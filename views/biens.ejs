@@ -1,0 +1,208 @@
+<%- include('partials/head') %>
+
+<!-- ───────── INTRODUCTION ÉDITORIALE ───────── -->
+<section class="mb-8 md:mb-10 rise rise-1">
+  <p class="dropcap text-[15px] sm:text-[15.5px] leading-[1.65] text-ink2 max-w-2xl ed-justify">
+    <strong class="text-ink">Le patrimoine</strong> rassemble les biens immobiliers confiés à la gérance du cabinet. Chaque bien possède sa propre adresse, qui s'inscrit automatiquement sur les attestations et quittances des locataires qui y résident.
+  </p>
+</section>
+
+<!-- ───────── Ajouter un bien ───────── -->
+<details class="card p-5 sm:p-6 mb-6 rise rise-2">
+  <summary class="cursor-pointer text-sm font-medium text-wine py-2 min-h-[44px] flex items-center gap-2 list-none">
+    <span class="font-display text-2xl leading-none text-wine italic">+</span>
+    <span>Ajouter un bien au patrimoine</span>
+    <span class="ml-auto text-[10.5px] font-mono uppercase tracking-[0.18em] text-ink3">Nouvelle entrée</span>
+  </summary>
+  <form action="/biens" method="post" class="mt-5 pt-5 border-t border-border grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+    <label class="sm:col-span-2 md:col-span-3">Type d'occupation
+      <div class="segmented mt-1.5">
+        <label><input type="radio" name="type" value="colocation" checked><span>Colocation</span></label>
+        <label><input type="radio" name="type" value="location_seule"><span>Location seule</span></label>
+      </div>
+    </label>
+    <label class="sm:col-span-2 md:col-span-3">Nom du bien
+      <input name="nom" required class="w-full" placeholder="Annemasse — René Blanc">
+      <span class="helper-text">Libellé court qui apparaît dans les listes et la fiche colocataire.</span>
+    </label>
+    <label class="sm:col-span-2 md:col-span-3">Adresse complète
+      <input name="adresse" required class="w-full" placeholder="5, rue René Blanc, 74100 Annemasse">
+      <span class="helper-text">Telle qu'elle figurera sur les attestations et quittances.</span>
+    </label>
+    <label class="sm:col-span-2 md:col-span-3">Régime
+      <div class="segmented mt-1.5">
+        <label><input type="radio" name="meuble" value="0" checked><span>Non meublé</span></label>
+        <label><input type="radio" name="meuble" value="1"><span>Meublé</span></label>
+      </div>
+      <span class="helper-text">Une location meublée relève du décret n° 2016-382 — texte des actes adapté en conséquence.</span>
+    </label>
+    <label>Surface (m²) <input name="surface" type="number" step="0.1" class="w-full"></label>
+    <label>Étage <input name="etage" class="w-full" placeholder="2ème, RDC…"></label>
+    <label>Nombre de chambres <input name="nb_chambres" type="number" min="0" class="w-full"></label>
+    <div class="sm:col-span-2 md:col-span-3 pt-2"><button class="btn btn-primary w-full sm:w-auto justify-center">Enregistrer le bien →</button></div>
+  </form>
+</details>
+
+<% if (!biens.length) { %>
+  <div class="empty-state rise rise-3">
+    <div class="empty-fleuron">·  ·  ·</div>
+    <div class="empty-eyebrow">Patrimoine vierge</div>
+    <p class="empty-line">Aucun bien n'est encore enregistré. L'inscription du premier logement permet de lier les colocataires à leur adresse, et conditionne l'adresse imprimée sur tous les actes.</p>
+    <p class="text-[12.5px] text-ink3 font-mono uppercase tracking-[0.18em]">Cliquez sur « Ajouter » ci-dessus.</p>
+  </div>
+<% } else { %>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5 rise rise-3">
+  <% let idx = 0; for (const b of biens) { idx++;
+    const typeLabel = b.type === 'colocation' ? 'Colocation' : 'Location seule';
+    const colocsActifs = b.colocataires.filter(c => c.actif);
+  %>
+    <article class="card p-5 card-hover">
+      <header class="flex items-start gap-3">
+        <div class="w-12 h-12 rounded-full bg-paper2 border border-border flex items-center justify-center font-display text-lg italic text-ink shrink-0" aria-hidden="true">
+          <%= b.nom?.[0] || '·' %>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline gap-2 flex-wrap">
+            <span class="font-mono text-[9.5px] uppercase tracking-[0.2em] text-ink3">Bien n° <%= String(idx).padStart(2,'0') %></span>
+            <span class="chip <%= b.type === 'colocation' ? 'chip-sent' : 'chip-issued' %>"><%= typeLabel %><% if (b.type === 'colocation' && b.nb_chambres) { %> · <%= b.nb_chambres %> chambres<% } %></span>
+            <% if (b.meuble) { %><span class="chip" style="background:#EFE5D1;color:#7C5B1E;border:1px solid #D9C7A0">Meublé</span><% } %>
+            <% if (!b.actif) { %><span class="chip chip-draft">archivé</span><% } %>
+          </div>
+          <div class="font-display text-lg sm:text-xl leading-tight truncate mt-0.5"><%= b.nom %></div>
+          <div class="text-[11.5px] text-ink3 mt-0.5 font-mono truncate"><%= b.adresse %></div>
+          <% if (b.surface || b.etage) { %>
+            <div class="text-[11px] text-ink3 mt-1">
+              <% if (b.surface) { %><%= b.surface %> m²<% } %>
+              <% if (b.surface && b.etage) { %> · <% } %>
+              <% if (b.etage) { %><%= b.etage %> étage<% } %>
+            </div>
+          <% } %>
+        </div>
+      </header>
+
+      <!-- ───── Occupation : qui habite où, et depuis quand ───── -->
+      <% if (b.type === 'colocation' && b.chambres) { %>
+        <div class="mt-4 pt-4 border-t border-border">
+          <div class="eyebrow mb-3">Occupation des chambres</div>
+          <div class="grid grid-cols-1 sm:grid-cols-<%= Math.min(3, b.chambres.length) %> gap-3">
+            <% for (const ch of b.chambres) { %>
+              <div class="border border-border rounded-lg p-3 bg-paper2/30">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="font-mono text-[9.5px] uppercase tracking-[0.22em] text-ink3">Chambre n° <%= String(ch.numero).padStart(2,'0') %></span>
+                  <% if (!ch.occupants.length) { %>
+                    <span class="chip chip-draft text-[9.5px]">libre</span>
+                  <% } %>
+                </div>
+                <% if (ch.occupants.length === 0) { %>
+                  <div class="text-[12.5px] text-ink3 italic font-display">Sans occupant</div>
+                <% } else { %>
+                  <% for (const c of ch.occupants) { %>
+                    <a href="/colocataires" class="block group">
+                      <div class="flex items-baseline gap-1.5 flex-wrap">
+                        <span class="font-display text-base sm:text-lg leading-tight text-ink group-hover:text-wine transition-colors"><%= c.prenom %> <%= c.nom %></span>
+                        <% if (c.civilite) { %><span class="text-[10.5px] text-ink3"><%= c.civilite === 'M' ? '(M.)' : '(Mme)' %></span><% } %>
+                      </div>
+                      <% if (c.dateEntreeFR) { %>
+                        <div class="text-[11px] text-ink2 mt-1">Entré le <%= c.dateEntreeFR %></div>
+                        <% if (c.duree?.compact) { %>
+                          <div class="font-mono text-[10.5px] text-wine mt-0.5 uppercase tracking-[0.12em]">↳ <%= c.duree.compact %></div>
+                        <% } %>
+                      <% } else { %>
+                        <div class="text-[11px] text-ink3 mt-1 italic font-display">date d'entrée à compléter</div>
+                      <% } %>
+                    </a>
+                  <% } %>
+                <% } %>
+              </div>
+            <% } %>
+          </div>
+          <% if (b.nonAssignes.length) { %>
+            <div class="mt-3 pt-3 border-t border-dashed border-border">
+              <div class="font-mono text-[9.5px] uppercase tracking-[0.22em] text-wine mb-2">⚠ Locataire(s) sans chambre attribuée</div>
+              <div class="flex flex-wrap gap-1.5">
+                <% for (const c of b.nonAssignes) { %>
+                  <a href="/colocataires" class="chip" style="background:#FBF4F2;color:#7C2D2A;border:1px solid #E8C7C2"><%= c.prenom %> <%= c.nom %> · à attribuer</a>
+                <% } %>
+              </div>
+              <p class="text-[11px] text-ink3 mt-2 italic font-display">Renseignez le n° de chambre dans la fiche du locataire (page Colocataires).</p>
+            </div>
+          <% } %>
+        </div>
+      <% } else if (b.type === 'location_seule') { %>
+        <div class="mt-4 pt-4 border-t border-border">
+          <div class="eyebrow mb-3">Occupant unique</div>
+          <% const occupantsActifs = b.colocataires.filter(c => c.actif); %>
+          <% if (!occupantsActifs.length) { %>
+            <div class="text-[12.5px] text-ink3 italic font-display">Logement vacant — aucun bail en cours.</div>
+          <% } else { %>
+            <% for (const c of occupantsActifs) { %>
+              <a href="/colocataires" class="block group border border-border rounded-lg p-3 bg-paper2/30">
+                <div class="flex items-baseline gap-2 flex-wrap">
+                  <span class="font-display text-lg sm:text-xl leading-tight group-hover:text-wine transition-colors"><%= c.prenom %> <%= c.nom %></span>
+                  <% if (c.civilite) { %><span class="text-[11px] text-ink3"><%= c.civilite === 'M' ? '(Monsieur)' : '(Madame)' %></span><% } %>
+                </div>
+                <% if (c.dateEntreeFR) { %>
+                  <div class="text-[12px] text-ink2 mt-1.5">Entré le <%= c.dateEntreeFR %></div>
+                  <% if (c.duree?.compact) { %>
+                    <div class="font-mono text-[11px] text-wine mt-1 uppercase tracking-[0.14em]">↳ Locataire <%= c.duree.compact %></div>
+                  <% } %>
+                <% } else { %>
+                  <div class="text-[12px] text-ink3 mt-1.5 italic font-display">date d'entrée à compléter dans la fiche du locataire</div>
+                <% } %>
+              </a>
+            <% } %>
+          <% } %>
+          <% const anciens = b.colocataires.filter(c => !c.actif); %>
+          <% if (anciens.length) { %>
+            <div class="mt-3 pt-3 border-t border-dashed border-border">
+              <div class="font-mono text-[9.5px] uppercase tracking-[0.22em] text-ink3 mb-2">Anciens locataires</div>
+              <div class="flex flex-wrap gap-1.5">
+                <% for (const c of anciens) { %>
+                  <a href="/colocataires" class="chip chip-draft"><%= c.prenom %> <%= c.nom %></a>
+                <% } %>
+              </div>
+            </div>
+          <% } %>
+        </div>
+      <% } %>
+
+      <!-- Édition (repliable pour ne pas surcharger la vue) -->
+      <details class="mt-5 pt-5 border-t border-border">
+        <summary class="cursor-pointer text-[12px] font-mono uppercase tracking-[0.18em] text-wine py-2 min-h-[44px] flex items-center gap-2 list-none">
+          <span>Modifier la fiche du bien</span>
+          <span class="ml-auto text-[10px] text-ink3">↓</span>
+        </summary>
+        <form action="/biens/<%= b.id %>" method="post" class="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <label class="sm:col-span-2 md:col-span-3">Type d'occupation
+          <div class="segmented mt-1.5">
+            <label><input type="radio" name="type" value="colocation" <%= b.type === 'colocation' ? 'checked' : '' %>><span>Colocation</span></label>
+            <label><input type="radio" name="type" value="location_seule" <%= b.type === 'location_seule' ? 'checked' : '' %>><span>Location seule</span></label>
+          </div>
+        </label>
+        <label class="sm:col-span-2 md:col-span-3">Nom du bien <input name="nom" value="<%= b.nom %>" required class="w-full"></label>
+        <label class="sm:col-span-2 md:col-span-3">Adresse complète <input name="adresse" value="<%= b.adresse %>" required class="w-full"></label>
+        <label class="sm:col-span-2 md:col-span-3">Régime
+          <div class="segmented mt-1.5">
+            <label><input type="radio" name="meuble" value="0" <%= !b.meuble ? 'checked' : '' %>><span>Non meublé</span></label>
+            <label><input type="radio" name="meuble" value="1" <%= b.meuble ? 'checked' : '' %>><span>Meublé</span></label>
+          </div>
+        </label>
+        <label>Surface (m²) <input name="surface" type="number" step="0.1" value="<%= b.surface ?? '' %>" class="w-full"></label>
+        <label>Étage <input name="etage" value="<%= b.etage || '' %>" class="w-full"></label>
+        <label>Nombre de chambres <input name="nb_chambres" type="number" min="0" value="<%= b.nb_chambres ?? '' %>" class="w-full"></label>
+        <label class="flex items-end gap-2 pb-2 cursor-pointer sm:col-span-2 md:col-span-3">
+          <input type="checkbox" name="actif" <%= b.actif ? 'checked' : '' %> class="w-4 h-4 accent-wine">
+          <span class="text-sm">Bien actif</span>
+        </label>
+        <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 pt-3 border-t border-border mt-2">
+          <button class="btn btn-primary justify-center">Enregistrer →</button>
+          <button name="_action" value="delete" formnovalidate class="btn btn-ghost text-wine border-wine/30 justify-center sm:ml-auto" onclick="return confirm('Supprimer définitivement le bien « <%= b.nom %> » ? Les colocataires liés conserveront leur fiche mais perdront le rattachement.')">Supprimer le bien</button>
+        </div>
+        </form>
+      </details>
+    </article>
+  <% } %>
+</div>
+<% } %>
+
+<%- include('partials/foot') %>

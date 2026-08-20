@@ -1,0 +1,537 @@
+<%- include('partials/head') %>
+
+<!-- ───────── FILTRES ───────── -->
+<form class="card p-4 sm:p-5 mb-6 rise rise-1">
+  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[1fr_180px_180px_auto] gap-3 items-end">
+    <label class="md:col-span-1 sm:col-span-2">Recherche libre
+      <input name="q" value="<%= filters.q %>" placeholder="Nom · type · mois · montant…" class="w-full">
+    </label>
+    <label>Type
+      <select name="type" class="w-full">
+        <option value="">Tous</option>
+        <% for (const t of ['attestation','quittance','facture']) { %>
+          <option value="<%= t %>" <%= filters.type===t?'selected':'' %>><%= t.charAt(0).toUpperCase()+t.slice(1) %></option>
+        <% } %>
+      </select>
+    </label>
+    <label>Statut
+      <select name="statut" class="w-full">
+        <option value="">Tous</option>
+        <% for (const s of ['brouillon','genere','envoye']) { %>
+          <option value="<%= s %>" <%= filters.statut===s?'selected':'' %>><%= s.charAt(0).toUpperCase()+s.slice(1) %></option>
+        <% } %>
+      </select>
+    </label>
+    <button class="btn btn-primary justify-center sm:col-span-2 md:col-span-1 md:self-end md:h-[38px]">Filtrer →</button>
+  </div>
+
+  <!-- Pills — accès rapide aux statuts -->
+  <div class="flex flex-wrap gap-1.5 mt-4 pt-4 border-t border-border" aria-label="Filtres rapides">
+    <a href="/historique" class="pill <%= !filters.statut && !filters.type ? 'is-active' : '' %>">Tous</a>
+    <a href="/historique?type=attestation" class="pill <%= filters.type==='attestation' ? 'is-active' : '' %>">Attestations</a>
+    <a href="/historique?type=quittance" class="pill <%= filters.type==='quittance' ? 'is-active' : '' %>">Quittances</a>
+    <a href="/historique?type=facture" class="pill <%= filters.type==='facture' ? 'is-active' : '' %>">Factures</a>
+    <span class="w-px bg-border mx-1 hidden sm:block" aria-hidden="true"></span>
+    <a href="/historique?statut=brouillon" class="pill <%= filters.statut==='brouillon' ? 'is-active' : '' %>">Brouillons</a>
+    <a href="/historique?statut=genere" class="pill <%= filters.statut==='genere' ? 'is-active' : '' %>">Émis</a>
+    <a href="/historique?statut=envoye" class="pill <%= filters.statut==='envoye' ? 'is-active' : '' %>">Envoyés</a>
+  </div>
+</form>
+
+<% if (!documents.length) { %>
+  <div class="empty-state rise rise-2">
+    <div class="empty-fleuron">·  ·  ·</div>
+    <div class="empty-eyebrow">Aucun document encore</div>
+    <p class="empty-line">Cette page recevra vos premières archives dès que vous publierez un acte. Les attestations, quittances et factures s'accumuleront ici, chronologiquement, signées et archivées.</p>
+    <a href="/tableau" class="btn btn-wine">Préparer un document →</a>
+  </div>
+<% } else { %>
+
+<!-- ───────── Toolbar : Tout sélectionner + compteur ───────── -->
+<div class="flex items-center justify-between gap-3 mb-4 rise rise-2 flex-wrap">
+  <div class="flex items-center gap-3">
+    <label class="flex items-center gap-2 cursor-pointer text-[12.5px] text-ink2 font-medium">
+      <input type="checkbox" id="select-all" class="check-pill" aria-label="Tout sélectionner">
+      <span>Tout sélectionner</span>
+    </label>
+    <span class="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink3 hidden sm:inline"><%= documents.length %> document<%= documents.length>1?'s':'' %> · <%= groupes.length %> destinataire<%= groupes.length>1?'s':'' %></span>
+  </div>
+  <div class="text-[11px] text-ink3 font-display italic hidden sm:block">Cochez pour envoyer, télécharger ou supprimer en lot.</div>
+</div>
+
+<!-- ───────── GROUPES par colocataire ───────── -->
+<div class="space-y-8 rise rise-2">
+  <% for (const g of groupes) { %>
+    <section class="group-block" data-group="<%= g.colocataire_id %>">
+      <header class="group-header">
+        <span class="group-mono" aria-hidden="true"><%= (g.prenom?.[0]||'·') %></span>
+        <div class="flex-1 min-w-0">
+          <div class="group-name"><%= g.nom %></div>
+          <div class="group-meta">
+            <%= g.docs.length %> document<%= g.docs.length>1?'s':'' %>
+            <% if (g.email) { %> · <span class="normal-case tracking-normal text-ink3"><%= g.email %></span><% } %>
+            <% if (!g.actif && g.colocataire_id) { %> · Ancien locataire<% } %>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap justify-end">
+          <span class="chip-channel <%= g.email ? 'is-on' : 'is-off' %>" title="<%= g.email ? 'Email : '+g.email : 'Aucun email enregistré' %>">
+            <span class="chip-glyph">✉</span> <%= g.email ? 'email' : 'email absent' %>
+          </span>
+          <span class="chip-channel <%= g.telephone ? 'is-on' : 'is-off' %>" title="<%= g.telephone ? 'Téléphone : '+g.telephone : 'Aucun téléphone enregistré' %>">
+            <span class="chip-glyph">☎</span> <%= g.telephone ? 'téléphone' : 'tél. absent' %>
+          </span>
+          <label class="flex items-center gap-1.5 text-[11px] text-ink2 cursor-pointer ml-1 pl-2 border-l border-border">
+            <input type="checkbox" class="check-pill group-select" data-group-select="<%= g.colocataire_id %>" aria-label="Sélectionner tous les documents de <%= g.nom %>">
+            <span class="font-mono text-[10px] uppercase tracking-[0.14em] hidden sm:inline">Tout</span>
+          </label>
+        </div>
+      </header>
+
+      <!-- ───── MOBILE : cartes ───── -->
+      <div class="md:hidden space-y-3">
+        <% for (const d of g.docs) { %>
+          <article class="doc-card card-hover" data-doc-id="<%= d.id %>" data-doc-group="<%= g.colocataire_id %>">
+            <label class="flex items-center pr-1 cursor-pointer" aria-label="Sélectionner le document <%= d.id %>">
+              <input type="checkbox" class="check-pill check-lg doc-check" value="<%= d.id %>" data-coloc="<%= g.colocataire_id %>">
+            </label>
+            <div class="doc-thumb" aria-hidden="true">
+              <span class="doc-thumb-label"><%= (d.type||'').slice(0,3).toUpperCase() %></span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <span class="chip <%= d.statut==='envoye' ? 'chip-sent' : d.statut==='genere' ? 'chip-issued' : 'chip-draft' %>"><%= d.statut %></span>
+                <span class="text-[10.5px] font-mono text-ink3"><%= d.creeLeFR %></span>
+              </div>
+              <div class="font-display text-xl capitalize leading-tight"><%= d.type %></div>
+              <% if (d.montant_total) { %>
+                <div class="text-[12.5px] text-ink2 mb-1 font-mono"><%= d.montant_total %> €</div>
+              <% } %>
+              <% if (d.periode_debut) { %>
+                <div class="text-[11px] text-ink3 font-mono mb-2"><%= d.periodeDebutFR %> → <%= d.periodeFinFR %></div>
+              <% } %>
+              <div class="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-border text-[13px]">
+                <a href="/documents/<%= d.id %>/voir" target="_blank" class="text-wine py-1 link-underline">Ouvrir</a>
+                <a href="/documents/<%= d.id %>/pdf" class="text-wine py-1 link-underline">PDF</a>
+                <a href="/documents/<%= d.id %>/editer" class="text-wine py-1 link-underline">Modifier</a>
+                <button type="button" class="text-wine py-1 link-underline btn-share-single" data-id="<%= d.id %>">↗ Partager</button>
+                <form method="post" action="/documents/<%= d.id %>/supprimer" class="inline ml-auto" onsubmit="return confirm('Supprimer ce document ?')"><button class="text-ink3 hover:text-wine2 py-1 px-1" aria-label="Supprimer">×</button></form>
+              </div>
+            </div>
+          </article>
+        <% } %>
+      </div>
+
+      <!-- ───── DESKTOP : tableau ───── -->
+      <div class="hidden md:block card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[860px]">
+            <thead>
+              <tr class="text-left text-[10.5px] uppercase tracking-[0.15em] text-ink3 bg-paper border-b border-border">
+                <th class="pl-5 pr-2 py-3 w-10"><span class="sr-only">Sélection</span></th>
+                <th class="px-3 py-3 font-medium font-mono">Statut</th>
+                <th class="px-3 py-3 font-medium font-mono">Type</th>
+                <th class="px-3 py-3 font-medium font-mono">Période</th>
+                <th class="px-3 py-3 font-medium font-mono text-right">Montant</th>
+                <th class="px-3 py-3 font-medium font-mono">Créé le</th>
+                <th class="px-5 py-3 font-medium font-mono text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border text-sm">
+              <% for (const d of g.docs) { %>
+                <tr class="hover:bg-paper2 transition-colors" data-doc-id="<%= d.id %>" data-doc-group="<%= g.colocataire_id %>">
+                  <td class="pl-5 pr-2 py-3">
+                    <label class="cursor-pointer inline-flex items-center" aria-label="Sélectionner le document <%= d.id %>">
+                      <input type="checkbox" class="check-pill doc-check" value="<%= d.id %>" data-coloc="<%= g.colocataire_id %>">
+                    </label>
+                  </td>
+                  <td class="px-3 py-3"><span class="chip <%= d.statut==='envoye' ? 'chip-sent' : d.statut==='genere' ? 'chip-issued' : 'chip-draft' %>"><%= d.statut %></span></td>
+                  <td class="px-3 py-3 font-medium capitalize"><%= d.type %></td>
+                  <td class="px-3 py-3 text-ink2 font-mono text-[11.5px]"><%= d.periodeDebutFR ? d.periodeDebutFR + ' → ' + d.periodeFinFR : '—' %></td>
+                  <td class="px-3 py-3 text-right font-mono text-[12.5px]"><%= d.montant_total ? d.montant_total + ' €' : '—' %></td>
+                  <td class="px-3 py-3 text-ink3 font-mono text-[11.5px]"><%= d.creeLeFR %></td>
+                  <td class="px-5 py-3 text-right">
+                    <div class="inline-flex gap-3 text-[12.5px]">
+                      <a href="/documents/<%= d.id %>/voir" target="_blank" class="text-wine link-underline">Voir</a>
+                      <a href="/documents/<%= d.id %>/pdf" class="text-wine link-underline">PDF</a>
+                      <a href="/documents/<%= d.id %>/editer" class="text-wine link-underline">Modifier</a>
+                      <% if (d.hasEmail) { %>
+                        <button class="text-wine link-underline" onclick="renvoyer(<%= d.id %>)">Renvoyer</button>
+                      <% } else { %>
+                        <span class="text-ink3 cursor-help" title="Aucun email enregistré">—</span>
+                      <% } %>
+                      <form method="post" action="/documents/<%= d.id %>/supprimer" class="inline" onsubmit="return confirm('Supprimer ce document ?')"><button class="text-ink3 hover:text-wine2" aria-label="Supprimer">×</button></form>
+                    </div>
+                  </td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  <% } %>
+</div>
+<% } %>
+
+<!-- ═══════ BARRE D'ACTION FLOTTANTE (sticky bottom) ═══════ -->
+<div id="bulk-action-bar" role="toolbar" aria-label="Actions groupées">
+  <div>
+    <div class="bulk-count"><span class="bulk-count-num" id="bulk-count">0</span> sélectionné<span id="bulk-plural"></span></div>
+    <div class="bulk-label" id="bulk-recap">—</div>
+  </div>
+  <button type="button" class="btn-bulk is-primary" id="bulk-email">
+    <span aria-hidden="true">✉</span> <span class="bulk-btn-full">Courriel</span>
+  </button>
+  <button type="button" class="btn-bulk" id="bulk-share" style="display:none">
+    <span aria-hidden="true">↗</span> <span class="bulk-btn-full">Partager</span>
+  </button>
+  <button type="button" class="btn-bulk" id="bulk-wa">
+    <span aria-hidden="true">💬</span> <span class="bulk-btn-full">WhatsApp</span>
+  </button>
+  <button type="button" class="btn-bulk" id="bulk-sms">
+    <span aria-hidden="true">📱</span> <span class="bulk-btn-full">SMS</span>
+  </button>
+  <button type="button" class="btn-bulk" id="bulk-download">
+    <span aria-hidden="true">↓</span> <span class="bulk-btn-full">Télécharger</span>
+  </button>
+  <button type="button" class="btn-bulk is-danger" id="bulk-delete">
+    <span aria-hidden="true">×</span> <span class="bulk-btn-full">Supprimer</span>
+  </button>
+  <button type="button" class="btn-bulk" id="bulk-clear" aria-label="Désélectionner tout" title="Désélectionner tout">
+    <span aria-hidden="true">⊘</span>
+  </button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  MULTI-SÉLECTION + ENVOI GROUPÉ MULTI-COLOCATAIRES
+// ═══════════════════════════════════════════════════════════════════
+
+const bar       = document.getElementById('bulk-action-bar');
+const barCount  = document.getElementById('bulk-count');
+const barPlural = document.getElementById('bulk-plural');
+const barRecap  = document.getElementById('bulk-recap');
+const shareBtn  = document.getElementById('bulk-share');
+const selectAll = document.getElementById('select-all');
+
+function selectedIds() {
+  return Array.from(document.querySelectorAll('.doc-check:checked')).map(el => el.value);
+}
+
+function selectedByGroup() {
+  const g = new Map();
+  document.querySelectorAll('.doc-check:checked').forEach(el => {
+    const k = el.dataset.coloc;
+    if (!g.has(k)) g.set(k, []);
+    g.get(k).push(el.value);
+  });
+  return g;
+}
+
+function refreshBar() {
+  const ids = selectedIds();
+  const groups = selectedByGroup();
+  const n = ids.length;
+  if (!n) { bar.classList.remove('is-visible'); document.body.classList.remove('has-bulk-bar'); return; }
+  bar.classList.add('is-visible');
+  document.body.classList.add('has-bulk-bar');
+  barCount.textContent = n;
+  barPlural.textContent = n > 1 ? 's' : '';
+  // Récapitulatif : "Nicolas · 2, Luesta · 1, Victoria · 2"
+  const parts = [];
+  groups.forEach((docIds, colocId) => {
+    const g = document.querySelector('.group-block[data-group="' + colocId + '"]');
+    const name = g?.querySelector('.group-name')?.textContent.trim().split(' ')[0] || '—';
+    parts.push(name + ' · ' + docIds.length);
+  });
+  barRecap.textContent = parts.join(' · ') + (groups.size > 1 ? '  (' + groups.size + ' destinataires)' : '');
+
+  // Affiche "Partager" sur mobile si Web Share API dispo
+  if (shareBtn && window.canShareFiles?.() && window.__isMobile) {
+    shareBtn.style.display = 'inline-flex';
+  }
+
+  // Sync indeterminate sur select-all
+  const all = document.querySelectorAll('.doc-check');
+  if (n === 0) { selectAll.checked = false; selectAll.indeterminate = false; }
+  else if (n === all.length) { selectAll.checked = true; selectAll.indeterminate = false; }
+  else { selectAll.checked = false; selectAll.indeterminate = true; }
+
+  // Sync group checkboxes
+  document.querySelectorAll('.group-select').forEach(gc => {
+    const k = gc.dataset.groupSelect;
+    const groupChecks = document.querySelectorAll('.doc-check[data-coloc="' + k + '"]');
+    const groupChecked = document.querySelectorAll('.doc-check[data-coloc="' + k + '"]:checked');
+    if (!groupChecked.length) { gc.checked = false; gc.indeterminate = false; }
+    else if (groupChecked.length === groupChecks.length) { gc.checked = true; gc.indeterminate = false; }
+    else { gc.checked = false; gc.indeterminate = true; }
+  });
+}
+
+document.addEventListener('change', (e) => {
+  if (e.target.classList.contains('doc-check')) refreshBar();
+});
+
+// Select all (global)
+selectAll?.addEventListener('change', () => {
+  const state = selectAll.checked;
+  document.querySelectorAll('.doc-check').forEach(c => { c.checked = state; });
+  refreshBar();
+});
+
+// Group select (par colocataire)
+document.querySelectorAll('.group-select').forEach(gc => {
+  gc.addEventListener('change', () => {
+    const k = gc.dataset.groupSelect;
+    const state = gc.checked;
+    document.querySelectorAll('.doc-check[data-coloc="' + k + '"]').forEach(c => { c.checked = state; });
+    refreshBar();
+  });
+});
+
+// Clear selection
+document.getElementById('bulk-clear').addEventListener('click', () => {
+  document.querySelectorAll('.doc-check:checked').forEach(c => { c.checked = false; });
+  refreshBar();
+});
+
+// ═══════ ACTIONS GROUPÉES ═══════
+
+function normalizePhone(raw) {
+  let p = String(raw || '').replace(/[\s.\-()]/g, '');
+  if (!p) return '';
+  if (p.startsWith('+')) return p;
+  if (p.startsWith('00')) return '+' + p.slice(2);
+  if (p.startsWith('0')) return '+33' + p.slice(1);
+  return '+' + p;
+}
+
+function markRowsSent(ids) {
+  ids.forEach(id => {
+    document.querySelectorAll('[data-doc-id="' + id + '"]').forEach(row => {
+      const chip = row.querySelector('.chip');
+      if (chip) { chip.className = 'chip chip-sent'; chip.textContent = 'envoye'; }
+    });
+  });
+}
+
+async function fetchResume(ids) {
+  const r = await fetch('/api/bulk-envoyer-resume', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids })
+  });
+  return await r.json();
+}
+
+// ─── ENVOI PAR COURRIEL (multi-colocataires si nécessaire) ───────
+document.getElementById('bulk-email').addEventListener('click', async () => {
+  const ids = selectedIds();
+  if (!ids.length) return;
+  const resume = await fetchResume(ids);
+  if (!resume.ok) return window.toast('Impossible de résumer la sélection.', { kind: 'error' });
+  if (!resume.smtpConfigured) return window.toastSmtpError();
+
+  const withoutEmail = resume.groupes.filter(g => !g.hasEmail);
+  if (withoutEmail.length === resume.groupes.length) {
+    return window.toast('Aucun destinataire n\'a d\'adresse email enregistrée.', { kind: 'error', eyebrow: 'Courriel impossible' });
+  }
+  const parts = resume.groupes.filter(g => g.hasEmail).map(g => g.nom + ' · ' + g.count);
+  const skipped = withoutEmail.length ? '\n\n' + withoutEmail.length + ' destinataire(s) sans email seront ignorés.' : '';
+  const msg = 'Vous allez envoyer ' + resume.total + ' document(s) à ' + parts.length + ' destinataire(s) :\n\n' + parts.join('\n') + skipped + '\n\nConfirmer ?';
+  if (!confirm(msg)) return;
+
+  const btn = document.getElementById('bulk-email');
+  btn.disabled = true; btn.style.opacity = '0.5';
+  try {
+    const r = await fetch('/api/bulk-envoyer-multi', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    const d = await r.json();
+    if (d.count_sent > 0) {
+      // Optimistic UI : marque les docs envoyés
+      const sentIds = [];
+      d.details.filter(x => x.ok).forEach(x => {
+        document.querySelectorAll('.doc-check:checked[data-coloc="' + x.colocataire_id + '"]').forEach(c => sentIds.push(c.value));
+      });
+      markRowsSent(sentIds);
+      const msg = d.count_sent + ' document' + (d.count_sent>1?'s':'') + ' transmis à ' + (d.details.filter(x=>x.ok).length) + ' destinataire' + (d.details.filter(x=>x.ok).length>1?'s':'') + '.';
+      const eyebrow = d.count_failed ? 'Envoi partiel' : 'Lot envoyé';
+      window.toast(msg + (d.count_failed ? ' · ' + d.count_failed + ' échec(s).' : ''), { kind: d.count_failed ? 'info' : 'success', eyebrow });
+      // Décoche
+      document.querySelectorAll('.doc-check:checked').forEach(c => { c.checked = false; });
+      refreshBar();
+    } else if (d.smtpMissing) {
+      window.toastSmtpError(d.raison);
+    } else {
+      window.toast(d.raison || 'Aucun courriel n\'a pu être envoyé.', { kind: 'error' });
+    }
+  } catch (e) {
+    window.toast('Erreur réseau : ' + e.message, { kind: 'error' });
+  }
+  btn.disabled = false; btn.style.opacity = '1';
+});
+
+// ─── PARTAGER (Web Share API — mobile uniquement) ───────
+document.getElementById('bulk-share').addEventListener('click', async () => {
+  const ids = selectedIds();
+  if (!ids.length) return;
+  const ok = await window.shareDocuments(ids, {
+    title: ids.length === 1 ? 'Document' : ids.length + ' documents',
+    text: 'Documents transmis par le cabinet',
+    onSuccess: async () => {
+      // Marque envoyé après partage réussi
+      await fetch('/api/bulk-marquer-envoye', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, canal: 'partage' })
+      });
+      markRowsSent(ids);
+      window.toast(ids.length + ' document(s) partagé(s).', { kind: 'success', eyebrow: 'Transmis' });
+      document.querySelectorAll('.doc-check:checked').forEach(c => c.checked = false);
+      refreshBar();
+    },
+    onError: (e) => window.toast(e.message, { kind: 'error' })
+  });
+});
+
+// ─── WHATSAPP (bulk : télécharge tous les PDFs + ouvre WA du 1er coloc) ───────
+document.getElementById('bulk-wa').addEventListener('click', async () => {
+  const ids = selectedIds();
+  if (!ids.length) return;
+  const resume = await fetchResume(ids);
+  const withPhone = resume.groupes.filter(g => g.hasPhone);
+  if (!withPhone.length) return window.toast('Aucun destinataire n\'a de téléphone.', { kind: 'error' });
+  if (resume.groupes.length > 1) {
+    if (!confirm('Sélection multi-colocataires : les PDFs seront téléchargés et WhatsApp s\'ouvrira sur le premier destinataire (' + withPhone[0].nom + '). Vous devrez répéter le geste pour les autres. Continuer ?')) return;
+  }
+  // Essaie d'abord Web Share API si dispo et mobile (partage direct)
+  if (window.canShareFiles?.() && window.__isMobile && resume.groupes.length === 1) {
+    const ok = await window.shareDocuments(ids, {
+      title: withPhone[0].nom, text: 'Vos documents',
+      onSuccess: async () => {
+        await fetch('/api/bulk-marquer-envoye', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ids, canal:'whatsapp', destinataire: withPhone[0].telephone }) });
+        markRowsSent(ids);
+        document.querySelectorAll('.doc-check:checked').forEach(c => c.checked = false); refreshBar();
+        window.toast('Documents partagés — choisissez WhatsApp dans le sélecteur.', { kind: 'success', eyebrow: 'Transmis' });
+      }
+    });
+    if (ok) return;
+  }
+  // Fallback : téléchargement + wa.me
+  for (let i = 0; i < ids.length; i++) {
+    const a = document.createElement('a');
+    a.href = '/documents/' + ids[i] + '/pdf'; a.download = '';
+    document.body.appendChild(a); a.click(); a.remove();
+    if (i < ids.length - 1) await new Promise(r => setTimeout(r, 250));
+  }
+  const first = withPhone[0];
+  const e164 = normalizePhone(first.telephone).replace('+', '');
+  const msg = 'Bonjour ' + (first.nom.split(' ')[0]) + ', je vous transmets vos documents en pièce jointe. Bien cordialement.';
+  setTimeout(() => window.open('https://wa.me/' + encodeURIComponent(e164) + '?text=' + encodeURIComponent(msg), '_blank', 'noopener'), 600);
+  await fetch('/api/bulk-marquer-envoye', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ids, canal:'whatsapp', destinataire: first.telephone }) });
+  markRowsSent(ids);
+  document.querySelectorAll('.doc-check:checked').forEach(c => c.checked = false); refreshBar();
+  window.toast(ids.length + ' PDFs téléchargés · WhatsApp ouvert.', { kind: 'success', eyebrow: 'Lot transmis' });
+});
+
+// ─── SMS (identique à WhatsApp, deeplink sms:) ───────
+document.getElementById('bulk-sms').addEventListener('click', async () => {
+  const ids = selectedIds();
+  if (!ids.length) return;
+  const resume = await fetchResume(ids);
+  const withPhone = resume.groupes.filter(g => g.hasPhone);
+  if (!withPhone.length) return window.toast('Aucun destinataire n\'a de téléphone.', { kind: 'error' });
+  if (resume.groupes.length > 1) {
+    if (!confirm('Sélection multi-colocataires : SMS ouvrira le premier destinataire (' + withPhone[0].nom + '). Continuer ?')) return;
+  }
+  for (let i = 0; i < ids.length; i++) {
+    const a = document.createElement('a');
+    a.href = '/documents/' + ids[i] + '/pdf'; a.download = '';
+    document.body.appendChild(a); a.click(); a.remove();
+    if (i < ids.length - 1) await new Promise(r => setTimeout(r, 250));
+  }
+  const first = withPhone[0];
+  const e164 = normalizePhone(first.telephone);
+  const msg = 'Bonjour ' + (first.nom.split(' ')[0]) + ', je vous transmets vos documents. Bien cordialement.';
+  setTimeout(() => { window.location.href = 'sms:' + e164 + '?body=' + encodeURIComponent(msg); }, 600);
+  await fetch('/api/bulk-marquer-envoye', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ids, canal:'sms', destinataire: first.telephone }) });
+  markRowsSent(ids);
+  document.querySelectorAll('.doc-check:checked').forEach(c => c.checked = false); refreshBar();
+  window.toast(ids.length + ' PDFs téléchargés · SMS ouvert.', { kind: 'success', eyebrow: 'Lot transmis' });
+});
+
+// ─── TÉLÉCHARGER (batch download) ───────
+document.getElementById('bulk-download').addEventListener('click', async () => {
+  const ids = selectedIds();
+  if (!ids.length) return;
+  for (let i = 0; i < ids.length; i++) {
+    const a = document.createElement('a');
+    a.href = '/documents/' + ids[i] + '/pdf'; a.download = '';
+    document.body.appendChild(a); a.click(); a.remove();
+    if (i < ids.length - 1) await new Promise(r => setTimeout(r, 200));
+  }
+  window.toast(ids.length + ' PDF(s) téléchargé(s).', { kind: 'success', eyebrow: 'Téléchargés' });
+});
+
+// ─── SUPPRIMER (batch delete) ───────
+document.getElementById('bulk-delete').addEventListener('click', async () => {
+  const ids = selectedIds();
+  if (!ids.length) return;
+  if (!confirm('Supprimer définitivement ' + ids.length + ' document' + (ids.length>1?'s':'') + ' ? Cette action est irréversible.')) return;
+  let ok = 0, ko = 0;
+  for (const id of ids) {
+    try {
+      const r = await fetch('/documents/' + id + '/supprimer', { method: 'POST' });
+      if (r.ok) { ok++; document.querySelectorAll('[data-doc-id="' + id + '"]').forEach(el => el.remove()); }
+      else ko++;
+    } catch { ko++; }
+  }
+  refreshBar();
+  window.toast(ok + ' supprimé(s)' + (ko ? ' · ' + ko + ' échec(s)' : '') + '.', { kind: ko ? 'info' : 'success', eyebrow: 'Suppression' });
+});
+
+// ═══════ ACTIONS PAR DOCUMENT ═══════
+
+async function renvoyer(id) {
+  if (!confirm('Renvoyer ce document par email ?')) return;
+  const r = await fetch('/documents/' + id + '/envoyer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  const data = await r.json();
+  if (data.ok) {
+    markRowsSent([id]);
+    window.toast('Le document a été renvoyé par courriel.', { kind: 'success', eyebrow: 'Envoyé' });
+  } else if (/SMTP/.test(data.raison || '')) {
+    window.toastSmtpError(data.raison);
+  } else {
+    window.toast(data.raison || 'Envoi impossible', { kind: 'error' });
+  }
+}
+
+// Bouton "Partager" mobile (par document)
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-share-single');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const ok = await window.shareDocuments([id], {
+    title: 'Document',
+    onSuccess: async () => {
+      await fetch('/documents/' + id + '/marquer-envoye', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canal: 'partage' })
+      });
+      markRowsSent([id]);
+      window.toast('Document partagé.', { kind: 'success', eyebrow: 'Transmis' });
+    },
+    onError: () => {
+      // Fallback : simplement télécharger
+      const a = document.createElement('a');
+      a.href = '/documents/' + id + '/pdf'; a.download = '';
+      document.body.appendChild(a); a.click(); a.remove();
+      window.toast('PDF téléchargé (partage natif indisponible).', { kind: 'info' });
+    }
+  });
+});
+
+// Init
+refreshBar();
+</script>
+<%- include('partials/foot') %>

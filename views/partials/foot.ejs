@@ -1,0 +1,344 @@
+      </main>
+      <footer class="safe-bottom px-5 sm:px-7 md:px-10 py-8 md:py-10 text-[11px] sm:text-[11.5px] text-ink3 border-t border-border bg-paper">
+        <!-- Signature line animée bordeaux (apparaît au scroll) -->
+        <div class="signature-line" data-signature-line aria-hidden="true"></div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10 mb-6">
+          <!-- Col 1 : Cabinet -->
+          <div>
+            <div class="eyebrow mb-2 text-ink2">Cabinet</div>
+            <div class="font-display text-base text-ink leading-snug"><%= proprietaire.nom %></div>
+            <div class="font-mono text-[10.5px] mt-1.5 leading-snug">
+              <%= proprietaire.bien_adresse %>
+            </div>
+            <% if (proprietaire.email) { %>
+              <a href="mailto:<%= proprietaire.email %>" class="font-mono text-[10.5px] text-wine link-underline mt-1 inline-block break-all"><%= proprietaire.email %></a>
+            <% } %>
+          </div>
+
+          <!-- Col 2 : Liens internes -->
+          <div>
+            <div class="eyebrow mb-2 text-ink2">Sommaire</div>
+            <ul class="space-y-1 font-mono text-[10.5px]">
+              <li><a href="/" class="link-underline">Accueil</a></li>
+              <li><a href="/tableau" class="link-underline">Tableau de bord</a></li>
+              <li><a href="/generation" class="link-underline">Production groupée</a></li>
+              <li><a href="/colocataires" class="link-underline">Colocataires</a></li>
+              <li><a href="/historique" class="link-underline">Documents</a></li>
+              <li><a href="/proprietaire" class="link-underline">Direction du cabinet</a></li>
+            </ul>
+          </div>
+
+          <!-- Col 3 : Mentions / confidentialité -->
+          <div>
+            <div class="eyebrow mb-2 text-ink2">Confidentialité</div>
+            <p class="font-mono text-[10.5px] leading-relaxed">
+              Stockage local exclusif (<code class="text-ink2">data/app.db</code>).<br>
+              Aucune donnée transmise à un tiers — conforme aux principes du RGPD pour traitement strictement personnel.
+            </p>
+          </div>
+        </div>
+
+        <div class="ornament-rule mb-5"><span>Fin de la page</span></div>
+
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 font-mono text-[10px] sm:text-[10.5px]">
+          <span>CABINET · MERHAWI · 74100 · ÉTABLI MMXXVI</span>
+          <span class="italic font-display text-[12px] text-ink3" style="font-style:italic">Diligenter administrare · Fideliter archivare</span>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ─── Toast helper global ─── -->
+  <script>
+    (function(){
+      window.toast = function(message, opts) {
+        opts = opts || {};
+        const kind = opts.kind || 'info';      // 'info' | 'success' | 'error'
+        const eyebrow = opts.eyebrow || ({info:'Information', success:'Confirmé', error:'Erreur'})[kind];
+        const ttl = opts.ttl || 4000;
+        const rack = document.getElementById('toast-rack');
+        if (!rack) return;
+        const el = document.createElement('div');
+        el.className = 'toast is-' + kind;
+        el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+        // Supporte les liens cliquables dans le message via {action:{href,label}}
+        const inner = document.createElement('div');
+        inner.className = 'flex-1 min-w-0';
+        const eb = document.createElement('span');
+        eb.className = 'toast-eyebrow';
+        eb.textContent = eyebrow;
+        inner.appendChild(eb);
+        const body = document.createElement('div');
+        body.className = 'leading-snug';
+        body.textContent = message || '';
+        if (opts.action && opts.action.href) {
+          const a = document.createElement('a');
+          a.href = opts.action.href;
+          a.className = 'link-underline text-wine font-medium ml-1';
+          a.textContent = opts.action.label || 'Configurer →';
+          body.appendChild(document.createTextNode(' '));
+          body.appendChild(a);
+        }
+        inner.appendChild(body);
+        el.appendChild(inner);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('aria-label', 'Fermer');
+        btn.className = 'text-ink3 hover:text-ink leading-none text-lg shrink-0';
+        btn.style.marginTop = '-2px';
+        btn.textContent = '×';
+        el.appendChild(btn);
+        const close = () => { el.classList.add('fade-out'); setTimeout(() => el.remove(), 280); };
+        btn.addEventListener('click', close);
+        rack.appendChild(el);
+        setTimeout(close, ttl);
+      };
+
+      // ─── Erreur SMTP formatée (bouton vers /proprietaire#smtp) ─────────
+      window.toastSmtpError = function(raison) {
+        window.toast(
+          (raison || 'SMTP non configuré') + ' —',
+          { kind: 'error', eyebrow: 'Courrier bloqué', ttl: 6000,
+            action: { href: '/proprietaire#smtp', label: 'Configurer le courrier →' } }
+        );
+      };
+    })();
+  </script>
+
+  <!-- ─── Progress bar de navigation ─── -->
+  <script>
+    (function(){
+      const bar = document.getElementById('nav-progress');
+      if (!bar) return;
+      window.__navProgress = {
+        start(){ bar.classList.add('is-active'); bar.style.width = '30%'; setTimeout(()=>{ bar.style.width = '65%'; }, 180); },
+        done(){ bar.style.width = '100%'; setTimeout(()=>{ bar.classList.remove('is-active'); bar.style.width = '0%'; }, 260); }
+      };
+      window.addEventListener('pageshow', () => window.__navProgress.done());
+      window.addEventListener('beforeunload', () => window.__navProgress.start());
+    })();
+  </script>
+
+  <!-- ─── View Transitions API — interception liens internes ─── -->
+  <script>
+    (function(){
+      if (!document.startViewTransition) return;
+      document.addEventListener('click', (e) => {
+        const a = e.target.closest('a[href]');
+        if (!a) return;
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+        if (a.target === '_blank' || a.hasAttribute('download')) return;
+        const url = new URL(a.href, location.href);
+        if (url.origin !== location.origin) return;
+        if (url.pathname === location.pathname && url.hash) return; // ancres internes
+        // Ne pas intercepter les liens vers /documents/:id/pdf, /voir (téléchargements)
+        if (/\/documents\/\d+\/(pdf|voir|apercu)/.test(url.pathname)) return;
+        e.preventDefault();
+        window.__navProgress?.start();
+        document.startViewTransition(() => {
+          location.href = a.href;
+        });
+      });
+    })();
+  </script>
+
+  <!-- ─── Signature line — IntersectionObserver ─── -->
+  <script>
+    (function(){
+      const lines = document.querySelectorAll('[data-signature-line]');
+      if (!lines.length || !('IntersectionObserver' in window)) {
+        lines.forEach(l => l.classList.add('is-visible'));
+        return;
+      }
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); } });
+      }, { threshold: 0.4 });
+      lines.forEach(l => io.observe(l));
+    })();
+  </script>
+
+  <!-- ─── Dense mode toggle (persiste via localStorage) ─── -->
+  <script>
+    (function(){
+      const KEY = 'cm.dense';
+      const isDense = () => localStorage.getItem(KEY) === '1';
+      const apply = () => document.body.classList.toggle('dense', isDense());
+      apply();
+      document.querySelectorAll('.dense-btn').forEach(b => {
+        const val = b.dataset.dense === 'on';
+        if (val === isDense()) b.classList.add('is-active');
+        b.addEventListener('click', () => {
+          localStorage.setItem(KEY, val ? '1' : '0');
+          document.querySelectorAll('.dense-btn').forEach(x => { x.classList.remove('is-active'); x.setAttribute('aria-selected','false'); });
+          b.classList.add('is-active'); b.setAttribute('aria-selected','true');
+          apply();
+        });
+      });
+    })();
+  </script>
+
+  <!-- ─── Cmd+K palette (recherche instantanée) ─── -->
+  <script>
+    (function(){
+      const dialog = document.getElementById('cmdk');
+      const input  = document.getElementById('cmdk-input');
+      const results = document.getElementById('cmdk-results');
+      if (!dialog || !input || !results) return;
+
+      const open = () => {
+        if (dialog.open) return;
+        dialog.showModal();
+        setTimeout(() => input.focus(), 20);
+      };
+      const close = () => { if (dialog.open) dialog.close(); };
+
+      // Raccourci clavier
+      document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); open(); }
+        else if (e.key === 'Escape' && dialog.open) { close(); }
+      });
+      document.getElementById('cmdk-trigger')?.addEventListener('click', open);
+      document.getElementById('cmdk-trigger-mobile')?.addEventListener('click', open);
+      // Fermer en cliquant hors du shell
+      dialog.addEventListener('click', (e) => {
+        const r = dialog.querySelector('.cmdk-shell').getBoundingClientRect();
+        if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) close();
+      });
+
+      let timer = null;
+      let items = [];
+      let focused = 0;
+
+      const render = (data) => {
+        items = [];
+        const parts = [];
+        const push = (title, list, kind, renderItem) => {
+          if (!list || !list.length) return;
+          parts.push('<div class="cmdk-section">' + title + '</div>');
+          for (const it of list) {
+            const idx = items.length;
+            items.push({ kind, ...it });
+            parts.push(renderItem(it, idx));
+          }
+        };
+        push('Colocataires', data.colocataires, 'coloc', (c, i) =>
+          `<div class="cmdk-item" data-i="${i}" data-href="/colocataires">
+             <span class="cmdk-emoji">${(c.prenom?.[0]||'')+(c.nom?.[0]||'')}</span>
+             <span>${c.prenom} ${c.nom}</span>
+             <span class="cmdk-meta">${c.chambre ? 'ch. '+c.chambre : (c.email || '')}</span>
+           </div>`);
+        push('Anciens colocataires', data.anciens, 'ancien', (c, i) =>
+          `<div class="cmdk-item" data-i="${i}" data-href="/colocataires">
+             <span class="cmdk-emoji">·</span>
+             <span>${c.prenom} ${c.nom}</span>
+             <span class="cmdk-meta">ancien</span>
+           </div>`);
+        push('Documents', data.documents, 'doc', (d, i) =>
+          `<div class="cmdk-item" data-i="${i}" data-href="/documents/${d.id}/editer">
+             <span class="cmdk-emoji">§</span>
+             <span style="text-transform:capitalize">${d.type} · ${d.coloc_prenom||''} ${d.coloc_nom||''}</span>
+             <span class="cmdk-meta">${d.statut}</span>
+           </div>`);
+        if (!items.length) {
+          results.innerHTML = '<p class="cmdk-hint">Aucun résultat.</p>';
+          return;
+        }
+        results.innerHTML = parts.join('');
+        focused = 0; highlight();
+      };
+
+      const highlight = () => {
+        results.querySelectorAll('.cmdk-item').forEach((el, i) => el.classList.toggle('is-focused', i === focused));
+        const el = results.querySelector('.cmdk-item.is-focused');
+        el?.scrollIntoView({ block: 'nearest' });
+      };
+
+      const go = (idx) => {
+        const el = results.querySelectorAll('.cmdk-item')[idx];
+        if (el) { const href = el.dataset.href; close(); location.href = href; }
+      };
+
+      input.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = input.value.trim();
+        if (!q) { results.innerHTML = '<p class="cmdk-hint">Tapez pour rechercher dans le cabinet.</p>'; items = []; return; }
+        timer = setTimeout(async () => {
+          try {
+            const r = await fetch('/api/recherche?q=' + encodeURIComponent(q) + '&filtre=tous');
+            const d = await r.json();
+            render(d);
+          } catch { results.innerHTML = '<p class="cmdk-hint">Recherche indisponible.</p>'; }
+        }, 130);
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); if (items.length) { focused = (focused + 1) % items.length; highlight(); } }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); if (items.length) { focused = (focused - 1 + items.length) % items.length; highlight(); } }
+        else if (e.key === 'Enter') { e.preventDefault(); if (items.length) go(focused); }
+      });
+
+      results.addEventListener('click', (e) => {
+        const el = e.target.closest('.cmdk-item');
+        if (!el) return;
+        const href = el.dataset.href;
+        close(); location.href = href;
+      });
+    })();
+  </script>
+
+  <!-- ─── Share helpers (Web Share API v2 avec fichiers) ─── -->
+  <script>
+    (function(){
+      // Détection de la capacité de partage de fichiers
+      window.canShareFiles = function() {
+        try {
+          if (!navigator.canShare) return false;
+          // Test avec un mini-fichier vide
+          const testFile = new File(['x'], 'test.pdf', { type: 'application/pdf' });
+          return navigator.canShare({ files: [testFile] });
+        } catch { return false; }
+      };
+
+      window.__isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+      // Récupère un doc en tant que File
+      window.fetchDocFile = async function(docId, filename) {
+        const r = await fetch('/documents/' + docId + '/pdf');
+        if (!r.ok) throw new Error('Téléchargement PDF impossible');
+        const blob = await r.blob();
+        const name = filename || ('document-' + docId + '.pdf');
+        return new File([blob], name, { type: 'application/pdf' });
+      };
+
+      // Partage un ou plusieurs documents via le sélecteur natif
+      // ids : array d'ids | opts : { title, text, onSuccess, onError }
+      window.shareDocuments = async function(ids, opts) {
+        opts = opts || {};
+        if (!Array.isArray(ids)) ids = [ids];
+        if (!window.canShareFiles()) {
+          if (opts.onError) opts.onError(new Error('Partage natif indisponible'));
+          return false;
+        }
+        try {
+          const files = [];
+          for (const id of ids) {
+            files.push(await window.fetchDocFile(id));
+          }
+          if (!navigator.canShare({ files })) throw new Error('Partage de ces fichiers refusé par le navigateur');
+          await navigator.share({
+            files,
+            title: opts.title || (files.length === 1 ? 'Document' : files.length + ' documents'),
+            text: opts.text || ''
+          });
+          if (opts.onSuccess) opts.onSuccess();
+          return true;
+        } catch (e) {
+          if (e.name === 'AbortError') return false;  // l'utilisateur a annulé
+          if (opts.onError) opts.onError(e);
+          return false;
+        }
+      };
+    })();
+  </script>
+</body>
+</html>

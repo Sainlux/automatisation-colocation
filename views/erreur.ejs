@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title><%= typeof code !== 'undefined' ? code : 404 %> — Cabinet Merhawi</title>
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root { --paper:#FBF8F3; --ink:#1A1916; --ink2:#4A4843; --ink3:#8C887F; --wine:#7C2D2A; --border:#E8E1D3; }
+    html, body { background: var(--paper); margin: 0; min-height: 100vh; font-family: 'Inter', sans-serif; color: var(--ink); }
+    body {
+      background-image:
+        radial-gradient(rgba(26,25,22,0.018) 1px, transparent 1px),
+        radial-gradient(rgba(124,45,42,0.012) 1px, transparent 1px);
+      background-size: 24px 24px, 47px 47px;
+      background-position: 0 0, 11px 13px;
+      display: flex; align-items: center; justify-content: center;
+      padding: 40px 24px;
+    }
+    .wrap { max-width: 540px; text-align: center; }
+    .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink3); margin-bottom: 24px; }
+    .code { font-family: 'Instrument Serif', serif; font-size: 180px; line-height: 0.85; letter-spacing: -0.02em; color: var(--wine); font-style: italic; margin-bottom: 12px; }
+    .titre { font-family: 'Instrument Serif', serif; font-size: 32px; line-height: 1.15; margin: 0 0 16px; }
+    .titre em { color: var(--wine); }
+    .desc { font-family: 'Instrument Serif', serif; font-style: italic; font-size: 18px; line-height: 1.45; color: var(--ink2); margin-bottom: 32px; }
+    .ornament { display: flex; align-items: center; justify-content: center; margin-bottom: 24px; color: var(--ink3); font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; gap: 14px; }
+    .ornament::before, .ornament::after { content: ''; flex: 0 0 60px; height: 1px; background: var(--border); }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: 6px; background: var(--ink); color: var(--paper); font-size: 13px; font-weight: 500; text-decoration: none; transition: background .15s; }
+    .btn:hover { background: var(--ink2); }
+    .meta { margin-top: 40px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink3); }
+    @media (max-width: 640px) {
+      .code { font-size: 120px; }
+      .titre { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="eyebrow">Cabinet · Merhawi · Anomalie</div>
+    <div class="code"><%= typeof code !== 'undefined' ? code : 404 %></div>
+    <div class="ornament"><span><%= typeof code !== 'undefined' && code === 401 ? 'Accès restreint' : 'Page introuvable' %></span></div>
+    <h1 class="titre">
+      <% if (typeof code !== 'undefined' && code === 401) { %>
+        <em>Authentification</em> requise.
+      <% } else { %>
+        Cette pièce n'est <em>pas au registre</em>.
+      <% } %>
+    </h1>
+    <p class="desc">
+      <% if (typeof code !== 'undefined' && code === 401) { %>
+        Le cabinet n'ouvre ses portes qu'aux personnes accréditées. Présentez vos identifiants pour reprendre la consultation des actes.
+      <% } else { %>
+        L'adresse demandée ne correspond à aucun acte archivé. Peut-être a-t-elle été déplacée — ou n'a-t-elle jamais existé.
+      <% } %>
+    </p>
+    <a href="/" class="btn">← Revenir à l'accueil</a>
+    <div class="meta">Vol. I · Erreur n° <%= typeof code !== 'undefined' ? code : 404 %></div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<%- include('partials/head') %>
+
+<!-- ───────── Ajouter une fiche ───────── -->
+<details class="card p-5 sm:p-6 mb-6 rise rise-1">
+  <summary class="cursor-pointer text-sm font-medium text-wine py-2 min-h-[44px] flex items-center gap-2 list-none">
+    <span class="font-display text-2xl leading-none text-wine italic">+</span>
+    <span>Ajouter un colocataire au registre</span>
+    <span class="ml-auto text-[10.5px] font-mono uppercase tracking-[0.18em] text-ink3">Nouvelle fiche</span>
+  </summary>
+  <form action="/colocataires" method="post" class="mt-5 pt-5 border-t border-border grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+    <label class="sm:col-span-2 md:col-span-3">Civilité
+      <div class="segmented mt-1.5">
+        <label><input type="radio" name="civilite" value=""><span>—</span></label>
+        <label><input type="radio" name="civilite" value="M"><span>Monsieur</span></label>
+        <label><input type="radio" name="civilite" value="Mme"><span>Madame</span></label>
+      </div>
+    </label>
+    <label class="sm:col-span-2 md:col-span-3">Bien immobilier
+      <select name="bien_id" class="w-full">
+        <option value="">— Non rattaché —</option>
+        <% for (const b of biens) { %>
+          <option value="<%= b.id %>"><%= b.nom %> · <%= b.adresse %></option>
+        <% } %>
+      </select>
+      <span class="helper-text">L'adresse du bien apparaîtra sur tous les documents de ce colocataire.</span>
+    </label>
+    <label>Prénom <input name="prenom" required class="w-full"></label>
+    <label>Nom <input name="nom" required class="w-full"></label>
+    <label>Email <input name="email" type="email" class="w-full"></label>
+    <label>Téléphone <input name="telephone" class="w-full"></label>
+    <label>Chambre <input name="chambre" class="w-full"></label>
+    <label>Date de naissance <input name="date_naissance" type="date" class="w-full"></label>
+    <label>Date d'entrée <input name="date_entree" type="date" class="w-full"></label>
+    <label>Loyer (€) <input name="loyer" type="number" step="0.01" class="w-full"></label>
+    <label>Charges (€) <input name="charges" type="number" step="0.01" class="w-full"></label>
+    <div class="sm:col-span-2 md:col-span-3 pt-2"><button class="btn btn-primary w-full sm:w-auto justify-center">Enregistrer la fiche →</button></div>
+  </form>
+</details>
+
+<% if (!colocataires.length) { %>
+  <div class="empty-state rise rise-2">
+    <div class="empty-fleuron">·  ·  ·</div>
+    <div class="empty-eyebrow">Registre vierge</div>
+    <p class="empty-line">Le cabinet n'a encore reçu aucune fiche. Le geste fondateur consiste à inscrire le premier colocataire — ses coordonnées, sa chambre, son entrée en bail.</p>
+    <p class="text-[12.5px] text-ink3 font-mono uppercase tracking-[0.18em]">Cliquez sur « Ajouter » ci-dessus pour ouvrir le registre.</p>
+  </div>
+<% } else { %>
+<% const bienById = new Map(biens.map(b => [b.id, b])); %>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5 rise rise-2">
+  <% let idx = 0; for (const c of colocataires) { idx++; const bienCur = bienById.get(c.bien_id); %>
+    <details class="card p-5 card-hover">
+      <summary class="cursor-pointer flex items-center gap-3 min-h-[44px] list-none">
+        <div class="w-12 h-12 rounded-full bg-paper2 border border-border flex items-center justify-center font-display text-lg italic text-ink shrink-0" aria-hidden="true"><%= (c.prenom?.[0] || '') + (c.nom?.[0] || '') %></div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-baseline gap-2 flex-wrap">
+            <span class="font-mono text-[9.5px] uppercase tracking-[0.2em] text-ink3">Fiche n° <%= String(idx).padStart(2,'0') %></span>
+            <% if (bienCur) { %>
+              <span class="chip chip-bare bg-paper2 text-ink2" title="<%= bienCur.adresse %>"><%= bienCur.nom %></span>
+            <% } else { %>
+              <span class="chip chip-draft" title="Aucun bien rattaché">sans bien</span>
+            <% } %>
+          </div>
+          <div class="font-display text-lg sm:text-xl leading-tight truncate"><%= c.prenom %> <%= c.nom %></div>
+          <div class="text-[11px] sm:text-[11.5px] text-ink3 mt-0.5 font-mono truncate">
+            <%= c.civilite === 'M' ? 'Monsieur' : c.civilite === 'Mme' ? 'Madame' : '—' %>
+            <% if (c.chambre) { %> · chambre <%= c.chambre %><% } %>
+          </div>
+          <!-- Chips canaux disponibles -->
+          <div class="flex flex-wrap gap-1.5 mt-2">
+            <span class="chip-channel <%= c.email ? 'is-on' : 'is-off' %>" title="<%= c.email || 'Ajoutez un email pour activer l\'envoi par courriel' %>">
+              <span class="chip-glyph" aria-hidden="true">✉</span> <%= c.email ? 'email' : 'email absent' %>
+            </span>
+            <span class="chip-channel <%= c.telephone ? 'is-on' : 'is-off' %>" title="<%= c.telephone || 'Ajoutez un téléphone pour activer WhatsApp/SMS' %>">
+              <span class="chip-glyph" aria-hidden="true">☎</span> <%= c.telephone ? 'téléphone' : 'tél. absent' %>
+            </span>
+          </div>
+          <% if (c.duree?.compact) { %>
+            <div class="font-mono text-[10.5px] text-wine mt-2 uppercase tracking-[0.14em]">↳ Locataire <%= c.duree.compact %></div>
+          <% } else if (c.actif) { %>
+            <div class="font-mono text-[10.5px] text-ink3 mt-2 italic font-display normal-case tracking-normal">Date d'entrée à compléter</div>
+          <% } %>
+        </div>
+        <span class="chip <%= c.actif ? 'chip-issued' : 'chip-draft' %> shrink-0"><%= c.actif ? 'actif' : 'ancien' %></span>
+      </summary>
+      <form action="/colocataires/<%= c.id %>" method="post" class="mt-5 pt-5 border-t border-border grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <label class="sm:col-span-2 md:col-span-3">Civilité
+          <div class="segmented mt-1.5">
+            <label><input type="radio" name="civilite" value="" <%= !c.civilite ? 'checked' : '' %>><span>—</span></label>
+            <label><input type="radio" name="civilite" value="M" <%= c.civilite === 'M' ? 'checked' : '' %>><span>Monsieur</span></label>
+            <label><input type="radio" name="civilite" value="Mme" <%= c.civilite === 'Mme' ? 'checked' : '' %>><span>Madame</span></label>
+          </div>
+        </label>
+        <label class="sm:col-span-2 md:col-span-3">Bien immobilier
+          <select name="bien_id" class="w-full">
+            <option value="" <%= !c.bien_id ? 'selected' : '' %>>— Non rattaché —</option>
+            <% for (const b of biens) { %>
+              <option value="<%= b.id %>" <%= c.bien_id === b.id ? 'selected' : '' %>><%= b.nom %> · <%= b.adresse %></option>
+            <% } %>
+          </select>
+          <span class="helper-text">L'adresse du bien apparaîtra automatiquement sur les attestations et quittances générées.</span>
+        </label>
+        <label>Prénom <input name="prenom" value="<%= c.prenom %>" class="w-full"></label>
+        <label>Nom <input name="nom" value="<%= c.nom %>" class="w-full"></label>
+        <label>Email <input name="email" type="email" value="<%= c.email || '' %>" class="w-full"></label>
+        <label>Téléphone <input name="telephone" value="<%= c.telephone || '' %>" class="w-full"></label>
+        <% if (bienCur?.type === 'colocation') { %>
+          <label>Chambre
+            <select name="chambre" class="w-full">
+              <option value="" <%= !c.chambre ? 'selected' : '' %>>— Non attribuée —</option>
+              <% for (let i = 1; i <= (bienCur.nb_chambres || 3); i++) { %>
+                <option value="<%= i %>" <%= String(c.chambre) === String(i) ? 'selected' : '' %>>Chambre <%= i %></option>
+              <% } %>
+            </select>
+            <span class="helper-text">Bien en colocation — choisissez un n° de chambre disponible.</span>
+          </label>
+        <% } else if (bienCur?.type === 'location_seule') { %>
+          <label>Chambre <input name="chambre" value="<%= c.chambre || '' %>" class="w-full" placeholder="—" disabled>
+            <span class="helper-text">Location seule — pas de chambre à attribuer.</span>
+          </label>
+        <% } else { %>
+          <label>Chambre <input name="chambre" value="<%= c.chambre || '' %>" class="w-full"></label>
+        <% } %>
+        <label>Date de naissance <input name="date_naissance" type="date" value="<%= c.date_naissance || '' %>" class="w-full"></label>
+        <label>Date d'entrée
+          <input name="date_entree" type="date" value="<%= c.date_entree || '' %>" class="w-full">
+          <% if (c.duree?.texte) { %>
+            <span class="helper-text"><strong class="text-wine"><%= c.duree.texte %></strong> dans le logement.</span>
+          <% } %>
+        </label>
+        <label>Date de sortie <input name="date_sortie" type="date" value="<%= c.date_sortie || '' %>" class="w-full"></label>
+        <label>Loyer (€) <input name="loyer" type="number" step="0.01" value="<%= c.loyer ?? '' %>" class="w-full"></label>
+        <label>Charges (€) <input name="charges" type="number" step="0.01" value="<%= c.charges ?? '' %>" class="w-full"></label>
+        <label class="sm:col-span-2 md:col-span-2">Adresse <input name="adresse" value="<%= c.adresse || '' %>" class="w-full"></label>
+        <label class="flex items-end gap-2 pb-2 cursor-pointer">
+          <input type="checkbox" name="actif" <%= c.actif ? 'checked' : '' %> class="w-4 h-4 accent-wine">
+          <span class="text-sm">Fiche active</span>
+        </label>
+        <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 pt-3 border-t border-border mt-2">
+          <button class="btn btn-primary justify-center">Enregistrer →</button>
+          <button name="_action" value="delete" formnovalidate class="btn btn-ghost text-wine border-wine/30 justify-center sm:ml-auto" onclick="return confirm('Supprimer définitivement la fiche de <%= c.prenom %> <%= c.nom %> ?')">Supprimer la fiche</button>
+        </div>
+      </form>
+    </details>
+  <% } %>
+</div>
+<% } %>
+
+<%- include('partials/foot') %>

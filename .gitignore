@@ -1,0 +1,52 @@
+# Dépendances Node
+node_modules/
+
+# Base de données SQLite + PDFs générés (données réelles locataires)
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Secrets et configuration locale
+.env
+.env.local
+.env.*.local
+
+# Signature manuscrite (donnée personnelle du bailleur)
+public/signature.png
+public/signature.backup.png
+
+# Fichiers d'aperçu / brouillons créés localement
+attestation_domiciliation_*.pdf
+attestation_domiciliation_*.html
+quittance_*.pdf
+facture_*.pdf
+
+# Dossiers de travail intermédiaires
+test-output/
+canvas-output/
+extracted-images/
+colocation Photos/
+
+# Logs & caches divers
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.cache/
+.npm/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Session Claude Code locale
+.claude/

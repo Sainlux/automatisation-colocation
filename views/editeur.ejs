@@ -1,0 +1,577 @@
+<%- include('partials/head') %>
+
+<!-- ───── Top bar : retour + step indicator + statut ───── -->
+<div class="mb-6 rise rise-1">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+    <a href="/historique" class="text-[13px] text-wine link-underline py-2 font-medium">← Retour aux documents</a>
+    <div class="flex items-center gap-2">
+      <span class="chip chip-bare bg-paper2 capitalize"><%= doc.type %></span>
+      <span class="chip <%= doc.statut==='envoye' ? 'chip-sent' : doc.statut==='genere' ? 'chip-issued' : 'chip-draft' %>"><%= doc.statut %></span>
+    </div>
+  </div>
+
+  <!-- Step indicator -->
+  <div class="steps">
+    <% const stepCurrent = doc.statut === 'envoye' ? 3 : doc.statut === 'genere' ? 2 : 1; %>
+    <span class="step <%= stepCurrent > 1 ? 'is-done' : stepCurrent === 1 ? 'is-current' : '' %>">
+      <span class="step-num">i</span> Préparer
+    </span>
+    <span class="step-sep">·</span>
+    <span class="step <%= stepCurrent > 2 ? 'is-done' : stepCurrent === 2 ? 'is-current' : '' %>">
+      <span class="step-num">ii</span> Réviser
+    </span>
+    <span class="step-sep">·</span>
+    <span class="step <%= stepCurrent === 3 ? 'is-current' : '' %>">
+      <span class="step-num">iii</span> Transmettre
+    </span>
+  </div>
+</div>
+
+<!-- ───── Mobile : bouton "Voir l'aperçu PDF" qui ouvre l'iframe au-dessus du form ───── -->
+<details class="lg:hidden card p-4 mb-5">
+  <summary class="cursor-pointer flex items-center justify-between min-h-[44px] list-none">
+    <span class="font-display text-lg">Aperçu du document</span>
+    <span class="text-[10.5px] font-mono uppercase tracking-[0.18em] text-wine">PDF live ↓</span>
+  </summary>
+  <div class="mt-3 -mx-4 -mb-4 border-t border-border overflow-hidden" style="height:70vh">
+    <iframe id="apercu-mobile" class="w-full h-full block bg-paper" src="" title="Aperçu du document"></iframe>
+  </div>
+</details>
+
+<div class="grid lg:grid-cols-2 gap-6">
+  <!-- ÉDITEUR -->
+  <form id="form-doc" class="card p-5 sm:p-6 space-y-6 rise rise-2" data-id="<%= doc.id %>">
+    <input type="hidden" name="_regen_texte" id="regen-flag" value="0" />
+
+    <section>
+      <div class="eyebrow mb-3">Colocataire</div>
+      <% if (doc.data.bien_adresse) { %>
+        <div class="mb-4 flex items-start gap-3 p-3 border border-border rounded-lg bg-paper2/40">
+          <span class="font-mono text-[10px] uppercase tracking-[0.18em] text-ink3 shrink-0 pt-0.5">Bien</span>
+          <div class="min-w-0">
+            <% if (doc.data.bien_nom) { %>
+              <div class="font-display text-base leading-tight"><%= doc.data.bien_nom %></div>
+            <% } %>
+            <div class="text-[12px] text-ink2 mt-0.5 truncate"><%= doc.data.bien_adresse %></div>
+            <div class="text-[10.5px] text-ink3 mt-1 leading-snug">Cette adresse sera imprimée sur le PDF. Modifiable plus bas dans la section <em>Cabinet</em>.</div>
+          </div>
+        </div>
+      <% } %>
+      <% if (doc.type === 'attestation' && !doc.data.coloc_civilite) { %>
+        <div class="border border-wine/30 rounded-lg p-3 sm:p-4 mb-4" style="background:#FBF4F2">
+          <div class="flex items-start gap-3">
+            <span class="font-mono text-[10px] tracking-[0.22em] uppercase text-wine shrink-0 pt-0.5">⚠ Précision requise</span>
+          </div>
+          <p class="text-[13px] text-ink2 mt-2 leading-snug">
+            Sans civilité, le document utilisera des formulations neutres comme « M./Mme » et « l'intéressé(e) ».
+            Sélectionnez <strong>Monsieur</strong> ou <strong>Madame</strong> ci-dessous pour adapter automatiquement
+            les accords (né/née, intéressé/intéressée, formule de politesse).
+          </p>
+        </div>
+      <% } %>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="sm:col-span-2">Civilité <% if (doc.type === 'attestation' && !doc.data.coloc_civilite) { %><span class="text-wine ml-1">*</span><% } %>
+          <div class="segmented mt-1.5">
+            <label><input type="radio" name="coloc_civilite" value="" <%= !doc.data.coloc_civilite ? 'checked' : '' %>><span>—</span></label>
+            <label><input type="radio" name="coloc_civilite" value="M" <%= doc.data.coloc_civilite === 'M' ? 'checked' : '' %>><span>Monsieur</span></label>
+            <label><input type="radio" name="coloc_civilite" value="Mme" <%= doc.data.coloc_civilite === 'Mme' ? 'checked' : '' %>><span>Madame</span></label>
+          </div>
+          <span class="helper-text">Enregistrée sur la fiche — saisie une seule fois. Détermine les accords du document.</span>
+        </label>
+        <label>Prénom <input class="w-full" name="coloc_prenom" value="<%= doc.data.coloc_prenom || '' %>"></label>
+        <label>Nom <input class="w-full" name="coloc_nom" value="<%= doc.data.coloc_nom || '' %>"></label>
+        <label>Email <input class="w-full" name="coloc_email" type="email" value="<%= doc.data.coloc_email || '' %>"></label>
+        <label>Téléphone <input class="w-full" name="coloc_telephone" type="tel" value="<%= doc.data.coloc_telephone || '' %>" placeholder="+33 6 12 34 56 78"></label>
+        <label>Chambre <input class="w-full" name="coloc_chambre" value="<%= doc.data.coloc_chambre || '' %>"></label>
+        <label class="sm:col-span-2">Adresse <input class="w-full" name="coloc_adresse" value="<%= doc.data.coloc_adresse || '' %>"></label>
+        <label>Date de naissance
+          <input class="w-full" name="coloc_date_naissance" type="date" value="<%= doc.data.coloc_date_naissance || '' %>">
+          <span class="helper-text">Conservée sur la fiche — jamais redemandée.</span>
+        </label>
+        <% if (doc.type === 'attestation') { %>
+          <label>Date d'entrée <input class="w-full" name="coloc_date_entree" type="date" value="<%= doc.data.coloc_date_entree || '' %>"></label>
+        <% } %>
+      </div>
+    </section>
+
+    <section class="hairline pt-6">
+      <div class="eyebrow mb-3">Période & émission</div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <label>Date d'émission <input class="w-full" name="date_emission" type="date" value="<%= doc.data.date_emission || '' %>"></label>
+        <% if (doc.type !== 'attestation') { %>
+          <label>Période début <input class="w-full" name="periode_debut" type="date" value="<%= doc.data.periode_debut || '' %>"></label>
+          <label>Période fin <input class="w-full" name="periode_fin" type="date" value="<%= doc.data.periode_fin || '' %>"></label>
+        <% } %>
+      </div>
+    </section>
+
+    <% if (doc.type === 'quittance') { %>
+    <section class="hairline pt-6">
+      <div class="eyebrow mb-3">Montants</div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <label>Loyer (€) <input id="f-loyer" class="w-full" name="loyer" type="number" step="0.01" value="<%= doc.data.loyer ?? '' %>"></label>
+        <label>Charges (€) <input id="f-charges" class="w-full" name="charges" type="number" step="0.01" value="<%= doc.data.charges ?? '' %>"></label>
+        <label>Total (€) <span class="text-[10px] text-ink3 italic">— calculé</span>
+          <input id="f-total" class="w-full" name="montant_total" type="number" step="0.01" value="<%= doc.data.montant_total ?? '' %>" readonly style="background:#F4EFE6;font-family:'IBM Plex Mono',monospace;font-weight:500">
+        </label>
+      </div>
+    </section>
+    <% } %>
+
+    <% if (doc.type === 'facture') { %>
+    <section class="hairline pt-6" id="degats-section">
+      <div class="flex items-baseline justify-between mb-3 gap-2 flex-wrap">
+        <div class="eyebrow">Dégâts à facturer</div>
+        <div class="text-[11px] text-ink3">Sélectionnez plusieurs lignes — quantité et prix ajustables.</div>
+      </div>
+
+      <!-- Sélecteurs : Immobilier / Mobilier -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <div>
+          <label class="eyebrow">Immobilier</label>
+          <select id="add-immobilier" class="w-full mt-1.5">
+            <option value="">+ Ajouter une réparation immobilière…</option>
+            <% for (const it of catalogueImmobilier) { %>
+              <option data-prix="<%= it.prix %>" value="<%= it.label %>"><%= it.label %> — <%= it.prix %> €</option>
+            <% } %>
+          </select>
+        </div>
+        <div>
+          <label class="eyebrow">Mobilier</label>
+          <select id="add-mobilier" class="w-full mt-1.5">
+            <option value="">+ Ajouter un meuble / équipement…</option>
+            <% for (const it of catalogueMobilier) { %>
+              <option data-prix="<%= it.prix %>" value="<%= it.label %>"><%= it.label %> — <%= it.prix %> €</option>
+            <% } %>
+          </select>
+        </div>
+      </div>
+
+      <!-- Tableau des items sélectionnés (scroll horizontal sur mobile) -->
+      <div class="bg-paper2/40 border border-border rounded-lg overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[520px] text-[12.5px]" id="items-table">
+            <thead class="text-[10px] uppercase tracking-[0.16em] text-ink3 font-mono bg-paper2">
+              <tr>
+                <th class="text-left px-3 py-2.5">Cat.</th>
+                <th class="text-left px-3 py-2.5">Désignation</th>
+                <th class="text-center px-2 py-2.5 w-14">Qté</th>
+                <th class="text-right px-2 py-2.5 w-24">Prix u. (€)</th>
+                <th class="text-right px-3 py-2.5 w-24">Total (€)</th>
+                <th class="w-10"></th>
+              </tr>
+            </thead>
+            <tbody id="items-tbody"></tbody>
+            <tfoot class="border-t border-border bg-paper2/60">
+              <tr>
+                <td colspan="4" class="px-3 py-3 text-right font-mono uppercase tracking-[0.16em] text-[10.5px] text-ink2">Total dû</td>
+                <td class="px-3 py-3 text-right font-display text-xl" id="items-total">0,00 €</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div id="items-empty" class="p-6 text-center text-[12.5px] text-ink3 italic font-display">Aucune ligne. Ajoutez une réparation via les sélecteurs ci-dessus.</div>
+      </div>
+
+      <div class="flex justify-between items-center mt-3">
+        <button type="button" id="add-custom" class="btn btn-ghost !text-[12px]">+ Ligne personnalisée</button>
+        <input type="hidden" name="items" id="items-json" value='<%= JSON.stringify(doc.data.items || []) %>' />
+      </div>
+    </section>
+    <% } %>
+
+    <section class="hairline pt-6">
+      <div class="eyebrow mb-3">Cabinet</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="sm:col-span-2">Nom <input class="w-full" name="proprietaire_nom" value="<%= doc.data.proprietaire_nom || '' %>"></label>
+        <label class="sm:col-span-2">Adresse <input class="w-full" name="proprietaire_adresse" value="<%= doc.data.proprietaire_adresse || '' %>"></label>
+        <label>Téléphone <input class="w-full" name="proprietaire_telephone" value="<%= doc.data.proprietaire_telephone || '' %>"></label>
+        <label>Email <input class="w-full" name="proprietaire_email" type="email" value="<%= doc.data.proprietaire_email || '' %>"></label>
+        <label class="sm:col-span-2">Adresse du bien <input class="w-full" name="bien_adresse" value="<%= doc.data.bien_adresse || '' %>"></label>
+        <label>Ville d'émission <input class="w-full" name="ville_emission" value="<%= doc.data.ville_emission || 'Beaumont' %>"></label>
+      </div>
+    </section>
+
+    <section class="hairline pt-6">
+      <div class="flex items-center justify-between mb-2">
+        <div class="eyebrow">Texte du document</div>
+        <button type="button" id="btn-regen" class="text-[11.5px] text-wine link-underline font-mono uppercase tracking-[0.14em]">↻ Régénérer</button>
+      </div>
+      <textarea class="w-full" name="texte" rows="9" aria-label="Texte du document"><%= doc.data.texte || '' %></textarea>
+      <span class="helper-text">Le texte est régénéré automatiquement quand vous modifiez la civilité, le nom, l'adresse ou les montants — sauf si vous l'avez édité manuellement.</span>
+    </section>
+
+    <% if (doc.type === 'quittance') { %>
+    <section class="hairline pt-6">
+      <div class="eyebrow mb-2">Mention légale</div>
+      <textarea class="w-full" name="mention_legale" rows="4"><%= doc.data.mention_legale || '' %></textarea>
+    </section>
+    <% } %>
+
+    <section class="hairline pt-6">
+      <div class="eyebrow mb-3">Position de la signature</div>
+      <div class="grid grid-cols-2 gap-3">
+        <label>X (0–1) <input class="w-full" type="number" step="0.01" min="0.05" max="0.95" name="signature_x_ratio" value="<%= doc.data.signature_x_ratio ?? 0.54 %>"></label>
+        <label>Y (0–1) <input class="w-full" type="number" step="0.01" min="0.05" max="0.95" name="signature_y_ratio" value="<%= doc.data.signature_y_ratio ?? 0.54 %>"></label>
+      </div>
+      <span class="helper-text">Position intelligente : si le texte arrive jusque-là, la signature glisse automatiquement plus bas.</span>
+    </section>
+
+    <!-- ───── TRANSMETTRE LE DOCUMENT ─────────────────────────────────── -->
+    <section class="hairline pt-6">
+      <div class="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 mb-4">
+        <div class="eyebrow">Transmettre le document</div>
+        <span class="text-[11px] text-ink3 font-display italic">Trois canaux disponibles</span>
+      </div>
+
+      <!-- Bouton "Partager" unifié (mobile avec Web Share API) — remplace les 3 boutons -->
+      <div id="share-mobile-wrap" class="md:hidden mb-4" style="display:none">
+        <button type="button" id="btn-envoyer-share" class="btn-share w-full justify-center">
+          <span class="btn-share-glyph" aria-hidden="true">↗</span>
+          <span>Partager le document</span>
+        </button>
+        <p class="helper-text mt-2">Choisissez WhatsApp, Messages, Mail ou AirDrop dans le sélecteur natif — le PDF est joint automatiquement.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <!-- ─── EMAIL ─── -->
+        <div class="border border-border rounded-lg p-4 bg-paper">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div class="font-display text-base">Par courriel</div>
+            <span class="text-[10px] font-mono uppercase tracking-[0.16em] <%= emailConfigured ? 'text-forest' : 'text-wine' %>">
+              <%= emailConfigured ? 'SMTP prêt' : 'SMTP absent' %>
+            </span>
+          </div>
+          <label class="text-[11px] text-ink3">Adresse email
+            <input id="email-to" class="w-full mt-1" type="email" value="<%= doc.email_destinataire || doc.data.coloc_email || '' %>" placeholder="exemple@email.com">
+          </label>
+          <button type="button" id="btn-envoyer-email" class="btn btn-wine w-full justify-center mt-3" <%= !emailConfigured ? 'disabled style="opacity:0.5;cursor:not-allowed"' : '' %>>
+            ✉  Envoyer →
+          </button>
+        </div>
+
+        <!-- ─── WHATSAPP ─── -->
+        <div class="border border-border rounded-lg p-4 bg-paper">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div class="font-display text-base">Par WhatsApp</div>
+            <span class="text-[10px] font-mono uppercase tracking-[0.16em] text-forest">Disponible</span>
+          </div>
+          <label class="text-[11px] text-ink3">Numéro de téléphone
+            <input id="wa-phone" class="w-full mt-1" type="tel" value="<%= doc.data.coloc_telephone || '' %>" placeholder="+33 6 12 34 56 78">
+          </label>
+          <button type="button" id="btn-envoyer-wa" class="btn w-full justify-center mt-3" style="background:#25D366;color:#fff">
+            💬  Ouvrir WhatsApp →
+          </button>
+        </div>
+
+        <!-- ─── SMS ─── -->
+        <div class="border border-border rounded-lg p-4 bg-paper">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div class="font-display text-base">Par SMS</div>
+            <span class="text-[10px] font-mono uppercase tracking-[0.16em] text-ink3">Mobile</span>
+          </div>
+          <label class="text-[11px] text-ink3">Numéro de téléphone
+            <input id="sms-phone" class="w-full mt-1" type="tel" value="<%= doc.data.coloc_telephone || '' %>" placeholder="+33 6 12 34 56 78">
+          </label>
+          <button type="button" id="btn-envoyer-sms" class="btn btn-primary w-full justify-center mt-3">
+            📱  Ouvrir SMS →
+          </button>
+        </div>
+      </div>
+
+      <p class="helper-text mt-3 leading-relaxed">
+        <strong class="text-ink2">WhatsApp / SMS</strong> — Le PDF est téléchargé automatiquement et un message pré-rempli s'ouvre dans l'application choisie. Joignez ensuite le PDF à la conversation. Le document est marqué comme <em>envoyé</em>.
+      </p>
+    </section>
+
+    <!-- Action bar sticky en bas — Préparer / Valider / Annuler -->
+    <div class="hairline pt-6 mt-6 -mx-5 sm:-mx-6 px-5 sm:px-6 sticky bottom-0 bg-card/95 backdrop-blur border-t-2 border-border z-20 safe-bottom" style="padding-bottom: calc(env(safe-area-inset-bottom) + 16px); padding-top: 16px; margin-bottom: -1.5rem">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+        <span class="font-mono text-[10px] uppercase tracking-[0.18em] text-ink3 hidden sm:inline-block mr-2">Actions du document</span>
+        <button type="button" id="btn-fullscreen" class="btn btn-ghost justify-center">Aperçu plein écran ↗</button>
+        <button type="button" id="btn-valider" class="btn btn-forest justify-center sm:ml-auto">Valider & générer le PDF →</button>
+        <button type="button" id="btn-annuler" class="btn btn-ghost justify-center">Annuler</button>
+      </div>
+    </div>
+  </form>
+
+  <!-- APERÇU (desktop uniquement — mobile utilise <details> en haut) -->
+  <div class="hidden lg:block lg:sticky lg:top-6 self-start rise rise-3">
+    <div class="mb-3 flex items-baseline justify-between">
+      <div class="eyebrow">Aperçu PDF — temps réel</div>
+      <span class="text-[10px] font-mono uppercase tracking-[0.18em] text-ink3">Recompose automatiquement</span>
+    </div>
+    <div class="card overflow-hidden shadow-float" style="height:calc(100vh - 9rem)">
+      <iframe id="apercu" class="w-full h-full block" src="" title="Aperçu du document"></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const form = $('#form-doc');
+const id = form.dataset.id;
+
+function formDataAsBody() {
+  const fd = new FormData(form);
+  const obj = {};
+  for (const [k, v] of fd.entries()) obj[k] = v;
+  return obj;
+}
+
+async function refreshPreview() {
+  const body = formDataAsBody();
+  const r = await fetch('/documents/' + id + '/apercu', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.getElementById('apercu');         // desktop
+  const am = document.getElementById('apercu-mobile'); // mobile (details)
+  if (a) a.src = url;
+  if (am) am.src = url;
+  $('#regen-flag').value = '0';
+}
+
+function recalcTotal() {
+  const l = parseFloat(document.getElementById('f-loyer')?.value || '0') || 0;
+  const c = parseFloat(document.getElementById('f-charges')?.value || '0') || 0;
+  const t = document.getElementById('f-total');
+  if (t) t.value = (l + c).toFixed(2);
+}
+
+// ─── Gestion des items « Dégâts à facturer » ─────────────────────────
+const itemsJsonEl = document.getElementById('items-json');
+let items = [];
+try { items = JSON.parse(itemsJsonEl?.value || '[]'); } catch { items = []; }
+
+function fmtEur(n) { return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+function categorieLabel(c) { return c === 'immobilier' ? 'IMM' : c === 'mobilier' ? 'MOB' : 'AUT'; }
+function categorieColor(c) { return c === 'immobilier' ? 'text-wine' : c === 'mobilier' ? 'text-forest' : 'text-ink3'; }
+
+function renderItems() {
+  const tbody = document.getElementById('items-tbody');
+  const empty = document.getElementById('items-empty');
+  if (!tbody) return;
+  if (!items.length) {
+    tbody.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+  } else {
+    if (empty) empty.style.display = 'none';
+    tbody.innerHTML = items.map((it, i) => `
+      <tr class="border-t border-border/70">
+        <td class="px-3 py-2 font-mono text-[10px] uppercase tracking-wider ${categorieColor(it.categorie)}">${categorieLabel(it.categorie)}</td>
+        <td class="px-3 py-2">
+          <input data-i="${i}" data-k="label" value="${(it.label || '').replace(/"/g,'&quot;')}" class="!py-1 !px-2 !text-[12.5px] w-full bg-transparent border-transparent hover:border-border focus:bg-white">
+        </td>
+        <td class="px-2 py-2 text-center">
+          <input data-i="${i}" data-k="quantite" type="number" min="0" step="1" value="${it.quantite ?? 1}" class="!py-1 !px-1 !text-[12.5px] w-12 text-center">
+        </td>
+        <td class="px-2 py-2 text-right">
+          <input data-i="${i}" data-k="prix_unitaire" type="number" step="0.01" value="${it.prix_unitaire ?? 0}" class="!py-1 !px-1 !text-[12.5px] w-20 text-right">
+        </td>
+        <td class="px-3 py-2 text-right font-mono">${fmtEur((Number(it.quantite||0)) * (Number(it.prix_unitaire||0)))}</td>
+        <td class="px-2 py-2 text-center"><button type="button" data-rm="${i}" class="text-ink3 hover:text-wine text-lg leading-none" aria-label="Retirer la ligne">×</button></td>
+      </tr>
+    `).join('');
+  }
+  // Total
+  const total = items.reduce((s, it) => s + (Number(it.quantite||0) * Number(it.prix_unitaire||0)), 0);
+  const tEl = document.getElementById('items-total');
+  if (tEl) tEl.textContent = fmtEur(total);
+  // Sync hidden field
+  if (itemsJsonEl) itemsJsonEl.value = JSON.stringify(items);
+}
+
+function addItem(item) {
+  items.push({ categorie: 'autre', label: '', quantite: 1, prix_unitaire: 0, ...item });
+  renderItems();
+  scheduleRefresh();
+}
+
+const immoEl = document.getElementById('add-immobilier');
+if (immoEl) immoEl.addEventListener('change', (e) => {
+  const opt = e.target.selectedOptions[0];
+  if (!opt || !opt.value) return;
+  addItem({ categorie: 'immobilier', label: opt.value, prix_unitaire: Number(opt.dataset.prix || 0) });
+  e.target.value = '';
+});
+const mobEl = document.getElementById('add-mobilier');
+if (mobEl) mobEl.addEventListener('change', (e) => {
+  const opt = e.target.selectedOptions[0];
+  if (!opt || !opt.value) return;
+  addItem({ categorie: 'mobilier', label: opt.value, prix_unitaire: Number(opt.dataset.prix || 0) });
+  e.target.value = '';
+});
+const customEl = document.getElementById('add-custom');
+if (customEl) customEl.addEventListener('click', () => addItem({ categorie: 'autre', label: '', prix_unitaire: 0 }));
+
+// Délégation : mise à jour d'un item ou suppression
+const itemsSection = document.getElementById('degats-section');
+if (itemsSection) {
+  itemsSection.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.dataset.i !== undefined && t.dataset.k) {
+      const i = Number(t.dataset.i);
+      let v = t.value;
+      if (t.dataset.k === 'quantite' || t.dataset.k === 'prix_unitaire') v = parseFloat(v) || 0;
+      items[i][t.dataset.k] = v;
+      const total = items.reduce((s, it) => s + (Number(it.quantite||0) * Number(it.prix_unitaire||0)), 0);
+      document.getElementById('items-total').textContent = fmtEur(total);
+      const tr = t.closest('tr');
+      if (tr) {
+        const subTd = tr.querySelectorAll('td')[4];
+        if (subTd) subTd.textContent = fmtEur(Number(items[i].quantite||0) * Number(items[i].prix_unitaire||0));
+      }
+      itemsJsonEl.value = JSON.stringify(items);
+      scheduleRefresh();
+    }
+  });
+  itemsSection.addEventListener('click', (e) => {
+    const rm = e.target.dataset?.rm;
+    if (rm !== undefined) {
+      items.splice(Number(rm), 1);
+      renderItems();
+      scheduleRefresh();
+    }
+  });
+  renderItems();
+}
+
+function scheduleRefresh() { clearTimeout(liveTimer); liveTimer = setTimeout(refreshPreview, 250); }
+
+const REGEN_FIELDS = new Set(['loyer','charges','coloc_civilite','coloc_prenom','coloc_nom','coloc_date_naissance','coloc_date_entree','coloc_adresse','proprietaire_nom','proprietaire_adresse','bien_adresse','periode_debut','periode_fin']);
+let texteManually = false;
+const texteEl = form.querySelector('[name="texte"]');
+if (texteEl) texteEl.addEventListener('input', () => { texteManually = true; });
+document.getElementById('btn-regen')?.addEventListener('click', () => { texteManually = false; $('#regen-flag').value = '1'; refreshPreview(); window.toast('Le texte a été recomposé depuis le modèle.', { kind: 'info', eyebrow: 'Régénéré' }); });
+
+let liveTimer = null;
+form.addEventListener('input', (e) => {
+  if (e.target?.name === 'loyer' || e.target?.name === 'charges') recalcTotal();
+  if (e.target && REGEN_FIELDS.has(e.target.name) && !texteManually) $('#regen-flag').value = '1';
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(refreshPreview, 250);
+});
+
+$('#btn-fullscreen').addEventListener('click', async () => {
+  const body = formDataAsBody();
+  const r = await fetch('/documents/' + id + '/apercu', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+});
+
+$('#btn-valider').addEventListener('click', async () => {
+  const r = await fetch('/documents/' + id + '/valider', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(formDataAsBody()) });
+  const data = await r.json();
+  if (data.ok) {
+    window.toast('PDF généré : ' + data.filename, { kind: 'success', eyebrow: 'Acte émis' });
+    window.open(data.pdf_url, '_blank');
+  } else {
+    window.toast(data.raison || 'Erreur à la génération', { kind: 'error' });
+  }
+});
+
+$('#btn-annuler').addEventListener('click', () => { if (confirm('Annuler les modifications non enregistrées ?')) location.reload(); });
+
+// ─── Normalisation des numéros de téléphone (format international E.164) ──
+function normalizePhone(raw) {
+  let p = String(raw || '').replace(/[\s.\-()]/g, '');
+  if (!p) return '';
+  if (p.startsWith('+')) return p;
+  if (p.startsWith('00')) return '+' + p.slice(2);
+  if (p.startsWith('0')) return '+33' + p.slice(1);
+  return '+' + p;
+}
+
+async function fetchMessage() {
+  const r = await fetch('/documents/' + id + '/message-transmission');
+  const d = await r.json();
+  return d.message || '';
+}
+
+async function markSent(canal, destinataire) {
+  await fetch('/documents/' + id + '/marquer-envoye', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ canal, destinataire })
+  });
+}
+
+// ─── Envoi par email (SMTP direct) ─────────────────────────────────────
+document.getElementById('btn-envoyer-email')?.addEventListener('click', async () => {
+  const to = document.getElementById('email-to').value.trim();
+  if (!to) return window.toast('Adresse email requise.', { kind: 'error' });
+  const r = await fetch('/documents/' + id + '/envoyer', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to })
+  });
+  const data = await r.json();
+  if (data.ok) {
+    window.toast('Acte transmis à ' + to + '.', { kind: 'success', eyebrow: 'Courriel envoyé' });
+    setTimeout(() => location.reload(), 1600);
+  } else if (/SMTP/.test(data.raison || '')) {
+    window.toastSmtpError(data.raison);
+  } else {
+    window.toast(data.raison || 'envoi impossible', { kind: 'error' });
+  }
+});
+
+// ─── Partager (Web Share API — mobile) ────────────────────────────────
+if (window.canShareFiles?.() && window.__isMobile) {
+  const wrap = document.getElementById('share-mobile-wrap');
+  if (wrap) wrap.style.display = 'block';
+}
+document.getElementById('btn-envoyer-share')?.addEventListener('click', async () => {
+  await window.shareDocuments([id], {
+    title: 'Document',
+    text: '',
+    onSuccess: async () => {
+      await markSent('partage', document.getElementById('wa-phone')?.value || document.getElementById('email-to')?.value);
+      window.toast('Document partagé.', { kind: 'success', eyebrow: 'Transmis' });
+      setTimeout(() => location.reload(), 1600);
+    },
+    onError: (e) => window.toast(e.message, { kind: 'error' })
+  });
+});
+
+// ─── WhatsApp : deeplink + téléchargement PDF + marquage ───────────────
+document.getElementById('btn-envoyer-wa')?.addEventListener('click', async () => {
+  const phone = document.getElementById('wa-phone').value.trim();
+  if (!phone) return window.toast('Numéro de téléphone requis.', { kind: 'error' });
+  const e164 = normalizePhone(phone).replace('+', '');
+  const message = await fetchMessage();
+  const a = document.createElement('a');
+  a.href = '/documents/' + id + '/pdf';
+  a.download = '';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => {
+    const url = 'https://wa.me/' + encodeURIComponent(e164) + '?text=' + encodeURIComponent(message);
+    window.open(url, '_blank', 'noopener');
+  }, 350);
+  await markSent('whatsapp', phone);
+  window.toast('PDF téléchargé · WhatsApp ouvert. Joignez le PDF.', { kind: 'success', eyebrow: 'Transmis' });
+  setTimeout(() => location.reload(), 2400);
+});
+
+// ─── SMS : deeplink mobile + téléchargement PDF + marquage ─────────────
+document.getElementById('btn-envoyer-sms')?.addEventListener('click', async () => {
+  const phone = document.getElementById('sms-phone').value.trim();
+  if (!phone) return window.toast('Numéro de téléphone requis.', { kind: 'error' });
+  const e164 = normalizePhone(phone);
+  const message = await fetchMessage();
+  const a = document.createElement('a');
+  a.href = '/documents/' + id + '/pdf';
+  a.download = '';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => {
+    window.location.href = 'sms:' + e164 + '?body=' + encodeURIComponent(message);
+  }, 350);
+  await markSent('sms', phone);
+  window.toast('PDF téléchargé · client SMS ouvert.', { kind: 'success', eyebrow: 'Transmis' });
+});
+
+recalcTotal();
+refreshPreview();
+</script>
+
+<%- include('partials/foot') %>

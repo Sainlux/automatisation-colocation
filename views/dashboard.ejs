@@ -1,0 +1,190 @@
+<%- include('partials/head') %>
+
+<!-- ───────── ZONE 1 — ACTION IMMÉDIATE ───────── -->
+<section class="grid lg:grid-cols-5 gap-5 mb-8 md:mb-10 rise rise-1">
+  <!-- NL command -->
+  <div class="card lg:col-span-3 p-5 sm:p-7">
+    <div class="flex items-baseline justify-between mb-3">
+      <div class="eyebrow">Commande en langage naturel</div>
+      <span class="text-[10px] font-mono text-ink3 uppercase tracking-wider">↩ Entrée pour analyser</span>
+    </div>
+    <h2 class="font-display text-2xl sm:text-3xl mb-1.5">Que faut-il <span class="italic text-wine">préparer</span> ?</h2>
+    <p class="text-sm text-ink2 mb-5 ed-justify">Décrivez la demande en quelques mots — le cabinet identifie le type, le colocataire et la période.</p>
+    <form id="form-nl" class="flex flex-col sm:flex-row gap-2">
+      <input id="nl-message" type="text" required
+        placeholder="« Quittance Nicolas octobre 2025 »"
+        class="flex-1 !text-sm" autocomplete="off" />
+      <button class="btn btn-wine justify-center">Analyser →</button>
+    </form>
+    <div id="nl-feedback" class="text-sm text-ink2 mt-3"></div>
+  </div>
+
+  <!-- New doc -->
+  <div class="card lg:col-span-2 p-5 sm:p-7">
+    <div class="eyebrow mb-3">Création directe</div>
+    <h2 class="font-display text-2xl sm:text-3xl mb-4">Nouveau document</h2>
+    <form action="/documents/nouveau" method="post" class="space-y-3">
+      <label>Type de document
+        <select name="type" class="w-full">
+          <option value="attestation">Attestation de domiciliation</option>
+          <option value="quittance">Quittance de loyer</option>
+          <option value="facture">Facture / reçu</option>
+        </select>
+      </label>
+      <label>Colocataire
+        <select name="colocataire_id" class="w-full" required>
+          <% for (const c of colocataires) { %>
+            <option value="<%= c.id %>"><%= c.prenom %> <%= c.nom %><%= c.actif ? '' : ' — ancien' %></option>
+          <% } %>
+        </select>
+      </label>
+      <button class="btn btn-primary w-full justify-center">Créer le brouillon →</button>
+    </form>
+  </div>
+</section>
+
+<!-- ───────── ZONE 2 — ÉTAT DU CABINET ───────── -->
+<div class="ornament-rule mb-6 md:mb-8 rise rise-2"><span>État du cabinet</span></div>
+
+<section class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-10 md:mb-12 rise rise-2">
+  <% const metrics = [
+    { label: 'Colocataires actifs', value: stats.colocActifs, foot: 'au cabinet',          tone: '' },
+    { label: 'Documents émis',      value: stats.docsTotal,   foot: 'depuis l\'origine',    tone: '' },
+    { label: 'Brouillons',          value: stats.brouillons,  foot: 'à finaliser',          tone: 'wine' },
+    { label: 'Envoyés par email',   value: stats.envoyes,     foot: 'transmis',             tone: '' }
+  ]; %>
+  <% for (const m of metrics) { %>
+    <div class="stat-card <%= m.value === 0 ? 'is-zero' : (m.tone === 'wine' ? 'is-wine' : '') %>">
+      <div class="eyebrow text-[9.5px] sm:text-[10.5px] leading-tight"><%= m.label %></div>
+      <span class="stat-value"><%= m.value %></span>
+      <div class="stat-foot"><%= m.foot %></div>
+      <span class="stat-arrow" aria-hidden="true">↗</span>
+    </div>
+  <% } %>
+</section>
+
+<!-- ───────── ZONE 3 — RECHERCHE & ACTIVITÉ ───────── -->
+<div class="ornament-rule mb-6 md:mb-8 rise rise-3"><span>Recherche & activité</span></div>
+
+<section class="grid lg:grid-cols-5 gap-5 rise rise-3">
+  <!-- Search -->
+  <div class="card lg:col-span-3 p-5 sm:p-7">
+    <div class="eyebrow mb-3">Recherche globale</div>
+    <input id="search-q" type="search" placeholder="Colocataire · type · mois · montant…"
+      class="w-full mb-4" aria-label="Rechercher dans le cabinet" />
+    <div class="flex flex-wrap gap-1.5 mb-4" id="filters" role="tablist" aria-label="Filtres de recherche">
+      <% const fs = [
+        ['tous','Tous'],['colocataires','Colocataires'],['documents','Documents'],
+        ['brouillons','Brouillons'],['envoyes','Envoyés'],['anciens','Anciens colocataires']
+      ]; %>
+      <% for (const [k,l] of fs) { %>
+        <button type="button" data-filter="<%= k %>"
+          class="filter-btn pill <%= k==='tous' ? 'is-active' : '' %>">
+          <%= l %>
+        </button>
+      <% } %>
+    </div>
+    <div id="search-results" class="text-sm space-y-3">
+      <p class="text-ink3 text-[12.5px] italic font-display">Tapez pour rechercher dans tout le cabinet…</p>
+    </div>
+  </div>
+
+  <!-- Recent -->
+  <div class="card lg:col-span-2 p-5 sm:p-7">
+    <div class="flex items-baseline justify-between mb-3">
+      <div class="eyebrow">Activité récente</div>
+      <a href="/historique" class="text-[10.5px] font-mono uppercase tracking-[0.18em] text-wine link-underline">Tout voir →</a>
+    </div>
+    <% if (!recents.length) { %>
+      <div class="empty-state" style="padding:28px 12px">
+        <div class="empty-fleuron" style="font-size:22px">·  ·</div>
+        <div class="empty-eyebrow">Aucune activité</div>
+        <p class="empty-line" style="font-size:15px">Le premier acte produit s'inscrira ici dès sa création.</p>
+      </div>
+    <% } else { %>
+    <ul class="divide-y divide-border -mx-2">
+      <% for (const d of recents) { %>
+        <li class="py-3 px-2 flex items-center gap-3 group">
+          <span class="chip <%= d.statut==='envoye' ? 'chip-sent' : d.statut==='genere' ? 'chip-issued' : 'chip-draft' %> shrink-0"><%= d.statut %></span>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium truncate capitalize"><%= d.type %> · <%= d.coloc_prenom || '' %> <%= d.coloc_nom || '' %></div>
+            <div class="text-[11px] text-ink3 font-mono"><%= d.cree_le %></div>
+          </div>
+          <a href="/documents/<%= d.id %>/editer" class="text-xs text-wine link-underline shrink-0 py-2 opacity-70 group-hover:opacity-100">Ouvrir →</a>
+        </li>
+      <% } %>
+    </ul>
+    <% } %>
+  </div>
+</section>
+
+<script>
+const $ = (s) => document.querySelector(s);
+
+// NL --------------------------------------------------------------
+$('#form-nl').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const message = $('#nl-message').value.trim();
+  if (!message) return;
+  $('#nl-feedback').innerHTML = '<span class="font-mono text-[11.5px] uppercase tracking-[0.18em] text-ink3">… analyse en cours</span>';
+  const r = await fetch('/api/nl', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message}) });
+  const data = await r.json();
+  if (data.ok) { location.href = '/documents/' + data.document_id + '/editer'; return; }
+  let html = '<div class="p-3 bg-wineBg border border-wine/20 rounded-lg"><div class="font-mono text-[10.5px] uppercase tracking-[0.18em] text-wine mb-1">Précision requise</div><div class="text-ink"><strong>' + data.raison + '</strong>' + (data.indices ? '<br><span class="text-ink2 text-[12.5px]">' + data.indices + '</span>' : '') + '</div></div>';
+  if (data.colocataires) {
+    html += '<div class="mt-3"><div class="eyebrow mb-2">Choisissez le colocataire</div><div class="flex flex-wrap gap-1.5">';
+    for (const c of data.colocataires) {
+      html += '<button type="button" data-id="'+c.id+'" data-type="'+(data.analyse?.type||'attestation')+'" class="pick-coloc btn btn-ghost text-xs">'+c.prenom+' '+c.nom+'</button>';
+    }
+    html += '</div></div>';
+  }
+  $('#nl-feedback').innerHTML = html;
+  for (const b of document.querySelectorAll('.pick-coloc')) {
+    b.addEventListener('click', () => {
+      const f = document.createElement('form');
+      f.method = 'post'; f.action = '/documents/nouveau';
+      f.innerHTML = '<input name="type" value="'+b.dataset.type+'"><input name="colocataire_id" value="'+b.dataset.id+'">';
+      document.body.appendChild(f); f.submit();
+    });
+  }
+});
+
+// Search ---------------------------------------------------------
+let currentFilter = 'tous';
+for (const b of document.querySelectorAll('.filter-btn')) {
+  b.addEventListener('click', () => {
+    for (const x of document.querySelectorAll('.filter-btn')) x.classList.remove('is-active');
+    b.classList.add('is-active');
+    currentFilter = b.dataset.filter;
+    runSearch();
+  });
+}
+let searchTimer = null;
+$('#search-q').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = $('#search-q').value.trim();
+  // Skeleton loading pendant l'attente réseau
+  if (q) $('#search-results').innerHTML = '<div class="space-y-2"><div class="skel h-9 rounded-md"></div><div class="skel h-9 rounded-md w-11/12"></div><div class="skel h-9 rounded-md w-4/5"></div></div>';
+  searchTimer = setTimeout(runSearch, 150);
+});
+
+async function runSearch() {
+  const q = $('#search-q').value.trim();
+  if (!q) { $('#search-results').innerHTML = '<p class="text-ink3 text-[12.5px] italic font-display">Tapez pour rechercher dans tout le cabinet…</p>'; return; }
+  const r = await fetch('/api/recherche?q=' + encodeURIComponent(q) + '&filtre=' + currentFilter);
+  const data = await r.json();
+  const sect = (title, html) => html ? '<div><div class="eyebrow mb-2">'+title+'</div>'+html+'</div>' : '';
+  const renderColoc = (list) => list.length ? '<ul class="divide-y divide-border border border-border rounded-lg overflow-hidden bg-white">' + list.map(c => '<li class="px-3 py-2.5 flex items-center gap-2"><span class="font-medium text-sm">'+c.prenom+' '+c.nom+'</span><span class="text-ink3 text-xs">'+(c.email||'')+'</span>'+(c.chambre?'<span class="text-ink3 text-xs">· chambre '+c.chambre+'</span>':'')+(c.actif?'':'<span class="ml-2 chip chip-draft">ancien</span>')+'<a href="/colocataires" class="ml-auto text-wine text-xs link-underline">Ouvrir →</a></li>').join('') + '</ul>' : '';
+  const renderDocs = (list) => list.length ? '<ul class="divide-y divide-border border border-border rounded-lg overflow-hidden bg-white">' + list.map(d => '<li class="px-3 py-2.5 flex items-center gap-2 text-sm flex-wrap"><span class="chip '+(d.statut==='envoye'?'chip-sent':d.statut==='genere'?'chip-issued':'chip-draft')+'">'+d.statut+'</span><span class="font-medium capitalize">'+d.type+'</span><span class="text-ink3">'+(d.coloc_prenom||'')+' '+(d.coloc_nom||'')+'</span>'+(d.montant_total?'<span class="text-ink3 text-xs font-mono">· '+d.montant_total+' €</span>':'')+'<a href="/documents/'+d.id+'/editer" class="ml-auto text-wine text-xs link-underline">Ouvrir →</a></li>').join('') + '</ul>' : '';
+  const blocks = [];
+  if (currentFilter === 'tous' || currentFilter === 'colocataires') blocks.push(sect('Colocataires', renderColoc(data.colocataires)));
+  if (currentFilter === 'tous' || currentFilter === 'anciens') blocks.push(sect('Anciens colocataires', renderColoc(data.anciens)));
+  if (currentFilter === 'tous' || currentFilter === 'documents') blocks.push(sect('Documents', renderDocs(data.documents)));
+  if (currentFilter === 'brouillons') blocks.push(sect('Brouillons', renderDocs(data.brouillons)));
+  if (currentFilter === 'envoyes') blocks.push(sect('Envoyés', renderDocs(data.envoyes)));
+  const out = blocks.filter(Boolean).join('');
+  $('#search-results').innerHTML = out || '<p class="text-ink3 text-sm italic font-display">Aucun résultat.</p>';
+}
+</script>
+
+<%- include('partials/foot') %>

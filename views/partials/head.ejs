@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title><%= title %> — Cabinet Merhawi</title>
+
+  <!-- ─── Open Graph + Twitter Card ─── -->
+  <meta name="description" content="Cabinet de gérance privée. Préparation, validation et archivage des pièces administratives de la colocation — attestations, quittances, factures.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Cabinet Merhawi">
+  <meta property="og:title" content="Cabinet Merhawi — Gérance privée">
+  <meta property="og:description" content="Les papiers du quotidien, traités avec la patience d'un notaire et la précision d'un horloger.">
+  <meta property="og:image" content="/icons/icon-512.png">
+  <meta property="og:locale" content="fr_FR">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Cabinet Merhawi">
+  <meta name="twitter:description" content="Cabinet de gérance privée — préparation et archivage des actes locatifs.">
+  <meta name="twitter:image" content="/icons/icon-512.png">
+
+  <!-- PWA installable (Android Chrome + iOS Safari "Ajouter à l'écran d'accueil") -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#7C2D2A">
+  <meta name="application-name" content="Cabinet Merhawi">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- iOS Safari : mode plein écran + icône d'app -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cabinet Merhawi">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
+  <!-- Prefetch des 6 pages principales pour navigation instantanée -->
+  <link rel="prefetch" href="/" as="document">
+  <link rel="prefetch" href="/tableau" as="document">
+  <link rel="prefetch" href="/generation" as="document">
+  <link rel="prefetch" href="/biens" as="document">
+  <link rel="prefetch" href="/colocataires" as="document">
+  <link rel="prefetch" href="/historique" as="document">
+  <link rel="prefetch" href="/proprietaire" as="document">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            serif: ['"Instrument Serif"', 'Georgia', 'serif'],
+            mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace']
+          },
+          colors: {
+            paper:   '#FBF8F3',
+            paper2:  '#F4EFE6',
+            card:    '#FFFFFF',
+            border:  '#E8E1D3',
+            ink:     '#1A1916',
+            ink2:    '#4A4843',
+            ink3:    '#8C887F',
+            wine:    '#7C2D2A',
+            wine2:   '#A23A2F',
+            wineBg:  '#F1E2DF',
+            forest:  '#2F4030',
+            gold:    '#B89357'
+          },
+          letterSpacing: { tightish: '-0.012em' },
+          boxShadow: {
+            card: '0 1px 2px rgba(26,25,22,0.04), 0 1px 1px rgba(26,25,22,0.02)',
+            float: '0 8px 24px -8px rgba(26,25,22,0.12), 0 2px 4px rgba(26,25,22,0.04)',
+            press: 'inset 0 1px 2px rgba(26,25,22,0.06)'
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════
+       FOUNDATION — papier, encre, grille verticale 8px
+       ═════════════════════════════════════════════════════════════════ */
+    :root {
+      --paper:#FBF8F3; --paper2:#F4EFE6; --card:#FFFFFF;
+      --border:#E8E1D3; --ink:#1A1916; --ink2:#4A4843; --ink3:#8C887F;
+      --wine:#7C2D2A; --wine2:#A23A2F; --wineBg:#F1E2DF;
+      --forest:#2F4030; --gold:#B89357;
+    }
+    html, body { background: var(--paper); }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      /* paper grain — barely visible, adds expensive texture */
+      background-image:
+        radial-gradient(rgba(26,25,22,0.018) 1px, transparent 1px),
+        radial-gradient(rgba(124,45,42,0.012) 1px, transparent 1px);
+      background-size: 24px 24px, 47px 47px;
+      background-position: 0 0, 11px 13px;
+    }
+    ::selection { background:#F1E2DF; color:#1A1916; }
+    .font-display { font-family: 'Instrument Serif', Georgia, serif; }
+
+    /* ─── Skip-to-content (a11y clavier) ─── */
+    .skip-link {
+      position: fixed; top: -100px; left: 1rem; z-index: 100;
+      background: #1A1916; color: #FBF8F3;
+      padding: 10px 16px; border-radius: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+      transition: top .2s ease;
+    }
+    .skip-link:focus { top: 1rem; }
+
+    /* ─── Drop cap for editorial paragraphs ─── */
+    .dropcap::first-letter {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-size: 5.4em;
+      line-height: 0.85;
+      float: left;
+      margin: 6px 12px 0 0;
+      color: var(--wine);
+      font-style: italic;
+    }
+
+    /* ─── Underline animation on links ─── */
+    .link-underline { background-image: linear-gradient(currentColor, currentColor); background-size: 0% 1px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size .35s ease; }
+    .link-underline:hover { background-size: 100% 1px; }
+
+    /* ─── Monograms ─── */
+    .monogram {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 56px; height: 56px; border-radius: 50%;
+      border: 1.2px solid var(--ink); color: var(--ink);
+      font-family: 'Instrument Serif', serif; font-size: 24px; font-style: italic;
+      letter-spacing: -0.04em;
+      transition: background .2s, color .2s;
+    }
+    .monogram-sm {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 1px solid var(--ink); color: var(--ink);
+      font-family: 'Instrument Serif', serif; font-size: 14px; font-style: italic;
+      letter-spacing: -0.03em;
+      transition: background .2s, color .2s;
+    }
+
+    /* ─── Ornament dividers ─── */
+    .ornament-rule { position: relative; display: flex; align-items: center; }
+    .ornament-rule::before, .ornament-rule::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .ornament-rule span { padding: 0 16px; color: var(--ink3); font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; }
+    .ornament-fleuron {
+      display: flex; align-items: center; justify-content: center;
+      color: var(--ink3); font-family: 'Instrument Serif', serif;
+      font-size: 18px; font-style: italic; letter-spacing: 0.4em;
+    }
+    .ornament-fleuron::before, .ornament-fleuron::after {
+      content: ''; flex: 0 0 28px; height: 1px; background: var(--border);
+      margin: 0 14px;
+    }
+
+    /* ─── Form controls ─── */
+    input[type=text], input[type=email], input[type=number], input[type=date], input[type=search], input[type=tel], input[type=password], input[type=month], select, textarea {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 13.5px;
+      color: var(--ink);
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--wine);
+      box-shadow: 0 0 0 3px rgba(124,45,42,0.10);
+    }
+    /* Native select chevron — cohérent multi-OS */
+    select {
+      appearance: none; -webkit-appearance: none; -moz-appearance: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'><path d='M1 1.5L6 6.5L11 1.5' stroke='%238C887F' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 32px;
+    }
+    textarea { font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.55; }
+    label { display: block; font-size: 11.5px; color: var(--ink2); font-weight: 500; letter-spacing: 0.02em; }
+    label > input, label > select, label > textarea { margin-top: 4px; }
+    .helper-text { font-size: 11px; color: var(--ink3); margin-top: 4px; line-height: 1.45; display: block; }
+
+    /* Focus visible global — a11y ring cohérent */
+    *:focus-visible {
+      outline: 2px solid var(--wine);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+    button:focus-visible, a:focus-visible { outline-offset: 3px; }
+
+    /* ─── Buttons ─── */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; transition: background .15s, color .15s, border-color .15s, box-shadow .15s, transform .1s cubic-bezier(.4,0,.2,1); cursor: pointer; border: 1px solid transparent; user-select: none; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { cursor: not-allowed; }
+    .btn-primary { background: var(--ink); color: var(--paper); }
+    .btn-primary:hover { background: var(--ink2); }
+    .btn-wine { background: var(--wine); color: var(--paper); }
+    .btn-wine:hover { background: var(--wine2); }
+    .btn-ghost { background: transparent; color: var(--ink); border-color: var(--border); }
+    .btn-ghost:hover { background: var(--paper2); }
+    .btn-soft { background: var(--paper2); color: var(--ink); }
+    .btn-soft:hover { background: var(--border); }
+    .btn-forest { background: var(--forest); color: var(--paper); }
+    .btn-forest:hover { background: #1f2c20; }
+
+    /* ─── Chips / status badges ─── */
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.6; }
+    .chip-draft { background: var(--paper2); color: var(--ink2); }
+    .chip-draft::before { content: '●'; color: var(--ink3); font-size: 8px; }
+    .chip-issued { background: #E2E8DE; color: var(--forest); }
+    .chip-issued::before { content: '✓'; font-size: 10px; }
+    .chip-sent { background: var(--wineBg); color: var(--wine); }
+    .chip-sent::before { content: '✉'; font-size: 9px; }
+    .chip-bare { background: transparent; }
+    .chip-bare::before { content: none; }
+
+    /* ─── Sidebar links ─── */
+    .nav-link {
+      position: relative;
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; border-radius: 6px;
+      font-size: 13.5px; color: var(--ink2);
+      transition: all .15s;
+    }
+    .nav-link:hover { background: var(--paper2); color: var(--ink); }
+    .nav-link.active {
+      background: var(--paper2);
+      color: var(--ink);
+      font-weight: 500;
+    }
+    .nav-link.active::before {
+      content: '';
+      position: absolute; left: -3px; top: 6px; bottom: 6px;
+      width: 2.5px; background: var(--wine); border-radius: 2px;
+    }
+    .nav-link.active .dot { background: var(--wine); }
+    .dot { width: 4px; height: 4px; border-radius: 999px; background: var(--ink3); transition: background .15s; }
+
+    /* ─── Cards ─── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 1px 2px rgba(26,25,22,0.04);
+    }
+    .card-hover {
+      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px -8px rgba(26,25,22,0.12), 0 2px 4px rgba(26,25,22,0.04);
+      border-color: #D8CDB6;
+    }
+
+    /* ─── Sections / eyebrows ─── */
+    .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink3); }
+    .eyebrow-wine { color: var(--wine); }
+    .hairline { border-top: 1px solid var(--border); }
+    .nav-section { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink3); padding: 0 12px; margin: 18px 0 8px; }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       PREMIUM COMPONENTS — réutilisables sur toutes les pages
+       ═════════════════════════════════════════════════════════════════ */
+
+    /* ─── STAT CARD : grand chiffre en serif, eyebrow, barre wine à gauche ─── */
+    .stat-card {
+      position: relative;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 18px 16px;
+      box-shadow: 0 1px 2px rgba(26,25,22,0.04);
+      overflow: hidden;
+      transition: transform .2s, box-shadow .2s, border-color .2s;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute; left: 0; top: 14px; bottom: 14px;
+      width: 3px; background: var(--gold); border-radius: 0 2px 2px 0;
+      opacity: 0.55; transition: background .2s, opacity .2s;
+    }
+    .stat-card.is-wine::before { background: var(--wine); opacity: 1; }
+    .stat-card.is-zero::before { background: var(--ink3); opacity: 0.4; }
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px -8px rgba(26,25,22,0.12), 0 2px 4px rgba(26,25,22,0.04);
+    }
+    .stat-card:hover::before { opacity: 1; }
+    .stat-card .stat-value {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-size: 48px; line-height: 1; letter-spacing: -0.018em;
+      color: var(--ink);
+      display: block; margin: 10px 0 6px;
+    }
+    .stat-card.is-zero .stat-value { color: var(--ink3); font-style: italic; }
+    .stat-card .stat-foot { font-size: 11px; color: var(--ink3); }
+    .stat-card .stat-arrow {
+      position: absolute; top: 14px; right: 14px;
+      color: var(--ink3); opacity: 0; transform: translateY(-2px);
+      transition: opacity .25s, transform .25s, color .25s;
+      font-family: 'Instrument Serif', serif; font-size: 18px;
+    }
+    .stat-card:hover .stat-arrow { opacity: 1; transform: translateY(0); color: var(--wine); }
+    @media (min-width: 640px) {
+      .stat-card .stat-value { font-size: 64px; }
+      .stat-card { padding: 22px 22px 20px; }
+    }
+
+    /* ─── DOC CARD : icône PDF + métadonnées sur 2 lignes ─── */
+    .doc-card {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 16px;
+      transition: transform .2s, box-shadow .2s, border-color .2s;
+    }
+    .doc-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px -8px rgba(26,25,22,0.12), 0 2px 4px rgba(26,25,22,0.04);
+      border-color: #D8CDB6;
+    }
+    .doc-thumb {
+      flex-shrink: 0;
+      width: 40px; height: 52px;
+      background: var(--paper); border: 1px solid var(--border);
+      border-radius: 3px;
+      position: relative;
+      display: flex; align-items: flex-end; justify-content: center;
+      padding-bottom: 6px;
+    }
+    .doc-thumb::before {
+      content: ''; position: absolute; top: 0; right: 0;
+      width: 11px; height: 11px;
+      background: linear-gradient(225deg, var(--paper2) 50%, var(--border) 50%);
+    }
+    .doc-thumb::after {
+      content: ''; position: absolute; top: 18px; left: 6px; right: 6px;
+      height: 1px; background: var(--border);
+      box-shadow: 0 4px 0 var(--border), 0 8px 0 var(--border), 0 12px 0 var(--border);
+    }
+    .doc-thumb-label {
+      font-family: 'IBM Plex Mono', monospace; font-size: 7.5px;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--ink3); position: relative; z-index: 1;
+    }
+
+    /* ─── EMPTY STATE : ornement + eyebrow + serif italic + CTA ─── */
+    .empty-state {
+      background: var(--card);
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 48px 24px;
+      text-align: center;
+    }
+    .empty-state .empty-fleuron {
+      font-family: 'Instrument Serif', serif;
+      font-size: 32px; color: var(--ink3);
+      font-style: italic; line-height: 1;
+      letter-spacing: 0.4em; margin-bottom: 16px;
+    }
+    .empty-state .empty-eyebrow {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase;
+      color: var(--ink3); margin-bottom: 12px;
+    }
+    .empty-state .empty-line {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-style: italic; font-size: 20px; line-height: 1.35;
+      color: var(--ink2); max-width: 28rem; margin: 0 auto 20px;
+    }
+
+    /* ─── STEP INDICATOR : Préparer → Réviser → Émettre ─── */
+    .steps {
+      display: flex; align-items: center; gap: 14px;
+      flex-wrap: wrap;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    }
+    .step { display: inline-flex; align-items: center; gap: 8px; color: var(--ink3); }
+    .step .step-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 1px solid var(--border); color: var(--ink3);
+      font-style: italic; font-family: 'Instrument Serif', serif;
+      font-size: 13px; letter-spacing: 0;
+    }
+    .step.is-done { color: var(--forest); }
+    .step.is-done .step-num { border-color: var(--forest); color: var(--forest); background: rgba(47,64,48,0.06); }
+    .step.is-current { color: var(--wine); }
+    .step.is-current .step-num { border-color: var(--wine); color: var(--paper); background: var(--wine); }
+    .step-sep { color: var(--ink3); font-family: 'Instrument Serif', serif; font-size: 16px; font-style: italic; }
+
+    /* ─── SEGMENTED CONTROL : pills horizontales 2-3 valeurs ─── */
+    .segmented {
+      display: inline-flex;
+      background: var(--paper2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .segmented label, .segmented .seg {
+      flex: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12.5px; font-weight: 500;
+      color: var(--ink2); cursor: pointer;
+      transition: background .15s, color .15s, box-shadow .15s;
+      min-height: 32px;
+    }
+    .segmented input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
+    .segmented input[type=radio]:checked + span,
+    .segmented label:has(input:checked) {
+      background: var(--card);
+      color: var(--ink);
+      box-shadow: 0 1px 2px rgba(26,25,22,0.08);
+    }
+
+    /* ─── TOAST / NOTIFICATIONS — carte papier épaisse, hairline gauche colorée ─── */
+    /* z-index 90 > bulk-action-bar (60) — les toasts s'affichent TOUJOURS au-dessus.
+       Sur desktop, on décale le rack vers le haut quand la barre d'action est visible. */
+    #toast-rack {
+      position: fixed; bottom: 18px; right: 18px;
+      display: flex; flex-direction: column; gap: 10px;
+      z-index: 90; pointer-events: none;
+      max-width: calc(100vw - 36px);
+      transition: bottom .3s cubic-bezier(.2,.7,.2,1);
+    }
+    body.has-bulk-bar #toast-rack { bottom: 92px; }
+    @media (max-width: 640px) { body.has-bulk-bar #toast-rack { bottom: calc(120px + env(safe-area-inset-bottom)); } }
+    .toast {
+      pointer-events: auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--ink2);
+      border-radius: 8px;
+      padding: 12px 16px 12px 14px;
+      box-shadow: 0 12px 32px -10px rgba(26,25,22,0.18), 0 2px 4px rgba(26,25,22,0.05);
+      font-size: 13px;
+      color: var(--ink);
+      min-width: 260px; max-width: 380px;
+      display: flex; align-items: flex-start; gap: 10px;
+      animation: toast-in .3s cubic-bezier(.2,.8,.3,1) both;
+    }
+    .toast.is-success { border-left-color: var(--forest); }
+    .toast.is-error { border-left-color: var(--wine); }
+    .toast.is-info { border-left-color: var(--ink2); }
+    .toast .toast-eyebrow {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--ink3); margin-bottom: 3px; display: block;
+    }
+    .toast.is-success .toast-eyebrow { color: var(--forest); }
+    .toast.is-error .toast-eyebrow { color: var(--wine); }
+    .toast.fade-out { animation: toast-out .25s ease forwards; }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(8px) translateX(8px); }
+      to { opacity: 1; transform: none; }
+    }
+    @keyframes toast-out {
+      from { opacity: 1; transform: none; }
+      to { opacity: 0; transform: translateX(20px); }
+    }
+    @media (max-width: 640px) {
+      #toast-rack { right: 12px; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); }
+      .toast { min-width: 0; max-width: none; }
+    }
+
+    /* ─── FILTER PILL (chip cliquable pour filtres historique / recherche) ─── */
+    .pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 11.5px; font-weight: 500;
+      color: var(--ink2);
+      background: var(--card);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all .15s;
+      min-height: 30px;
+    }
+    .pill:hover { background: var(--paper2); color: var(--ink); }
+    .pill.is-active {
+      background: var(--ink);
+      color: var(--paper);
+      border-color: var(--ink);
+    }
+    .pill .pill-count {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px; opacity: 0.7;
+    }
+
+    /* ─── MASTHEAD (bandeau type une de journal) ─── */
+    .masthead {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--ink3);
+      border-bottom: 1px solid var(--border);
+      padding-top: 8px; padding-bottom: 12px;
+    }
+    @media (min-width: 640px) { .masthead { font-size: 10.5px; } }
+
+    /* ─── EDITORIAL JUSTIFY (paragraphes longs) ─── */
+    .ed-justify { text-align: justify; hyphens: auto; -webkit-hyphens: auto; text-justify: inter-word; }
+    @media (max-width: 640px) {
+      .ed-justify { text-align: left; }   /* mobile : pas de justification (rivers) */
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       MOTION — entrée staggered, hover, page transitions
+       ═════════════════════════════════════════════════════════════════ */
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+    .rise { animation: rise .42s cubic-bezier(.2,.7,.2,1) both; }
+    .rise-1 { animation-delay: 0ms; }
+    .rise-2 { animation-delay: 80ms; }
+    .rise-3 { animation-delay: 160ms; }
+    .rise-4 { animation-delay: 240ms; }
+    .rise-5 { animation-delay: 320ms; }
+    .rise-6 { animation-delay: 400ms; }
+
+    /* View transition on hero — fluide entre pages */
+    .vt-hero { view-transition-name: cabinet-hero; }
+
+    /* ─── Mobile : éviter le zoom auto iOS Safari (font-size >= 16px) ─── */
+    @media (max-width: 640px) {
+      input[type=text], input[type=email], input[type=number], input[type=date],
+      input[type=tel], input[type=password], input[type=search], input[type=month],
+      select, textarea {
+        font-size: 16px;
+        padding: 10px 12px;
+      }
+      textarea { font-size: 15px; }
+      .btn { padding: 10px 16px; font-size: 14px; min-height: 44px; }
+      .stat-card .stat-value { font-size: 56px; }
+    }
+
+    /* ─── Safe areas iOS (encoches, barre du bas) ─── */
+    .safe-top { padding-top: env(safe-area-inset-top); }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+    /* ─── Burger menu mobile (overlay éditorial plein écran) ─── */
+    #nav-toggle { display: none; }
+    .nav-overlay {
+      position: fixed; inset: 0; z-index: 50;
+      background: var(--paper);
+      background-image:
+        radial-gradient(rgba(26,25,22,0.018) 1px, transparent 1px),
+        radial-gradient(rgba(124,45,42,0.012) 1px, transparent 1px);
+      background-size: 24px 24px, 47px 47px;
+      background-position: 0 0, 11px 13px;
+      opacity: 0; pointer-events: none;
+      transition: opacity .25s ease;
+      overflow-y: auto;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    #nav-toggle:checked ~ .nav-overlay { opacity: 1; pointer-events: auto; }
+    .burger-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px; cursor: pointer;
+      color: var(--ink);
+    }
+    .burger-btn svg { width: 22px; height: 22px; }
+    .nav-overlay a { display: block; }
+    /* Quand l'overlay est ouvert, empêche le scroll du body en dessous */
+    html:has(#nav-toggle:checked) { overflow: hidden; }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       REDUCED MOTION — respecter prefers-reduced-motion
+       ═════════════════════════════════════════════════════════════════ */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .rise { opacity: 1; transform: none; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       CHECK-PILL — checkbox custom éditoriale (papier ivoire ↔ vin)
+       ═════════════════════════════════════════════════════════════════ */
+    .check-pill {
+      appearance: none; -webkit-appearance: none;
+      width: 20px; height: 20px; border-radius: 50%;
+      border: 1.4px solid var(--border);
+      background: var(--card);
+      cursor: pointer; flex-shrink: 0;
+      transition: background .18s, border-color .18s, transform .1s;
+      position: relative; display: inline-block;
+      vertical-align: middle;
+    }
+    .check-pill:hover { border-color: var(--wine); }
+    .check-pill:checked {
+      background: var(--wine); border-color: var(--wine);
+    }
+    .check-pill:checked::after {
+      content: '';
+      position: absolute;
+      left: 5.5px; top: 2.5px;
+      width: 5px; height: 10px;
+      border: solid var(--paper);
+      border-width: 0 1.6px 1.6px 0;
+      transform: rotate(45deg);
+    }
+    .check-pill:active { transform: scale(0.9); }
+    .check-pill:indeterminate {
+      background: var(--wineBg); border-color: var(--wine);
+    }
+    .check-pill:indeterminate::after {
+      content: '';
+      position: absolute; left: 4px; top: 8px;
+      width: 10px; height: 2px; background: var(--wine);
+      border-radius: 1px; transform: none;
+    }
+    /* Grande version pour lignes principales du tableau */
+    .check-pill.check-lg { width: 22px; height: 22px; border-width: 1.6px; }
+    .check-pill.check-lg:checked::after { left: 6px; top: 3px; width: 6px; height: 11px; border-width: 0 1.8px 1.8px 0; }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       PROGRESS BAR — barre bordeaux fine en haut de page (navigation)
+       ═════════════════════════════════════════════════════════════════ */
+    #nav-progress {
+      position: fixed; top: 0; left: 0; height: 2px;
+      background: var(--wine); z-index: 200; width: 0%;
+      transition: width .2s cubic-bezier(.4,0,.2,1), opacity .3s;
+      opacity: 0; pointer-events: none;
+      box-shadow: 0 0 8px rgba(124,45,42,0.4);
+    }
+    #nav-progress.is-active { opacity: 1; }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       CHANNEL CHIPS — indicateurs canaux disponibles (email/tél)
+       ═════════════════════════════════════════════════════════════════ */
+    .chip-channel { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 500; letter-spacing: 0.02em; line-height: 1.5; font-family: 'Inter', sans-serif; text-transform: none; }
+    .chip-channel.is-on { background: #E2E8DE; color: var(--forest); border: 1px solid rgba(47,64,48,0.15); }
+    .chip-channel.is-off { background: var(--paper2); color: var(--ink3); border: 1px solid var(--border); text-decoration: line-through; text-decoration-thickness: 1px; text-decoration-color: rgba(140,136,127,0.4); }
+    .chip-channel .chip-glyph { font-size: 11px; line-height: 1; }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       BULK ACTION BAR — barre flottante sticky pour actions groupées
+       ═════════════════════════════════════════════════════════════════ */
+    #bulk-action-bar {
+      position: fixed; z-index: 60;
+      left: 50%; bottom: 20px; transform: translateX(-50%) translateY(20px);
+      background: var(--ink); color: var(--paper);
+      border-radius: 12px;
+      box-shadow: 0 20px 48px -12px rgba(26,25,22,0.35), 0 4px 12px rgba(26,25,22,0.15);
+      padding: 12px 16px;
+      display: none; align-items: center; gap: 14px;
+      max-width: calc(100vw - 24px);
+      opacity: 0;
+      transition: transform .3s cubic-bezier(.2,.7,.2,1), opacity .25s;
+      font-family: 'Inter', sans-serif;
+    }
+    #bulk-action-bar.is-visible { display: flex; opacity: 1; transform: translateX(-50%) translateY(0); }
+    #bulk-action-bar .bulk-count {
+      font-family: 'Instrument Serif', serif;
+      font-size: 22px; line-height: 1; font-style: italic;
+      color: var(--paper); padding-right: 12px;
+      border-right: 1px solid rgba(251,248,243,0.2);
+    }
+    #bulk-action-bar .bulk-count-num { font-style: normal; color: var(--gold); font-weight: 500; }
+    #bulk-action-bar .bulk-label {
+      font-size: 11px; font-family: 'IBM Plex Mono', monospace;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: rgba(251,248,243,0.7); line-height: 1.3;
+    }
+    #bulk-action-bar .btn-bulk {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(251,248,243,0.08);
+      color: var(--paper);
+      border: 1px solid rgba(251,248,243,0.15);
+      padding: 8px 12px; border-radius: 6px;
+      font-size: 12.5px; font-weight: 500; cursor: pointer;
+      transition: background .15s, border-color .15s, transform .1s;
+      white-space: nowrap;
+    }
+    #bulk-action-bar .btn-bulk:hover { background: rgba(251,248,243,0.14); border-color: rgba(251,248,243,0.3); }
+    #bulk-action-bar .btn-bulk:active { transform: scale(0.97); }
+    #bulk-action-bar .btn-bulk.is-primary { background: var(--wine); border-color: var(--wine2); }
+    #bulk-action-bar .btn-bulk.is-primary:hover { background: var(--wine2); }
+    #bulk-action-bar .btn-bulk.is-danger { color: #E8A9A2; border-color: rgba(232,169,162,0.25); }
+    #bulk-action-bar .btn-bulk.is-danger:hover { background: rgba(232,169,162,0.12); }
+    #bulk-action-bar .btn-bulk[disabled] { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+    @media (max-width: 640px) {
+      #bulk-action-bar {
+        left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom));
+        transform: translateY(30px);
+        max-width: none; padding: 10px 12px; gap: 8px;
+        flex-wrap: wrap;
+      }
+      #bulk-action-bar.is-visible { transform: translateY(0); }
+      #bulk-action-bar .bulk-count { font-size: 18px; padding-right: 8px; }
+      #bulk-action-bar .bulk-label { display: none; }
+      #bulk-action-bar .btn-bulk { padding: 8px 10px; font-size: 12px; }
+      #bulk-action-bar .btn-bulk .bulk-btn-full { display: none; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       SKELETON — bones subtils pour les états async
+       ═════════════════════════════════════════════════════════════════ */
+    .skel {
+      background: linear-gradient(90deg, var(--paper2) 0%, #EDE7DA 50%, var(--paper2) 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s linear infinite;
+      border-radius: 4px; display: block;
+    }
+    @keyframes shimmer {
+      0% { background-position: -100% 0; }
+      100% { background-position: 100% 0; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       Cmd+K PALETTE — dialog éditorial de recherche instantanée
+       ═════════════════════════════════════════════════════════════════ */
+    dialog#cmdk {
+      border: none; padding: 0; background: transparent;
+      max-width: min(560px, calc(100vw - 24px));
+      width: 100%;
+      margin-top: 12vh;
+    }
+    dialog#cmdk::backdrop {
+      background: rgba(26,25,22,0.42);
+      backdrop-filter: blur(2px);
+      animation: cmdk-fade .18s ease both;
+    }
+    @keyframes cmdk-fade { from { opacity: 0; } to { opacity: 1; } }
+    dialog#cmdk .cmdk-shell {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 24px 64px -12px rgba(26,25,22,0.35), 0 6px 16px rgba(26,25,22,0.08);
+      animation: cmdk-rise .28s cubic-bezier(.2,.8,.2,1) both;
+    }
+    @keyframes cmdk-rise { from { opacity: 0; transform: translateY(-8px) scale(.985); } to { opacity: 1; transform: none; } }
+    dialog#cmdk .cmdk-input-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+    }
+    dialog#cmdk .cmdk-glyph {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: 22px; color: var(--wine); line-height: 1;
+    }
+    dialog#cmdk input {
+      flex: 1; border: none; outline: none;
+      font-size: 15px; background: transparent;
+      color: var(--ink); padding: 4px 0;
+    }
+    dialog#cmdk .cmdk-kbd {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--ink3);
+      border: 1px solid var(--border); padding: 3px 7px;
+      border-radius: 4px; background: var(--paper2);
+    }
+    dialog#cmdk .cmdk-results {
+      max-height: 62vh; overflow-y: auto; padding: 8px 6px;
+    }
+    dialog#cmdk .cmdk-hint {
+      padding: 24px; text-align: center;
+      color: var(--ink3);
+      font-family: 'Instrument Serif', serif; font-style: italic; font-size: 15px;
+    }
+    dialog#cmdk .cmdk-section {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--ink3); padding: 8px 14px 4px;
+    }
+    dialog#cmdk .cmdk-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 14px; margin: 1px 0;
+      border-radius: 6px; cursor: pointer;
+      color: var(--ink); font-size: 13.5px;
+      transition: background .1s;
+    }
+    dialog#cmdk .cmdk-item:hover, dialog#cmdk .cmdk-item.is-focused {
+      background: var(--paper2);
+    }
+    dialog#cmdk .cmdk-item .cmdk-meta {
+      margin-left: auto; font-size: 11px; color: var(--ink3);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    dialog#cmdk .cmdk-item .cmdk-emoji {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      color: var(--wine); width: 18px; text-align: center;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       DENSE MODE — toggle Confortable/Dense (vue rapide)
+       ═════════════════════════════════════════════════════════════════ */
+    body.dense .card, body.dense .stat-card { padding: 12px 14px !important; }
+    body.dense .stat-card { padding: 14px 14px 12px !important; }
+    body.dense .stat-card .stat-value { font-size: 40px !important; margin: 6px 0 4px !important; }
+    body.dense .doc-card { padding: 10px 12px; }
+    body.dense main.px-5, body.dense main.sm\:px-7, body.dense main.md\:px-10 { padding-left: 20px; padding-right: 20px; }
+    body.dense .rise { animation-duration: 0.25s; }
+    body.dense h1.font-display { font-size: clamp(2rem, 6vw, 3.5rem) !important; }
+    .dense-toggle {
+      display: inline-flex; padding: 2px;
+      background: var(--paper2); border: 1px solid var(--border);
+      border-radius: 6px; gap: 1px;
+    }
+    .dense-toggle button {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 5px 8px; color: var(--ink3);
+      border: none; background: transparent;
+      border-radius: 4px; cursor: pointer;
+      transition: background .12s, color .12s;
+    }
+    .dense-toggle button.is-active {
+      background: var(--card); color: var(--ink);
+      box-shadow: 0 1px 2px rgba(26,25,22,0.06);
+    }
+    .dense-toggle button:hover:not(.is-active) { color: var(--ink); }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       SIGNATURE LINE — trait bordeaux animé (footer)
+       ═════════════════════════════════════════════════════════════════ */
+    .signature-line {
+      height: 1px; background: var(--wine);
+      transform: scaleX(0); transform-origin: left;
+      transition: transform 1s cubic-bezier(.2,.7,.2,1);
+      margin: 12px 0; opacity: 0.7;
+    }
+    .signature-line.is-visible { transform: scaleX(1); }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       SHARE BUTTON — bouton unifié « ↗ Partager » (mobile)
+       ═════════════════════════════════════════════════════════════════ */
+    .btn-share {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--forest); color: var(--paper);
+      padding: 10px 14px; border-radius: 6px;
+      font-size: 13px; font-weight: 500;
+      border: none; cursor: pointer;
+      transition: background .15s, transform .1s;
+    }
+    .btn-share:hover { background: #1f2c20; }
+    .btn-share:active { transform: scale(0.97); }
+    .btn-share .btn-share-glyph {
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: 16px; line-height: 1;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       VIEW TRANSITIONS — noms partagés pour continuité visuelle
+       ═════════════════════════════════════════════════════════════════ */
+    @supports (view-transition-name: none) {
+      ::view-transition-old(cabinet-hero),
+      ::view-transition-new(cabinet-hero) {
+        animation-duration: .32s;
+        animation-timing-function: cubic-bezier(.2,.7,.2,1);
+      }
+      ::view-transition-group(root) {
+        animation-duration: .28s;
+      }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       H1 responsive helper — grille type fixe pour titre principal
+       ═════════════════════════════════════════════════════════════════ */
+    h1.font-display, .h1-display {
+      line-height: 1.02;
+      letter-spacing: -0.014em;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       GROUP HEADER — masthead colocataire (historique groupé)
+       ═════════════════════════════════════════════════════════════════ */
+    .group-header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 4px 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .group-header .group-mono {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 1px solid var(--border); background: var(--paper2);
+      font-family: 'Instrument Serif', serif; font-style: italic;
+      font-size: 15px; color: var(--ink); flex-shrink: 0;
+    }
+    .group-header .group-name {
+      font-family: 'Instrument Serif', serif;
+      font-size: 22px; line-height: 1.1; color: var(--ink);
+      letter-spacing: -0.006em;
+    }
+    .group-header .group-meta {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10.5px; letter-spacing: 0.15em;
+      color: var(--ink3); text-transform: uppercase;
+      margin-top: 2px;
+    }
+    @media (min-width: 640px) {
+      .group-header .group-name { font-size: 26px; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       PRINT — au cas où le bailleur imprime une page interne
+       ═════════════════════════════════════════════════════════════════ */
+    @media print {
+      body { background: #fff !important; background-image: none !important; color: #111; font-size: 11pt; }
+      .main-shell aside, .nav-overlay, #toast-rack, .burger-btn,
+      header.md\:hidden, header.hidden.md\:flex, footer.safe-bottom,
+      .no-print { display: none !important; }
+      .card, .stat-card, .doc-card { border: 1px solid #999 !important; box-shadow: none !important; break-inside: avoid; }
+      a { color: inherit; text-decoration: none; }
+      a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9pt; color: #555; }
+      h1, h2, h3 { break-after: avoid; }
+      .ornament-rule::before, .ornament-rule::after { background: #999; }
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <% const _p = typeof activeNav !== 'undefined' ? activeNav : ''; %>
+
+  <!-- Skip-to-content (a11y clavier) -->
+  <a href="#contenu" class="skip-link">Aller au contenu</a>
+
+  <!-- Progress bar (navigation entre pages) -->
+  <div id="nav-progress" role="progressbar" aria-hidden="true"></div>
+
+  <!-- Toast rack (système de notifications) -->
+  <div id="toast-rack" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Cmd+K palette (recherche instantanée) -->
+  <dialog id="cmdk" aria-label="Recherche rapide">
+    <div class="cmdk-shell">
+      <div class="cmdk-input-row">
+        <span class="cmdk-glyph" aria-hidden="true">℘</span>
+        <input id="cmdk-input" type="search" placeholder="Rechercher un colocataire, un document…" autocomplete="off" autofocus>
+        <span class="cmdk-kbd" aria-hidden="true">Esc</span>
+      </div>
+      <div id="cmdk-results" class="cmdk-results">
+        <p class="cmdk-hint">Tapez pour rechercher dans le cabinet.</p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Burger toggle (checkbox CSS-only) -->
+  <input type="checkbox" id="nav-toggle" aria-hidden="true">
+
+  <!-- ───── Overlay mobile : menu plein écran style page de garde ───── -->
+  <div class="nav-overlay md:hidden" role="dialog" aria-label="Navigation principale">
+    <div class="px-6 pt-5 pb-4 flex items-center justify-between border-b border-border">
+      <a href="/" class="flex items-center gap-3">
+        <span class="monogram-sm">CM</span>
+        <div>
+          <div class="eyebrow leading-none">Est. 2026</div>
+          <div class="font-display text-lg leading-none mt-1">Cabinet <span class="italic text-wine">Merhawi</span></div>
+        </div>
+      </a>
+      <label for="nav-toggle" class="burger-btn" aria-label="Fermer le menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+          <path d="M5 5l14 14M19 5L5 19"/>
+        </svg>
+      </label>
+    </div>
+
+    <nav class="px-7 pt-10 pb-6">
+      <div class="eyebrow mb-6">Sommaire</div>
+      <ul class="space-y-0">
+        <% const navItems = [
+          { href:'/',             k:'accueil',      label:'Accueil',           num:'i',    group:'Documents'  },
+          { href:'/tableau',      k:'tableau',      label:'Tableau de bord',   num:'ii',   group:'Documents'  },
+          { href:'/generation',   k:'generation',   label:'Production groupée', num:'iii', group:'Documents' },
+          { href:'/biens',        k:'biens',        label:'Patrimoine',        num:'iv',   group:'Cabinet'    },
+          { href:'/colocataires', k:'colocataires', label:'Colocataires',      num:'v',    group:'Cabinet'    },
+          { href:'/historique',   k:'historique',   label:'Documents',         num:'vi',   group:'Cabinet'    },
+          { href:'/proprietaire', k:'proprietaire', label:'Cabinet',           num:'vii',  group:'Cabinet'    }
+        ]; %>
+        <% for (const it of navItems) { %>
+          <li class="border-b border-border">
+            <a href="<%= it.href %>" class="flex items-baseline gap-5 py-5 <%= _p===it.k ? 'text-wine' : 'text-ink' %>">
+              <span class="font-mono text-[11px] uppercase tracking-[0.22em] text-ink3 w-7"><%= it.num %>.</span>
+              <span class="font-display text-3xl leading-none <%= _p===it.k ? 'italic' : '' %>"><%= it.label %></span>
+            </a>
+          </li>
+        <% } %>
+      </ul>
+
+      <div class="ornament-rule mt-10 mb-6"><span>Bailleur</span></div>
+      <div class="text-center px-2">
+        <div class="font-display text-xl leading-tight"><%= proprietaire.nom %></div>
+        <div class="text-[12px] text-ink3 mt-1.5 leading-snug"><%= proprietaire.bien_adresse %></div>
+      </div>
+
+      <!-- citation latine — clin d'oeil notarial -->
+      <div class="mt-8 text-center">
+        <div class="font-display italic text-[15px] text-ink3 leading-snug">Pacta sunt servanda.</div>
+        <div class="eyebrow mt-1.5 text-[9px]">Les pactes doivent être respectés</div>
+      </div>
+    </nav>
+  </div>
+
+  <div class="main-shell flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="hidden md:flex md:flex-col w-60 shrink-0 bg-paper border-r border-border">
+      <div class="px-6 pt-7 pb-5">
+        <a href="/" class="block group">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="monogram-sm group-hover:bg-ink group-hover:text-paper">CM</span>
+            <div>
+              <div class="eyebrow leading-none">Est. 2026</div>
+              <div class="font-display text-xl leading-none mt-1">Cabinet <span class="italic text-wine">Merhawi</span></div>
+            </div>
+          </div>
+          <div class="text-[10px] text-ink3 font-mono tracking-[0.18em] uppercase">Gérance · 74100</div>
+        </a>
+      </div>
+      <nav class="px-3 mt-1 flex-1">
+        <div class="nav-section">Préparation</div>
+        <a href="/" class="nav-link <%= _p==='accueil' ? 'active' : '' %>"><span class="dot"></span> Accueil</a>
+        <a href="/tableau" class="nav-link <%= _p==='tableau' ? 'active' : '' %>"><span class="dot"></span> Tableau de bord</a>
+        <a href="/generation" class="nav-link <%= _p==='generation' ? 'active' : '' %>"><span class="dot"></span> Production groupée</a>
+
+        <div class="nav-section">Cabinet</div>
+        <a href="/biens" class="nav-link <%= _p==='biens' ? 'active' : '' %>"><span class="dot"></span> Patrimoine</a>
+        <a href="/colocataires" class="nav-link <%= _p==='colocataires' ? 'active' : '' %>"><span class="dot"></span> Colocataires</a>
+        <a href="/historique" class="nav-link <%= _p==='historique' ? 'active' : '' %>"><span class="dot"></span> Documents</a>
+        <a href="/proprietaire" class="nav-link <%= _p==='proprietaire' ? 'active' : '' %>"><span class="dot"></span> Direction</a>
+      </nav>
+      <div class="px-3 pb-3 pt-1">
+        <button type="button" id="cmdk-trigger" class="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-card hover:bg-paper2 transition-colors text-left group">
+          <span class="font-display italic text-wine text-base leading-none">℘</span>
+          <span class="text-[12px] text-ink3 group-hover:text-ink2 flex-1">Recherche</span>
+          <span class="font-mono text-[9.5px] tracking-[0.14em] text-ink3 uppercase border border-border rounded px-1.5 py-0.5 bg-paper2">Ctrl K</span>
+        </button>
+      </div>
+      <div class="px-6 pb-6 pt-4 border-t border-border">
+        <div class="eyebrow mb-1.5">Bailleur</div>
+        <div class="text-sm font-medium leading-tight"><%= proprietaire.nom %></div>
+        <div class="text-[11px] text-ink3 mt-1 leading-snug"><%= proprietaire.bien_adresse %></div>
+        <div class="ornament-rule mt-4 mb-2"><span>·</span></div>
+        <div class="font-display italic text-[12.5px] text-ink3 text-center leading-tight mb-3">Diligenter administrare</div>
+        <!-- Dense mode toggle -->
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[10px] font-mono uppercase tracking-[0.14em] text-ink3">Vue</span>
+          <div class="dense-toggle" role="tablist" aria-label="Densité de la vue">
+            <button type="button" data-dense="off" class="dense-btn is-active" role="tab" aria-selected="true">Ample</button>
+            <button type="button" data-dense="on"  class="dense-btn" role="tab" aria-selected="false">Dense</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main column -->
+    <div class="flex-1 min-w-0">
+      <!-- Mobile topbar : logo à gauche, burger à droite -->
+      <header class="md:hidden safe-top sticky top-0 z-40 border-b border-border bg-paper/95 backdrop-blur px-5 py-3 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-2.5">
+          <span class="monogram-sm" style="width:30px;height:30px;font-size:12px;">CM</span>
+          <span class="font-display text-lg leading-none">Cabinet <span class="italic text-wine">Merhawi</span></span>
+        </a>
+        <div class="flex items-center gap-1">
+          <button type="button" id="cmdk-trigger-mobile" class="burger-btn" aria-label="Recherche rapide">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+              <circle cx="10.5" cy="10.5" r="6.5"/>
+              <path d="M20 20l-4.6-4.6"/>
+            </svg>
+          </button>
+          <label for="nav-toggle" class="burger-btn" aria-label="Ouvrir le menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+              <path d="M4 7h16M4 12h16M4 17h16"/>
+            </svg>
+          </label>
+        </div>
+      </header>
+
+      <!-- Topbar (page header) — caché si la page veut son propre hero -->
+      <% if (typeof hideTopbar === 'undefined' || !hideTopbar) { %>
+      <header class="hidden md:flex items-end justify-between px-10 pt-9 pb-6 rise rise-1">
+        <div>
+          <div class="eyebrow mb-2"><%= (typeof eyebrow !== 'undefined') ? eyebrow : 'Cabinet locatif' %></div>
+          <h1 class="font-display text-[40px] leading-[1.05] tracking-tightish vt-hero"><%= (typeof pageTitle !== 'undefined') ? pageTitle : title %></h1>
+          <% if (typeof pageSubtitle !== 'undefined' && pageSubtitle) { %>
+            <p class="text-ink2 mt-2 max-w-xl"><%= pageSubtitle %></p>
+          <% } %>
+        </div>
+        <div class="text-right">
+          <div class="eyebrow">Adresse du bien</div>
+          <div class="text-sm mt-1.5 leading-snug"><%= proprietaire.bien_adresse %></div>
+        </div>
+      </header>
+      <% } %>
+
+      <!-- Eyebrow mobile (pour les pages classiques uniquement) -->
+      <% if (typeof hideTopbar === 'undefined' || !hideTopbar) { %>
+      <div class="md:hidden px-5 pt-5 pb-4 rise rise-1">
+        <div class="eyebrow mb-2"><%= (typeof eyebrow !== 'undefined') ? eyebrow : 'Cabinet locatif' %></div>
+        <h1 class="font-display text-3xl sm:text-4xl leading-[1.05] tracking-tightish"><%= (typeof pageTitle !== 'undefined') ? pageTitle : title %></h1>
+        <% if (typeof pageSubtitle !== 'undefined' && pageSubtitle) { %>
+          <p class="text-ink2 mt-2 text-sm"><%= pageSubtitle %></p>
+        <% } %>
+      </div>
+      <% } %>
+
+      <main id="contenu" class="px-5 sm:px-7 md:px-10 pb-14">

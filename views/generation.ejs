@@ -1,0 +1,475 @@
+<%- include('partials/head') %>
+
+<!-- ───── Step indicator ───── -->
+<div class="mb-8 md:mb-10 rise rise-1">
+  <div class="steps">
+    <span class="step is-current"><span class="step-num">i</span> Choisir</span>
+    <span class="step-sep">·</span>
+    <span class="step"><span class="step-num">ii</span> Produire</span>
+    <span class="step-sep">·</span>
+    <span class="step"><span class="step-num">iii</span> Transmettre</span>
+  </div>
+  <p class="font-display italic text-ink2 mt-4 max-w-2xl text-base sm:text-lg leading-snug">
+    Un colocataire. Plusieurs documents. Toutes les pièces préparées d'un seul geste, archivées en brouillon, prêtes à être révisées et émises.
+  </p>
+</div>
+
+<form id="batch-form" class="grid grid-cols-1 lg:grid-cols-3 gap-5 rise rise-2">
+  <!-- ─── 1. Colocataire ─── -->
+  <section class="card p-5 sm:p-6">
+    <div class="flex items-baseline justify-between mb-4">
+      <div>
+        <div class="eyebrow">Étape 1</div>
+        <h2 class="font-display text-2xl sm:text-3xl mt-1">Le <span class="italic text-wine">colocataire</span></h2>
+      </div>
+    </div>
+    <% if (!colocataires.length) { %>
+      <div class="empty-state" style="padding:32px 16px">
+        <div class="empty-fleuron" style="font-size:22px">·</div>
+        <p class="empty-line" style="font-size:14px">Aucun colocataire au registre.</p>
+        <a href="/colocataires" class="btn btn-ghost !text-[12px]">Ouvrir le registre →</a>
+      </div>
+    <% } else { %>
+    <div class="space-y-2">
+      <% for (const c of colocataires) { %>
+        <label class="flex items-center gap-3 p-3 border border-border rounded-lg cursor-pointer hover:border-ink hover:bg-paper2/50 transition-colors min-h-[56px]">
+          <input type="radio" name="colocataire_id" value="<%= c.id %>" class="w-5 h-5 accent-wine shrink-0" required>
+          <div class="w-10 h-10 rounded-full bg-paper2 border border-border flex items-center justify-center font-display italic text-sm shrink-0"><%= (c.prenom?.[0] || '') + (c.nom?.[0] || '') %></div>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium text-sm truncate"><%= c.prenom %> <%= c.nom %></div>
+            <div class="text-[11px] text-ink3 font-mono truncate">
+              <%= c.civilite === 'M' ? 'Monsieur' : c.civilite === 'Mme' ? 'Madame' : '—' %>
+              <% if (c.chambre) { %> · ch. <%= c.chambre %><% } %>
+            </div>
+          </div>
+        </label>
+      <% } %>
+    </div>
+    <% } %>
+  </section>
+
+  <!-- ─── 2. Types de documents ─── -->
+  <section class="card p-5 sm:p-6">
+    <div class="flex items-baseline justify-between mb-4">
+      <div>
+        <div class="eyebrow">Étape 2</div>
+        <h2 class="font-display text-2xl sm:text-3xl mt-1">Les <span class="italic text-wine">types</span></h2>
+      </div>
+    </div>
+    <div class="space-y-2">
+      <% const typesOptions = [
+        { v: 'attestation', l: 'Attestation de domiciliation', d: 'Un document unique (sans période).' },
+        { v: 'quittance',   l: 'Quittance de loyer',           d: 'Un document par mois sélectionné.' },
+        { v: 'facture',     l: 'Facture pour dégâts',           d: 'Un document par mois sélectionné.' }
+      ]; %>
+      <% for (const t of typesOptions) { %>
+        <label class="flex items-start gap-3 p-3 border border-border rounded-lg cursor-pointer hover:border-ink hover:bg-paper2/50 transition-colors min-h-[56px]">
+          <input type="checkbox" name="types" value="<%= t.v %>" class="w-5 h-5 mt-0.5 accent-wine shrink-0">
+          <div class="flex-1 min-w-0">
+            <div class="font-medium text-sm"><%= t.l %></div>
+            <div class="text-[11.5px] text-ink3 mt-0.5"><%= t.d %></div>
+          </div>
+        </label>
+      <% } %>
+    </div>
+  </section>
+
+  <!-- ─── 3. Période ─── -->
+  <section class="card p-5 sm:p-6">
+    <div class="flex items-baseline justify-between mb-4">
+      <div>
+        <div class="eyebrow">Étape 3</div>
+        <h2 class="font-display text-2xl sm:text-3xl mt-1">La <span class="italic text-wine">période</span></h2>
+      </div>
+    </div>
+    <p class="text-[11.5px] text-ink3 mb-3 font-display italic">S'applique aux quittances et factures.</p>
+    <div class="space-y-2">
+      <% const periodes = [
+        { v: 'courant',  l: 'Mois en cours' },
+        { v: '3',        l: 'Les 3 derniers mois' },
+        { v: '6',        l: 'Les 6 derniers mois' },
+        { v: '12',       l: 'Les 12 derniers mois' },
+        { v: 'personnalise', l: 'Période personnalisée…' }
+      ]; %>
+      <% for (let i = 0; i < periodes.length; i++) { const p = periodes[i]; %>
+        <label class="flex items-center gap-3 p-3 border border-border rounded-lg cursor-pointer hover:border-ink hover:bg-paper2/50 transition-colors min-h-[48px]">
+          <input type="radio" name="periode_mode" value="<%= p.v %>" class="w-5 h-5 accent-wine shrink-0" <%= i===0 ? 'checked' : '' %>>
+          <div class="font-medium text-sm"><%= p.l %></div>
+        </label>
+      <% } %>
+    </div>
+    <div id="periode-custom" class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 hidden">
+      <label>Mois début <input type="month" name="mois_debut" class="w-full"></label>
+      <label>Mois fin <input type="month" name="mois_fin" class="w-full"></label>
+    </div>
+  </section>
+
+  <!-- ─── Submit ─── -->
+  <div class="lg:col-span-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-border pt-6 mt-2">
+    <p class="font-display italic text-[15px] text-ink2 max-w-xl leading-snug">
+      Les documents seront créés en <strong class="not-italic font-medium text-ink">brouillon</strong> dans l'historique. Vous pourrez ensuite les ouvrir, les éditer puis les valider en PDF un à un.
+    </p>
+    <button class="btn btn-forest justify-center w-full sm:w-auto">Produire les documents →</button>
+  </div>
+</form>
+
+<!-- ─── Résultats ─── -->
+<section id="results" class="hidden mt-10 card p-5 sm:p-7">
+  <div class="ornament-rule mb-6"><span>Production accomplie</span></div>
+  <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6">
+    <div class="min-w-0">
+      <div class="eyebrow mb-1">Brouillons produits</div>
+      <h2 class="font-display text-3xl sm:text-4xl leading-tight"><span id="count">0</span> document<span id="plural"></span> créé<span id="plural2"></span>
+        <span id="for-whom" class="font-display italic text-wine text-2xl sm:text-3xl block sm:inline"></span>
+      </h2>
+    </div>
+    <div class="sm:text-right text-[11.5px] text-ink2 leading-relaxed">
+      <div id="contact-email" class="font-mono break-all"></div>
+      <div id="contact-phone" class="font-mono"></div>
+    </div>
+  </div>
+
+  <!-- Barre d'envoi groupé -->
+  <div id="bulk-bar" class="bg-paper2/50 border border-border rounded-lg p-4 mb-5 flex flex-col md:flex-row md:flex-wrap md:items-center gap-3">
+    <div class="flex-1 min-w-0">
+      <div class="eyebrow mb-1">Envoi groupé</div>
+      <div class="text-[12.5px] text-ink2">Un seul courriel avec toutes les pièces — ou tous les PDFs téléchargés + un message WhatsApp/SMS unique listant les actes.</div>
+    </div>
+    <div class="flex flex-col sm:flex-row gap-2">
+      <button type="button" id="btn-bulk-share" class="btn btn-forest justify-center !text-[12.5px]" style="display:none">
+        ↗ Tout partager
+      </button>
+      <button type="button" id="btn-bulk-email" class="btn btn-wine justify-center !text-[12.5px]">
+        Tout par courriel
+      </button>
+      <button type="button" id="btn-bulk-wa" class="btn justify-center !text-[12.5px]" style="background:#25D366;color:#fff">
+        Tout par WhatsApp
+      </button>
+      <button type="button" id="btn-bulk-sms" class="btn btn-primary justify-center !text-[12.5px]">
+        Tout par SMS
+      </button>
+    </div>
+  </div>
+
+  <div id="results-list" class="space-y-3"></div>
+
+  <div class="mt-6 pt-5 border-t border-border flex flex-col sm:flex-row gap-3">
+    <a href="/historique" class="btn btn-soft justify-center">Voir tous les documents →</a>
+    <a href="/generation" class="btn btn-ghost justify-center">Produire un autre lot</a>
+  </div>
+</section>
+
+<script>
+const form = document.getElementById('batch-form');
+const customBlock = document.getElementById('periode-custom');
+
+form.addEventListener('change', (e) => {
+  if (e.target.name === 'periode_mode') {
+    customBlock.classList.toggle('hidden', e.target.value !== 'personnalise');
+  }
+});
+
+let lastBatch = null;
+
+function normalizePhone(raw) {
+  let p = String(raw || '').replace(/[\s.\-()]/g, '');
+  if (!p) return '';
+  if (p.startsWith('+')) return p;
+  if (p.startsWith('00')) return '+' + p.slice(2);
+  if (p.startsWith('0')) return '+33' + p.slice(1);
+  return '+' + p;
+}
+
+async function fetchMessage(docId) {
+  const r = await fetch('/documents/' + docId + '/message-transmission');
+  const d = await r.json();
+  return d.message || '';
+}
+
+async function markSent(docId, canal, destinataire) {
+  await fetch('/documents/' + docId + '/marquer-envoye', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ canal, destinataire })
+  });
+}
+
+function renderResults(data) {
+  lastBatch = data;
+  document.getElementById('count').textContent = data.count;
+  document.getElementById('plural').textContent = data.count > 1 ? 's' : '';
+  document.getElementById('plural2').textContent = data.count > 1 ? 's' : '';
+  document.getElementById('for-whom').textContent = '· ' + data.colocataire.prenom + ' ' + data.colocataire.nom;
+
+  const emailLine = data.colocataire.email
+    ? '<span class="text-ink2">✉ ' + data.colocataire.email + '</span>'
+    : '<span class="text-wine">⚠ aucun email enregistré</span>';
+  const phoneLine = data.colocataire.telephone
+    ? '<span class="text-ink2">☎ ' + data.colocataire.telephone + '</span>'
+    : '<span class="text-wine">⚠ aucun téléphone enregistré</span>';
+  document.getElementById('contact-email').innerHTML = emailLine;
+  document.getElementById('contact-phone').innerHTML = phoneLine;
+
+  const hasEmail = !!data.colocataire.email && data.emailConfigured;
+  const hasPhone = !!data.colocataire.telephone;
+  const list = document.getElementById('results-list');
+
+  const showShare = window.canShareFiles?.() && window.__isMobile;
+  const emailTitle = hasEmail ? 'Envoyer par email' : 'Ajoutez un email à cette fiche pour activer l\'envoi';
+  const phoneTitle = hasPhone ? '' : 'Ajoutez un téléphone pour activer WhatsApp/SMS';
+
+  list.innerHTML = data.documents.map((d, i) => `
+    <article class="border border-border rounded-lg p-4 hover:border-ink hover:shadow-card transition-all" data-id="${d.id}" data-type="${d.type}">
+      <div class="flex items-center gap-3 mb-3 flex-wrap">
+        <span class="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink3 w-7 shrink-0">${String(i + 1).padStart(2, '0')}</span>
+        <span class="chip chip-draft shrink-0">brouillon</span>
+        <span class="font-medium text-sm flex-1 min-w-0">${d.label}</span>
+      </div>
+      <div class="flex flex-wrap items-center gap-1.5 sm:pl-10">
+        <a href="/documents/${d.id}/voir" target="_blank" class="btn btn-ghost !text-[11.5px]">Voir PDF</a>
+        <a href="/documents/${d.id}/editer" class="btn btn-ghost !text-[11.5px]">Modifier</a>
+        <span class="hidden sm:inline mx-2 text-ink3 text-[10px] font-mono uppercase tracking-[0.18em]">│ Envoyer par</span>
+        ${showShare ? `<button type="button" class="btn-send-share btn btn-forest !text-[11.5px]" title="Partager via le sélecteur natif">↗ Partager</button>` : ''}
+        <button type="button" class="btn-send-email btn btn-wine !text-[11.5px]" title="${emailTitle}" ${hasEmail ? '' : 'disabled style="opacity:0.45;cursor:not-allowed"'}>
+          Courriel
+        </button>
+        <button type="button" class="btn-send-wa btn !text-[11.5px]" style="background:#25D366;color:#fff${hasPhone ? '' : ';opacity:0.45;cursor:not-allowed'}" title="${phoneTitle}" ${hasPhone ? '' : 'disabled'}>
+          WhatsApp
+        </button>
+        <button type="button" class="btn-send-sms btn btn-primary !text-[11.5px]" title="${phoneTitle}" ${hasPhone ? '' : 'disabled style="opacity:0.45;cursor:not-allowed"'}>
+          SMS
+        </button>
+      </div>
+    </article>
+  `).join('');
+
+  // Bouton "Tout partager" (Web Share API — mobile)
+  const shareBulk = document.getElementById('btn-bulk-share');
+  if (shareBulk && window.canShareFiles?.() && window.__isMobile) {
+    shareBulk.style.display = 'inline-flex';
+  }
+
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+document.getElementById('results-list')?.addEventListener('click', () => {});
+document.addEventListener('click', async (e) => {
+  const article = e.target.closest('article[data-id]');
+  if (!article || !lastBatch) return;
+  const docId = article.dataset.id;
+  const coloc = lastBatch.colocataire;
+
+  if (e.target.closest('.btn-send-share')) {
+    e.preventDefault();
+    await window.shareDocuments([docId], {
+      title: coloc.prenom + ' ' + coloc.nom,
+      text: 'Votre document',
+      onSuccess: async () => {
+        await markSent(docId, 'partage', coloc.email || coloc.telephone);
+        article.querySelector('.chip').className = 'chip chip-sent';
+        article.querySelector('.chip').textContent = 'envoye';
+        window.toast('Document partagé.', { kind: 'success', eyebrow: 'Transmis' });
+      },
+      onError: () => window.toast('Partage indisponible sur ce navigateur.', { kind: 'error' })
+    });
+    return;
+  }
+
+  if (e.target.closest('.btn-send-email')) {
+    e.preventDefault();
+    if (!coloc.email) return window.toast('Aucun email enregistré pour ' + coloc.prenom + '.', { kind: 'error' });
+    const btn = e.target.closest('.btn-send-email');
+    btn.disabled = true; btn.textContent = '… envoi';
+    const r = await fetch('/documents/' + docId + '/envoyer', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ to: coloc.email })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      btn.textContent = '✓ envoyé';
+      btn.style.opacity = '0.6';
+      article.querySelector('.chip').className = 'chip chip-sent';
+      article.querySelector('.chip').textContent = 'envoyé';
+      window.toast('Acte transmis à ' + coloc.email + '.', { kind: 'success', eyebrow: 'Courriel envoyé' });
+    } else if (/SMTP/.test(d.raison || '')) {
+      btn.disabled = false; btn.textContent = 'Courriel';
+      window.toastSmtpError(d.raison);
+    } else {
+      btn.disabled = false; btn.textContent = 'Courriel';
+      window.toast(d.raison || 'envoi impossible', { kind: 'error' });
+    }
+    return;
+  }
+
+  if (e.target.closest('.btn-send-wa')) {
+    e.preventDefault();
+    if (!coloc.telephone) return window.toast('Aucun téléphone enregistré.', { kind: 'error' });
+    const e164 = normalizePhone(coloc.telephone).replace('+', '');
+    const msg = await fetchMessage(docId);
+    const a = document.createElement('a');
+    a.href = '/documents/' + docId + '/pdf'; a.download = '';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => window.open('https://wa.me/' + encodeURIComponent(e164) + '?text=' + encodeURIComponent(msg), '_blank', 'noopener'), 350);
+    await markSent(docId, 'whatsapp', coloc.telephone);
+    article.querySelector('.chip').className = 'chip chip-sent';
+    article.querySelector('.chip').textContent = 'envoyé';
+    window.toast('PDF téléchargé · WhatsApp ouvert. Joignez le PDF.', { kind: 'success', eyebrow: 'Transmis' });
+    return;
+  }
+
+  if (e.target.closest('.btn-send-sms')) {
+    e.preventDefault();
+    if (!coloc.telephone) return window.toast('Aucun téléphone enregistré.', { kind: 'error' });
+    const e164 = normalizePhone(coloc.telephone);
+    const msg = await fetchMessage(docId);
+    const a = document.createElement('a');
+    a.href = '/documents/' + docId + '/pdf'; a.download = '';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => { window.location.href = 'sms:' + e164 + '?body=' + encodeURIComponent(msg); }, 350);
+    await markSent(docId, 'sms', coloc.telephone);
+    article.querySelector('.chip').className = 'chip chip-sent';
+    article.querySelector('.chip').textContent = 'envoyé';
+    window.toast('PDF téléchargé · client SMS ouvert.', { kind: 'success', eyebrow: 'Transmis' });
+    return;
+  }
+});
+
+// ─── Envoi groupé ─────────────────────────────
+function setBulkSentVisually() {
+  for (const a of document.querySelectorAll('article[data-id]')) {
+    const chip = a.querySelector('.chip');
+    if (chip) { chip.className = 'chip chip-sent'; chip.textContent = 'envoyé'; }
+    for (const b of a.querySelectorAll('.btn-send-email, .btn-send-wa, .btn-send-sms')) {
+      b.disabled = true; b.style.opacity = '0.5'; b.style.cursor = 'not-allowed';
+    }
+  }
+}
+
+function bulkIds() {
+  return Array.from(document.querySelectorAll('article[data-id]')).map(a => a.dataset.id);
+}
+
+async function bulkDownloadPdfs(ids) {
+  for (let i = 0; i < ids.length; i++) {
+    const a = document.createElement('a');
+    a.href = '/documents/' + ids[i] + '/pdf';
+    a.download = '';
+    document.body.appendChild(a); a.click(); a.remove();
+    if (i < ids.length - 1) await new Promise(r => setTimeout(r, 250));
+  }
+}
+
+async function bulkMessage(ids) {
+  const r = await fetch('/api/bulk-message-transmission?ids=' + ids.join(','));
+  const d = await r.json();
+  return d.message || '';
+}
+
+document.getElementById('btn-bulk-email').addEventListener('click', async () => {
+  if (!lastBatch) return;
+  const coloc = lastBatch.colocataire;
+  if (!coloc.email) return window.toast('Aucun email enregistré pour ' + coloc.prenom + '.', { kind: 'error' });
+  if (!lastBatch.emailConfigured) return window.toastSmtpError();
+  const ids = bulkIds();
+  if (!confirm('Envoyer les ' + ids.length + ' documents par email à ' + coloc.email + ' ?')) return;
+  const btn = document.getElementById('btn-bulk-email');
+  btn.disabled = true; btn.textContent = '… envoi en cours';
+  const r = await fetch('/api/bulk-envoyer', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, to: coloc.email })
+  });
+  const d = await r.json();
+  if (d.ok) {
+    setBulkSentVisually();
+    btn.textContent = '✓ ' + d.count + ' envoyés';
+    btn.style.opacity = '0.7';
+    window.toast(d.count + ' document' + (d.count>1?'s':'') + ' transmis à ' + coloc.email + '.', { kind: 'success', eyebrow: 'Lot envoyé' });
+  } else if (/SMTP/.test(d.raison || '')) {
+    btn.disabled = false; btn.textContent = 'Tout par courriel';
+    window.toastSmtpError(d.raison);
+  } else {
+    btn.disabled = false; btn.textContent = 'Tout par courriel';
+    window.toast(d.raison || 'envoi impossible', { kind: 'error' });
+  }
+});
+
+document.getElementById('btn-bulk-wa').addEventListener('click', async () => {
+  if (!lastBatch) return;
+  const coloc = lastBatch.colocataire;
+  if (!coloc.telephone) return window.toast('Aucun téléphone enregistré.', { kind: 'error' });
+  const ids = bulkIds();
+  if (!confirm('Télécharger les ' + ids.length + ' PDFs et ouvrir WhatsApp ?')) return;
+  await bulkDownloadPdfs(ids);
+  const e164 = normalizePhone(coloc.telephone).replace('+', '');
+  const message = await bulkMessage(ids);
+  setTimeout(() => window.open('https://wa.me/' + encodeURIComponent(e164) + '?text=' + encodeURIComponent(message), '_blank', 'noopener'), 600);
+  await fetch('/api/bulk-marquer-envoye', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, canal: 'whatsapp', destinataire: coloc.telephone })
+  });
+  setBulkSentVisually();
+  window.toast(ids.length + ' PDFs téléchargés · WhatsApp ouvert.', { kind: 'success', eyebrow: 'Lot transmis' });
+});
+
+document.getElementById('btn-bulk-share')?.addEventListener('click', async () => {
+  if (!lastBatch) return;
+  const ids = bulkIds();
+  await window.shareDocuments(ids, {
+    title: lastBatch.colocataire.prenom + ' ' + lastBatch.colocataire.nom,
+    text: 'Vos ' + ids.length + ' document(s)',
+    onSuccess: async () => {
+      await fetch('/api/bulk-marquer-envoye', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, canal: 'partage', destinataire: lastBatch.colocataire.email || lastBatch.colocataire.telephone })
+      });
+      setBulkSentVisually();
+      window.toast(ids.length + ' documents partagés.', { kind: 'success', eyebrow: 'Lot transmis' });
+    },
+    onError: (e) => window.toast(e.message, { kind: 'error' })
+  });
+});
+
+document.getElementById('btn-bulk-sms').addEventListener('click', async () => {
+  if (!lastBatch) return;
+  const coloc = lastBatch.colocataire;
+  if (!coloc.telephone) return window.toast('Aucun téléphone enregistré.', { kind: 'error' });
+  const ids = bulkIds();
+  if (!confirm('Télécharger les ' + ids.length + ' PDFs et ouvrir le client SMS ?')) return;
+  await bulkDownloadPdfs(ids);
+  const e164 = normalizePhone(coloc.telephone);
+  const message = await bulkMessage(ids);
+  setTimeout(() => { window.location.href = 'sms:' + e164 + '?body=' + encodeURIComponent(message); }, 600);
+  await fetch('/api/bulk-marquer-envoye', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, canal: 'sms', destinataire: coloc.telephone })
+  });
+  setBulkSentVisually();
+  window.toast(ids.length + ' PDFs téléchargés · client SMS ouvert.', { kind: 'success', eyebrow: 'Lot transmis' });
+});
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(form);
+  const body = {
+    colocataire_id: fd.get('colocataire_id'),
+    types: fd.getAll('types'),
+    periode_mode: fd.get('periode_mode'),
+    mois_debut: fd.get('mois_debut'),
+    mois_fin: fd.get('mois_fin')
+  };
+  if (!body.colocataire_id) return window.toast('Sélectionnez un colocataire.', { kind: 'error' });
+  if (!body.types.length) return window.toast('Sélectionnez au moins un type de document.', { kind: 'error' });
+
+  const r = await fetch('/generation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await r.json();
+  if (!data.ok) return window.toast(data.raison || 'production impossible', { kind: 'error' });
+  renderResults(data);
+  window.toast(data.count + ' brouillon' + (data.count>1?'s':'') + ' produit' + (data.count>1?'s':'') + '.', { kind: 'success', eyebrow: 'Production accomplie' });
+});
+</script>
+
+<%- include('partials/foot') %>

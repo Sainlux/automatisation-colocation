@@ -1,0 +1,198 @@
+<%- include('partials/head') %>
+
+<!-- ───────── INTRODUCTION ÉDITORIALE ───────── -->
+<section class="mb-8 md:mb-10 rise rise-1">
+  <p class="dropcap text-[15px] sm:text-[15.5px] leading-[1.65] text-ink2 max-w-2xl ed-justify">
+    <strong class="text-ink">La direction du cabinet</strong> rassemble les renseignements qui figurent au pied de chaque acte : nom du bailleur, adresse du bien, coordonnées de correspondance. Ces informations sont enregistrées une seule fois — elles s'inscrivent ensuite automatiquement sur toutes les pièces que vous produirez.
+  </p>
+</section>
+
+<div class="grid lg:grid-cols-3 gap-5 md:gap-6 rise rise-2">
+  <!-- IDENTITÉ -->
+  <form method="post" action="/proprietaire" class="card p-5 sm:p-6 lg:col-span-2">
+    <div class="flex items-baseline justify-between mb-5 pb-4 border-b border-border">
+      <div>
+        <div class="eyebrow">Identité du bailleur</div>
+        <h2 class="font-display text-2xl sm:text-3xl mt-1">Le <span class="italic text-wine">cabinet</span></h2>
+      </div>
+      <span class="text-[10.5px] font-mono uppercase tracking-[0.18em] text-ink3 hidden sm:inline">Apparaît sur tous les PDF</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <label class="sm:col-span-2">Nom complet
+        <input name="nom" value="<%= proprietaire.nom %>" class="w-full">
+        <span class="helper-text">Tel qu'il apparaîtra sur la signature des documents.</span>
+      </label>
+      <label class="sm:col-span-2">Adresse du bailleur
+        <input name="adresse" value="<%= proprietaire.adresse %>" class="w-full">
+      </label>
+      <label class="sm:col-span-2">Adresse du bien loué <span class="text-[10px] font-mono uppercase tracking-[0.18em] text-ink3 ml-1">archive</span>
+        <input name="bien_adresse" value="<%= proprietaire.bien_adresse %>" class="w-full" style="background:#F4EFE6">
+        <span class="helper-text">
+          <strong class="text-wine">Géré dans Patrimoine maintenant</strong> — voir <a href="/biens" class="text-wine link-underline">l'onglet dédié</a>. Ce champ est conservé pour compatibilité avec les anciens documents : il sert de repli si un colocataire n'a pas de bien rattaché.
+        </span>
+      </label>
+      <label>Téléphone <input name="telephone" value="<%= proprietaire.telephone || '' %>" class="w-full"></label>
+      <label>Email <input name="email" type="email" value="<%= proprietaire.email || '' %>" class="w-full"></label>
+      <label class="sm:col-span-2">Ville d'émission
+        <input name="ville_emission" value="<%= proprietaire.ville_emission || 'Beaumont' %>" class="w-full">
+        <span class="helper-text">Mentionnée à la formule « Fait à [ville], le [date] » au pied du document.</span>
+      </label>
+      <div class="sm:col-span-2 pt-3 mt-1 border-t border-border">
+        <button class="btn btn-primary w-full sm:w-auto justify-center">Enregistrer la direction →</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="space-y-5">
+    <div class="card p-5">
+      <div class="eyebrow mb-3">Signature manuscrite</div>
+      <!-- Visuel papier signature -->
+      <div class="border border-border rounded-md bg-paper2/60 p-4 mb-3" style="background-image: repeating-linear-gradient(0deg, transparent, transparent 18px, rgba(26,25,22,0.04) 18px, rgba(26,25,22,0.04) 19px); min-height: 70px;">
+        <div class="font-display italic text-wine text-2xl text-right tracking-tight" style="font-style:italic">G. Merhawi</div>
+      </div>
+      <p class="text-[12.5px] text-ink2 leading-relaxed">Image stockée dans <code class="font-mono text-[11px]">public/signature.png</code>. Elle est apposée automatiquement à l'emplacement défini sur chaque acte.</p>
+    </div>
+
+    <div class="card p-5">
+      <div class="eyebrow mb-2">Mention légale</div>
+      <p class="font-display italic text-[15px] text-ink2 leading-snug">Le bailleur certifie l'exactitude des informations consignées et reconnaît leur usage exclusivement administratif.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ CONFIGURATION SMTP ═══════════ -->
+<div id="smtp" class="ornament-rule mt-12 mb-8 rise rise-3" style="scroll-margin-top: 24px"><span>Envoi automatique des courriels</span></div>
+
+<section class="card overflow-hidden rise rise-3">
+  <div class="p-5 sm:p-6 border-b border-border flex flex-col sm:flex-row sm:items-start gap-3 sm:justify-between">
+    <div class="min-w-0">
+      <div class="eyebrow mb-1">Configuration SMTP</div>
+      <h2 class="font-display text-2xl sm:text-3xl">Le <span class="italic text-wine">courrier</span> du cabinet</h2>
+      <p class="text-sm text-ink2 mt-2 max-w-2xl ed-justify">Pour pouvoir transmettre les documents par courriel depuis l'application, renseignez les paramètres de votre boîte mail. Vos identifiants restent stockés localement dans <code class="font-mono text-xs">.env</code> — jamais transmis ailleurs.</p>
+    </div>
+    <span id="smtp-status" class="chip <%= smtp.host && smtp.hasPass ? 'chip-issued' : 'chip-draft' %> self-start shrink-0">
+      <%= smtp.host && smtp.hasPass ? 'configuré' : 'non configuré' %>
+    </span>
+  </div>
+
+  <div class="p-5 sm:p-6">
+    <!-- Presets rapides -->
+    <div class="mb-6">
+      <div class="eyebrow mb-3">Préréglages rapides</div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" data-preset="hotmail" class="preset-btn btn btn-ghost !text-[12.5px]">Hotmail / Outlook</button>
+        <button type="button" data-preset="gmail"   class="preset-btn btn btn-ghost !text-[12.5px]">Gmail</button>
+        <button type="button" data-preset="yahoo"   class="preset-btn btn btn-ghost !text-[12.5px]">Yahoo</button>
+        <button type="button" data-preset="ovh"     class="preset-btn btn btn-ghost !text-[12.5px]">OVH</button>
+        <button type="button" data-preset="manuel"  class="preset-btn btn btn-ghost !text-[12.5px]">Manuel</button>
+      </div>
+    </div>
+
+    <form id="smtp-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <label class="sm:col-span-2">Serveur SMTP (host)
+        <input id="smtp-host" name="host" type="text" value="<%= smtp.host %>" class="w-full" placeholder="smtp-mail.outlook.com">
+      </label>
+      <label>Port
+        <input id="smtp-port" name="port" type="number" value="<%= smtp.port %>" class="w-full" placeholder="587">
+      </label>
+      <label class="flex items-center sm:items-end gap-2 sm:pb-2 cursor-pointer">
+        <input id="smtp-secure" name="secure" type="checkbox" <%= smtp.secure ? 'checked' : '' %> class="w-4 h-4 accent-wine">
+        <span class="text-sm">Connexion SSL/TLS (port 465)</span>
+      </label>
+      <label class="sm:col-span-2">Identifiant (votre adresse email complète)
+        <input id="smtp-user" name="user" type="email" value="<%= smtp.user || proprietaire.email %>" class="w-full" placeholder="vous@hotmail.com">
+      </label>
+      <label class="sm:col-span-2">
+        Mot de passe d'application
+        <input id="smtp-pass" name="pass" type="password" class="w-full" placeholder="<%= smtp.hasPass ? '••••••••••••  (laissez vide pour conserver)' : 'mot de passe d\'application' %>" autocomplete="new-password">
+        <span class="helper-text">
+          <strong class="text-ink2">Important</strong> — Hotmail, Gmail et Yahoo refusent désormais le mot de passe principal pour des raisons de sécurité. Il faut créer un <a id="link-app-pass" class="text-wine link-underline" href="https://account.live.com/proofs/AppPassword" target="_blank" rel="noopener">mot de passe d'application</a> dédié dans les paramètres de votre boîte mail.
+        </span>
+      </label>
+      <label class="sm:col-span-2">Expéditeur affiché (optionnel)
+        <input id="smtp-from" name="from" type="text" value="<%= smtp.from %>" class="w-full" placeholder="« Cabinet Merhawi &lt;ghmerhawi@hotmail.com&gt; »">
+      </label>
+
+      <div class="sm:col-span-2 flex flex-col sm:flex-row sm:flex-wrap gap-2 pt-4 mt-2 border-t border-border">
+        <button type="button" id="btn-test" class="btn btn-soft justify-center">Tester la connexion</button>
+        <button type="submit" class="btn btn-forest justify-center">Enregistrer la configuration →</button>
+        <span id="smtp-feedback" class="self-center text-[12.5px] font-mono uppercase tracking-[0.12em]"></span>
+      </div>
+    </form>
+  </div>
+</section>
+
+<script>
+const presets = {
+  hotmail: { host: 'smtp-mail.outlook.com', port: 587, secure: false, link: 'https://account.live.com/proofs/AppPassword' },
+  gmail:   { host: 'smtp.gmail.com',         port: 587, secure: false, link: 'https://myaccount.google.com/apppasswords' },
+  yahoo:   { host: 'smtp.mail.yahoo.com',    port: 587, secure: false, link: 'https://login.yahoo.com/account/security' },
+  ovh:     { host: 'ssl0.ovh.net',           port: 465, secure: true,  link: '' },
+  manuel:  { host: '',                        port: 587, secure: false, link: '' }
+};
+
+document.querySelectorAll('.preset-btn').forEach(b => b.addEventListener('click', () => {
+  const p = presets[b.dataset.preset];
+  if (!p) return;
+  document.getElementById('smtp-host').value = p.host;
+  document.getElementById('smtp-port').value = p.port;
+  document.getElementById('smtp-secure').checked = p.secure;
+  if (p.link) document.getElementById('link-app-pass').href = p.link;
+  for (const x of document.querySelectorAll('.preset-btn')) x.classList.remove('bg-paper2');
+  b.classList.add('bg-paper2');
+}));
+
+function feedback(msg, ok) {
+  const el = document.getElementById('smtp-feedback');
+  el.textContent = msg;
+  el.className = 'self-center text-[12.5px] font-mono uppercase tracking-[0.12em] ' + (ok ? 'text-forest' : 'text-wine');
+}
+
+function formData() {
+  return {
+    host: document.getElementById('smtp-host').value.trim(),
+    port: document.getElementById('smtp-port').value.trim(),
+    secure: document.getElementById('smtp-secure').checked ? 'true' : 'false',
+    user: document.getElementById('smtp-user').value.trim(),
+    pass: document.getElementById('smtp-pass').value,
+    from: document.getElementById('smtp-from').value.trim()
+  };
+}
+
+document.getElementById('btn-test').addEventListener('click', async () => {
+  feedback('… test en cours', true);
+  const r = await fetch('/proprietaire/smtp/test', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(formData())
+  });
+  const d = await r.json();
+  if (d.ok) {
+    feedback('✓ connexion réussie', true);
+    window.toast('Le serveur SMTP a accepté la connexion.', { kind: 'success', eyebrow: 'Connexion OK' });
+  } else {
+    feedback('✗ échec', false);
+    window.toast(d.raison || 'Échec de connexion SMTP', { kind: 'error' });
+  }
+});
+
+document.getElementById('smtp-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const r = await fetch('/proprietaire/smtp', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(formData())
+  });
+  const d = await r.json();
+  if (d.ok) {
+    feedback('✓ enregistré', true);
+    window.toast('Configuration enregistrée — le cabinet peut désormais expédier les courriels.', { kind: 'success', eyebrow: 'Sauvegardé' });
+    document.getElementById('smtp-status').textContent = d.configured ? 'configuré' : 'non configuré';
+    document.getElementById('smtp-status').className = 'chip ' + (d.configured ? 'chip-issued' : 'chip-draft') + ' self-start shrink-0';
+    document.getElementById('smtp-pass').value = '';
+  } else {
+    feedback('✗ erreur', false);
+    window.toast('Erreur à l\'enregistrement', { kind: 'error' });
+  }
+});
+</script>
+
+<%- include('partials/foot') %>

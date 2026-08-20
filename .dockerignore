@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+.env
+.env.local
+data
+test-output
+canvas-output
+extracted-images
+colocation Photos
+.git
+.gitignore
+.claude
+*.md
+attestation_domiciliation_*.html
+attestation_domiciliation_*.pdf
