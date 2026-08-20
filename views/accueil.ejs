@@ -121,13 +121,24 @@
       <a href="/colocataires" class="btn btn-wine">Ouvrir le registre →</a>
     </div>
   <% } else { %>
+  <%
+    /* Helpers d'affichage — format français, vue uniquement */
+    const _moisFR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+    const fmtDateFR = (iso) => {
+      if (!iso) return '';
+      const [y, m, j] = String(iso).slice(0, 10).split('-').map(Number);
+      if (!y || !m || !j) return String(iso);
+      return `${j}${j === 1 ? 'ᵉʳ' : ''} ${_moisFR[m - 1]} ${y}`;
+    };
+    const fmtEur = (n) => Number(n).toLocaleString('fr-FR') + ' €';
+  %>
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
     <% let portraitIndex = 0; for (const c of colocataires) {
          const last = lastByColoc.get(c.id);
          const civ = c.civilite === 'M' ? 'Monsieur' : c.civilite === 'Mme' ? 'Madame' : '';
          portraitIndex++;
     %>
-      <article class="card card-hover p-6 sm:p-7 group">
+      <article class="card card-hover p-6 sm:p-7 group flex flex-col">
         <!-- masthead -->
         <div class="flex items-baseline justify-between mb-6 md:mb-7 gap-2">
           <span class="font-mono text-[10px] sm:text-[10.5px] uppercase tracking-[0.18em] sm:tracking-[0.2em] text-ink3">Portrait n° <%= String(portraitIndex).padStart(2,'0') %></span>
@@ -137,23 +148,31 @@
         <div class="mb-1 font-display text-[15px] italic text-ink3"><%= civ || '—' %></div>
         <h3 class="font-display text-3xl sm:text-[34px] leading-[0.95] mb-5 break-words"><%= c.prenom %><br><%= c.nom %></h3>
 
-        <!-- metadata as editorial rows -->
-        <dl class="space-y-2 text-[13px] mb-6 md:mb-7">
-          <% if (c.chambre) { %>
-            <div class="flex justify-between border-b border-border/60 pb-1.5"><dt class="text-ink3">Chambre</dt><dd class="font-mono"><%= c.chambre %></dd></div>
-          <% } %>
-          <% if (c.date_entree) { %>
-            <div class="flex justify-between border-b border-border/60 pb-1.5"><dt class="text-ink3">Entrée</dt><dd class="font-mono"><%= c.date_entree %></dd></div>
-          <% } %>
-          <% if (c.loyer) { %>
-            <div class="flex justify-between border-b border-border/60 pb-1.5"><dt class="text-ink3">Loyer mensuel</dt><dd class="font-mono"><%= c.loyer %> €</dd></div>
-          <% } %>
-          <% if (last) { %>
-            <div class="flex justify-between"><dt class="text-ink3">Dernier document</dt><dd class="capitalize"><%= last.type %></dd></div>
-          <% } %>
+        <!-- metadata as editorial rows — rangées fixes pour aligner les cartes entre elles -->
+        <dl class="space-y-2 text-[13px] mb-6 md:mb-7 flex-1">
+          <div class="flex justify-between border-b border-border/60 pb-1.5">
+            <dt class="text-ink3">Chambre</dt>
+            <dd class="font-mono <%= c.chambre ? '' : 'text-ink3' %>"><%= c.chambre || '—' %></dd>
+          </div>
+          <div class="flex justify-between border-b border-border/60 pb-1.5">
+            <dt class="text-ink3">Entrée</dt>
+            <% if (c.date_entree) { %>
+              <dd><%= fmtDateFR(c.date_entree) %></dd>
+            <% } else { %>
+              <dd class="font-display italic text-ink3">à compléter</dd>
+            <% } %>
+          </div>
+          <div class="flex justify-between border-b border-border/60 pb-1.5">
+            <dt class="text-ink3">Loyer mensuel</dt>
+            <dd class="font-mono <%= c.loyer ? '' : 'text-ink3' %>"><%= c.loyer ? fmtEur(c.loyer) : '—' %></dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-ink3">Dernier document</dt>
+            <dd class="capitalize <%= last ? '' : 'font-display italic text-ink3' %>"><%= last ? last.type : 'aucun' %></dd>
+          </div>
         </dl>
 
-        <!-- inline action -->
+        <!-- inline action — alignée en pied de carte quel que soit le contenu -->
         <form action="/documents/nouveau" method="post" class="flex flex-col sm:flex-row gap-2 pt-5 border-t border-border">
           <input type="hidden" name="colocataire_id" value="<%= c.id %>">
           <select name="type" class="flex-1 !text-[13px]" aria-label="Type de document">

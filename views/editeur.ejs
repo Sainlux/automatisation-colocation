@@ -125,8 +125,9 @@
         <div class="text-[11px] text-ink3">Sélectionnez plusieurs lignes — quantité et prix ajustables.</div>
       </div>
 
-      <!-- Sélecteurs : Immobilier / Mobilier -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+      <!-- Sélecteurs : Immobilier / Mobilier — pleine largeur : à mi-colonne,
+           les intitulés du catalogue (« Ajouter une réparation immobilière… ») sont tronqués -->
+      <div class="grid grid-cols-1 gap-3 mb-4">
         <div>
           <label class="eyebrow">Immobilier</label>
           <select id="add-immobilier" class="w-full mt-1.5">
@@ -234,49 +235,63 @@
         <p class="helper-text mt-2">Choisissez WhatsApp, Messages, Mail ou AirDrop dans le sélecteur natif — le PDF est joint automatiquement.</p>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+<!-- Canaux empilés : dans la colonne éditeur (mi-écran), trois cartes côte à côte
+           écrasent les champs — une rangée par canal garde des saisies confortables. -->
+      <div class="grid grid-cols-1 gap-3">
         <!-- ─── EMAIL ─── -->
         <div class="border border-border rounded-lg p-4 bg-paper">
-          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div class="font-display text-base">Par courriel</div>
-            <span class="text-[10px] font-mono uppercase tracking-[0.16em] <%= emailConfigured ? 'text-forest' : 'text-wine' %>">
-              <%= emailConfigured ? 'SMTP prêt' : 'SMTP absent' %>
-            </span>
+          <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex flex-wrap items-baseline justify-between gap-2 mb-1.5">
+                <div class="font-display text-base">Par courriel</div>
+                <span class="text-[10px] font-mono uppercase tracking-[0.16em] <%= emailConfigured ? 'text-forest' : 'text-wine' %>">
+                  <%= emailConfigured ? 'SMTP prêt' : 'SMTP absent' %>
+                </span>
+              </div>
+              <label class="text-[11px] text-ink3">Adresse email
+                <input id="email-to" class="w-full mt-1" type="email" value="<%= doc.email_destinataire || doc.data.coloc_email || '' %>" placeholder="exemple@email.com">
+              </label>
+            </div>
+            <button type="button" id="btn-envoyer-email" class="btn btn-wine justify-center shrink-0 sm:w-44" <%= !emailConfigured ? 'disabled style="opacity:0.5;cursor:not-allowed"' : '' %>>
+              ✉  Envoyer →
+            </button>
           </div>
-          <label class="text-[11px] text-ink3">Adresse email
-            <input id="email-to" class="w-full mt-1" type="email" value="<%= doc.email_destinataire || doc.data.coloc_email || '' %>" placeholder="exemple@email.com">
-          </label>
-          <button type="button" id="btn-envoyer-email" class="btn btn-wine w-full justify-center mt-3" <%= !emailConfigured ? 'disabled style="opacity:0.5;cursor:not-allowed"' : '' %>>
-            ✉  Envoyer →
-          </button>
         </div>
 
         <!-- ─── WHATSAPP ─── -->
         <div class="border border-border rounded-lg p-4 bg-paper">
-          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div class="font-display text-base">Par WhatsApp</div>
-            <span class="text-[10px] font-mono uppercase tracking-[0.16em] text-forest">Disponible</span>
+          <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex flex-wrap items-baseline justify-between gap-2 mb-1.5">
+                <div class="font-display text-base">Par WhatsApp</div>
+                <span class="text-[10px] font-mono uppercase tracking-[0.16em] text-forest">Disponible</span>
+              </div>
+              <label class="text-[11px] text-ink3">Numéro de téléphone
+                <input id="wa-phone" class="w-full mt-1" type="tel" value="<%= doc.data.coloc_telephone || '' %>" placeholder="+33 6 12 34 56 78">
+              </label>
+            </div>
+            <button type="button" id="btn-envoyer-wa" class="btn justify-center shrink-0 sm:w-44" style="background:#25D366;color:#fff">
+              💬  Ouvrir WhatsApp →
+            </button>
           </div>
-          <label class="text-[11px] text-ink3">Numéro de téléphone
-            <input id="wa-phone" class="w-full mt-1" type="tel" value="<%= doc.data.coloc_telephone || '' %>" placeholder="+33 6 12 34 56 78">
-          </label>
-          <button type="button" id="btn-envoyer-wa" class="btn w-full justify-center mt-3" style="background:#25D366;color:#fff">
-            💬  Ouvrir WhatsApp →
-          </button>
         </div>
 
         <!-- ─── SMS ─── -->
         <div class="border border-border rounded-lg p-4 bg-paper">
-          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div class="font-display text-base">Par SMS</div>
-            <span class="text-[10px] font-mono uppercase tracking-[0.16em] text-ink3">Mobile</span>
+          <div class="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex flex-wrap items-baseline justify-between gap-2 mb-1.5">
+                <div class="font-display text-base">Par SMS</div>
+                <span class="text-[10px] font-mono uppercase tracking-[0.16em] text-ink3">Mobile</span>
+              </div>
+              <label class="text-[11px] text-ink3">Numéro de téléphone
+                <input id="sms-phone" class="w-full mt-1" type="tel" value="<%= doc.data.coloc_telephone || '' %>" placeholder="+33 6 12 34 56 78">
+              </label>
+            </div>
+            <button type="button" id="btn-envoyer-sms" class="btn btn-primary justify-center shrink-0 sm:w-44">
+              📱  Ouvrir SMS →
+            </button>
           </div>
-          <label class="text-[11px] text-ink3">Numéro de téléphone
-            <input id="sms-phone" class="w-full mt-1" type="tel" value="<%= doc.data.coloc_telephone || '' %>" placeholder="+33 6 12 34 56 78">
-          </label>
-          <button type="button" id="btn-envoyer-sms" class="btn btn-primary w-full justify-center mt-3">
-            📱  Ouvrir SMS →
-          </button>
         </div>
       </div>
 

@@ -163,7 +163,10 @@
     }
 
     /* ─── Form controls ─── */
-    input[type=text], input[type=email], input[type=number], input[type=date], input[type=search], input[type=tel], input[type=password], input[type=month], select, textarea {
+    /* `input:not([type])` : un <input> sans attribut type est bien un champ texte,
+       mais n'est PAS couvert par input[type=text] — sans lui, tous les champs
+       « nus » (Prénom, Nom, Adresse…) s'affichent sans bordure. */
+    input:not([type]), input[type=text], input[type=email], input[type=number], input[type=date], input[type=search], input[type=tel], input[type=password], input[type=month], select, textarea {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -538,7 +541,7 @@
 
     /* ─── Mobile : éviter le zoom auto iOS Safari (font-size >= 16px) ─── */
     @media (max-width: 640px) {
-      input[type=text], input[type=email], input[type=number], input[type=date],
+      input:not([type]), input[type=text], input[type=email], input[type=number], input[type=date],
       input[type=tel], input[type=password], input[type=search], input[type=month],
       select, textarea {
         font-size: 16px;
@@ -986,7 +989,7 @@
           { href:'/biens',        k:'biens',        label:'Patrimoine',        num:'iv',   group:'Cabinet'    },
           { href:'/colocataires', k:'colocataires', label:'Colocataires',      num:'v',    group:'Cabinet'    },
           { href:'/historique',   k:'historique',   label:'Documents',         num:'vi',   group:'Cabinet'    },
-          { href:'/proprietaire', k:'proprietaire', label:'Cabinet',           num:'vii',  group:'Cabinet'    }
+          { href:'/proprietaire', k:'proprietaire', label:'Direction',         num:'vii',  group:'Cabinet'    }
         ]; %>
         <% for (const it of navItems) { %>
           <li class="border-b border-border">

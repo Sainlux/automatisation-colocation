@@ -64,6 +64,7 @@
           <div class="text-[11px] sm:text-[11.5px] text-ink3 mt-0.5 font-mono truncate">
             <%= c.civilite === 'M' ? 'Monsieur' : c.civilite === 'Mme' ? 'Madame' : '—' %>
             <% if (c.chambre) { %> · chambre <%= c.chambre %><% } %>
+            <% if (c.loyer) { %> · <%= Number(c.loyer).toLocaleString('fr-FR') %> €<% if (c.charges) { %> + <%= Number(c.charges).toLocaleString('fr-FR') %> € ch.<% } %><% } %>
           </div>
           <!-- Chips canaux disponibles -->
           <div class="flex flex-wrap gap-1.5 mt-2">

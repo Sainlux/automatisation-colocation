@@ -48,18 +48,18 @@
 
 <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-10 md:mb-12 rise rise-2">
   <% const metrics = [
-    { label: 'Colocataires actifs', value: stats.colocActifs, foot: 'au cabinet',          tone: '' },
-    { label: 'Documents émis',      value: stats.docsTotal,   foot: 'depuis l\'origine',    tone: '' },
-    { label: 'Brouillons',          value: stats.brouillons,  foot: 'à finaliser',          tone: 'wine' },
-    { label: 'Envoyés par email',   value: stats.envoyes,     foot: 'transmis',             tone: '' }
+    { label: 'Colocataires actifs', value: stats.colocActifs, foot: 'au cabinet',          tone: '',     href: '/colocataires' },
+    { label: 'Documents émis',      value: stats.docsTotal,   foot: 'depuis l\'origine',    tone: '',     href: '/historique' },
+    { label: 'Brouillons',          value: stats.brouillons,  foot: 'à finaliser',          tone: 'wine', href: '/historique' },
+    { label: 'Envoyés par email',   value: stats.envoyes,     foot: 'transmis',             tone: '',     href: '/historique' }
   ]; %>
   <% for (const m of metrics) { %>
-    <div class="stat-card <%= m.value === 0 ? 'is-zero' : (m.tone === 'wine' ? 'is-wine' : '') %>">
+    <a href="<%= m.href %>" class="stat-card block <%= m.value === 0 ? 'is-zero' : (m.tone === 'wine' ? 'is-wine' : '') %>">
       <div class="eyebrow text-[9.5px] sm:text-[10.5px] leading-tight"><%= m.label %></div>
       <span class="stat-value"><%= m.value %></span>
       <div class="stat-foot"><%= m.foot %></div>
       <span class="stat-arrow" aria-hidden="true">↗</span>
-    </div>
+    </a>
   <% } %>
 </section>
 
@@ -102,13 +102,24 @@
         <p class="empty-line" style="font-size:15px">Le premier acte produit s'inscrira ici dès sa création.</p>
       </div>
     <% } else { %>
+    <%
+      /* Horodatage humanisé — « 20 août · 13 h 40 » (vue uniquement) */
+      const _moisFR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+      const fmtHorodatage = (ts) => {
+        const s = String(ts || '');
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+        if (!m) return s;
+        const j = Number(m[3]);
+        return `${j}${j === 1 ? 'ᵉʳ' : ''} ${_moisFR[Number(m[2]) - 1]} · ${Number(m[4])} h ${m[5]}`;
+      };
+    %>
     <ul class="divide-y divide-border -mx-2">
       <% for (const d of recents) { %>
         <li class="py-3 px-2 flex items-center gap-3 group">
           <span class="chip <%= d.statut==='envoye' ? 'chip-sent' : d.statut==='genere' ? 'chip-issued' : 'chip-draft' %> shrink-0"><%= d.statut %></span>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium truncate capitalize"><%= d.type %> · <%= d.coloc_prenom || '' %> <%= d.coloc_nom || '' %></div>
-            <div class="text-[11px] text-ink3 font-mono"><%= d.cree_le %></div>
+            <div class="text-[11px] text-ink3 font-mono"><%= fmtHorodatage(d.cree_le) %></div>
           </div>
           <a href="/documents/<%= d.id %>/editer" class="text-xs text-wine link-underline shrink-0 py-2 opacity-70 group-hover:opacity-100">Ouvrir →</a>
         </li>
