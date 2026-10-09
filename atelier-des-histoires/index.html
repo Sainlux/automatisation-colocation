@@ -1,0 +1,1842 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>L'Atelier des Histoires</title>
+<meta name="description" content="Transforme une histoire de la Bible en audio Suno, livret illustré, kit vidéo YouTube ou chant sur mesure.">
+<meta name="theme-color" content="#0d1117">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; connect-src https://api.anthropic.com https://api.openai.com; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d1117'/%3E%3Cpath d='M14 18h16c3 0 5 2 5 5v25c0-3-2-5-5-5H14zM50 18H34c-3 0-5 2-5 5v25c0-3 2-5 5-5h16z' fill='%2330d6d2'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d1117; --panel:#151a22; --raised:#1d232d; --field:#0f141b; --line:#2a323f;
+  --ink:#eef1f5; --soft:#8b93a1; --accent:#30d6d2; --accent-deep:#1aa8a5; --accent-ink:#06171a;
+  --glow:0 0 0 1px rgba(48,214,210,.35),0 0 24px rgba(48,214,210,.28);
+  --ok:#5fd39a; --warn:#ff8a7a;
+  --display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r-pill:999px; --r-card:18px; --r-field:12px;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 76px);-webkit-text-size-adjust:100%}
+body{margin:0;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.5}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+main{max-width:1180px;margin:0 auto;padding:16px 16px 60px}
+header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding:8px 4px 4px}
+header h1{font-family:var(--display);font-weight:700;font-size:clamp(1.7rem,6vw,2.4rem);line-height:1;letter-spacing:-.02em;margin:0;color:var(--accent);text-shadow:0 0 18px rgba(48,214,210,.35)}
+header p{color:var(--soft);margin:0;font-size:.95rem;max-width:60ch}
+h2{font-family:var(--display);font-size:1.3rem;margin:28px 0 12px;letter-spacing:-.01em}
+
+/* onglets */
+.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-pill);padding:5px;margin:14px 0 18px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:1;white-space:nowrap;border:0;background:transparent;color:var(--soft);border-radius:var(--r-pill);padding:10px 14px;min-height:42px;font-weight:700}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);box-shadow:var(--glow)}
+.badge{display:inline-block;min-width:20px;padding:0 6px;border-radius:var(--r-pill);background:var(--raised);color:var(--ink);font-size:.75rem;line-height:20px;margin-left:6px;vertical-align:middle}
+.tabs button[aria-selected="true"] .badge{background:rgba(6,23,26,.25);color:var(--accent-ink)}
+.panel[hidden],.badge[hidden]{display:none}
+
+/* formulaire */
+#form{display:grid;gap:12px}
+@media(min-width:900px){#form{grid-template-columns:1fr 1fr}.step.wide,.actions.wide{grid-column:1/-1}}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);padding:16px}
+.step label.q,.step .q{display:block;font-weight:700;margin-bottom:4px}
+.step .hint{color:var(--soft);font-size:.9rem;margin:0 0 10px}
+input[type=text],input[type=number],input[type=password],input[type=search],textarea,select{width:100%;font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:var(--r-field);padding:12px;color-scheme:dark}
+select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--accent) 50%),linear-gradient(135deg,var(--accent) 50%,transparent 50%);background-position:calc(100% - 20px) 50%,calc(100% - 14px) 50%;background-size:6px 6px;background-repeat:no-repeat;padding-right:38px}
+textarea{min-height:84px;resize:vertical}
+input:focus,textarea:focus,select:focus,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:grid;gap:10px}
+@media(min-width:560px){.row.two{grid-template-columns:2fr 1fr}}
+.grid2{display:grid;gap:12px}
+@media(min-width:560px){.grid2{grid-template-columns:1fr 1fr}}
+@media(min-width:900px){.grid2{grid-template-columns:1fr 1fr 1fr}}
+.grid2 label{display:block;font-size:.9rem;color:var(--soft);margin-bottom:4px}
+.custX{margin-top:8px}
+
+/* puces pilules (comme les presets de l'égaliseur) */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips label{display:inline-flex;align-items:center;gap:8px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r-pill);padding:9px 14px;cursor:pointer;min-height:44px;color:var(--soft)}
+.chips label:has(input:checked){background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:700}
+.chips input{accent-color:var(--accent);width:16px;height:16px}
+.chips label:has(input:checked) input{accent-color:var(--accent-ink)}
+.modes{display:grid;gap:8px}
+@media(min-width:700px){.modes{grid-template-columns:1fr 1fr}}@media(min-width:1000px){.modes{grid-template-columns:1fr 1fr 1fr 1fr}}
+.mode{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:var(--r-card);padding:14px;cursor:pointer;background:var(--raised)}
+.mode:has(input:checked){border-color:var(--accent);box-shadow:var(--glow)}
+.mode input{accent-color:var(--accent);width:20px;height:20px;margin-top:3px;flex:none}
+.mode small{display:block;color:var(--soft);font-size:.9rem}
+details.more{margin-top:12px}details.more>summary{cursor:pointer;color:var(--accent);font-weight:700;min-height:44px;display:flex;align-items:center}
+.ideas{display:grid;gap:8px;margin-top:10px}
+.ideas button{text-align:left;width:100%}
+.ideas button small{display:block;color:var(--soft)}
+
+/* boutons */
+button{font:inherit;cursor:pointer;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--raised);color:var(--ink);padding:10px 16px;min-height:44px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:700;font-size:1.05rem;padding:14px 18px;width:100%;box-shadow:var(--glow)}
+button:disabled{opacity:.45;cursor:default;box-shadow:none}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.actions{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);padding:16px}
+@media(min-width:900px){.actions{position:sticky;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);z-index:4;box-shadow:0 -8px 30px rgba(0,0,0,.45)}}
+@media(max-width:599px){.tabs button{padding:10px 6px;font-size:.86rem;min-width:0}.badge{margin-left:3px}}
+.muted{color:var(--soft);font-size:.9rem}
+.banner{border-left:3px solid var(--warn);background:var(--panel);padding:12px 14px;border-radius:0 var(--r-field) var(--r-field) 0;margin:0 0 14px}
+.banner.ok{border-color:var(--ok)}
+.empty{text-align:center;padding:40px 0}
+
+/* résultats */
+details.job{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);margin-bottom:10px;overflow:hidden}
+details.job>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;font-weight:700}
+details.job>summary::-webkit-details-marker{display:none}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex:none}
+.dot.run{background:var(--accent);box-shadow:0 0 10px var(--accent);animation:pulse 1s infinite alternate}
+.dot.done{background:var(--ok)} .dot.err{background:var(--warn)}
+@keyframes pulse{to{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.dot.run{animation:none}}
+.status{margin-left:auto;font-weight:400;color:var(--soft);font-size:.9rem}
+.body{padding:0 16px 16px;overflow-wrap:anywhere;max-width:85ch}
+.body h3{font-family:var(--display);font-size:1.15rem;margin:20px 0 6px;color:var(--accent)}
+.body h4{font-size:1rem;margin:16px 0 4px}
+.body p{margin:0 0 10px} .body ul{margin:0 0 10px;padding-left:20px}
+.copybox{border:1px solid var(--accent-deep);border-radius:var(--r-field);margin:14px 0;background:var(--field)}
+.copybox .top{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.copybox .name{font-weight:700;color:var(--accent)}
+.copybox .count{color:var(--soft);font-size:.85rem}
+.copybox .count.over{color:var(--warn);font-weight:700}
+.copybox .top button{margin-left:auto;min-height:36px;padding:6px 14px}
+.copybox pre{margin:0;padding:12px;white-space:pre-wrap;font-family:var(--body);font-size:.95rem;max-height:420px;overflow:auto}
+.manual{margin:4px 0 14px;padding:12px;border:1px solid var(--accent-deep);border-radius:var(--r-field);background:rgba(48,214,210,.06)}
+.manual-title{margin:0 0 6px;font-weight:700;color:var(--accent)}
+.manual-steps{margin:0 0 10px;padding-left:20px;color:var(--soft)}
+.manual .copybox{margin:10px 0}.manual .mpre{max-height:200px;font-size:.85rem}
+.manual .mpaste{min-height:110px;margin-top:10px}
+.linkbtn{background:none;border:0;padding:0;min-height:0;color:var(--accent);text-decoration:underline;font:inherit;cursor:pointer}
+.apikey input[type=password]{font-family:monospace;letter-spacing:.08em}
+.btnlink{display:inline-flex;align-items:center;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--raised);color:var(--ink);padding:10px 16px;min-height:44px;text-decoration:none}
+.refine{margin-top:12px;border-top:1px dashed var(--line);padding-top:12px}
+.refine textarea{min-height:56px;font-size:.95rem}
+.refine .ptxt{min-height:220px;font-size:.85rem;margin-top:8px}
+
+/* bibliothèque et infos */
+.lib ul,.combos ul{list-style:none;margin:0;padding:0}
+.lib li{display:block;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-card);background:var(--panel);margin-bottom:8px}
+.lib .head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lib .t{flex:1;min-width:0} .lib .t small{display:block;color:var(--soft)}
+.lib .det{display:none;margin-top:12px;border-top:1px dashed var(--line);padding-top:12px}
+.lib li.open .det{display:block}
+.lib .kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;font-size:.92rem;margin:0 0 12px}
+.lib .kv dt{color:var(--soft)}.lib .kv dd{margin:0}
+.ver{border:1px solid var(--line);border-radius:var(--r-field);padding:10px 12px;margin:8px 0;background:var(--field)}
+.ver .vh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.92rem}
+.ver .vh .when{color:var(--soft)}
+.ver pre{white-space:pre-wrap;font-family:var(--body);font-size:.88rem;max-height:300px;overflow:auto;margin:8px 0 0;padding:10px;background:var(--panel);border-radius:8px}
+.ver pre[hidden]{display:none}
+.vers{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
+.vers>summary{cursor:pointer;color:var(--accent);font-weight:700;min-height:40px;display:flex;align-items:center}
+.combos li{padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-card);background:var(--panel);margin-bottom:8px}
+.help ul{padding-left:20px;margin:0}.help li{margin-bottom:6px}
+.credit{color:var(--soft);font-size:.85rem;text-align:center;padding:32px 0 8px;border-top:1px solid var(--line);margin-top:40px}
+</style>
+</head>
+<body>
+<noscript><p style="padding:16px;color:#fff;background:#0d1117">Cette page a besoin de JavaScript pour fonctionner.</p></noscript>
+<main>
+<header>
+  <h1>L'Atelier des Histoires</h1>
+  <p>Une histoire de la Bible en entrée. En sortie : l'audio pour Suno, un livret illustré, le kit d'une vidéo YouTube, ou une chanson sur mesure pour quelqu'un.</p>
+</header>
+<div class="tabs" role="tablist" aria-label="Sections">
+  <button type="button" role="tab" aria-selected="true" tabindex="0" aria-controls="tab-atelier" id="tabbtn-atelier" data-tab="atelier">Atelier</button>
+  <button type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-results" id="tabbtn-results" data-tab="results">Résultats <span class="badge" id="badgeRes" hidden></span></button>
+  <button type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-lib" id="tabbtn-lib" data-tab="lib">Historique <span class="badge" id="badgeLib" hidden></span></button>
+  <button type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="tab-info" id="tabbtn-info" data-tab="info">Infos</button>
+</div>
+<div id="noSample" class="banner" hidden>Sur cette version, l'IA n'écrit pas encore dans la page. Deux solutions : <button type="button" class="linkbtn" id="goApi">ajouter ta clé API dans l'onglet Infos</button> pour une génération directe, ou utiliser « Copier le prompt » dans chaque module et coller la réponse de Claude ou ChatGPT.</div>
+<section id="tab-atelier" class="panel" role="tabpanel" aria-labelledby="tabbtn-atelier">
+<form id="form" onsubmit="return false">
+  <div class="step wide">
+    <span class="q" id="modeL" style="font-weight:700;display:block;margin-bottom:8px">Que veux-tu fabriquer ?</span>
+    <div class="modes" role="radiogroup" aria-labelledby="modeL">
+      <label class="mode"><input type="radio" name="mode" value="A" checked><span><strong>Audio Suno</strong><small>Le conte ou la chanson, prêt à coller dans Suno.</small></span></label>
+      <label class="mode"><input type="radio" name="mode" value="B"><span><strong>Livret de l'histoire</strong><small>Une quinzaine de pages : récit, pédagogie, prompts d'illustrations pour ChatGPT.</small></span></label>
+      <label class="mode"><input type="radio" name="mode" value="C"><span><strong>Vidéo YouTube</strong><small>Audio Suno + livret + images animées + fiche de publication.</small></span></label>
+      <label class="mode"><input type="radio" name="mode" value="D"><span><strong>Chant pour quelqu'un</strong><small>Anniversaire, fête des mères, Noël, bonne année… une chanson sur mesure pour Suno.</small></span></label>
+    </div>
+  </div>
+
+  <div class="step wide" id="occOpts" hidden>
+    <span class="q" style="font-weight:700;display:block;margin-bottom:10px">Pour quelle occasion ?</span>
+    <div class="grid2">
+      <div><label for="oOcc">Occasion</label>
+        <select id="oOcc">
+          <optgroup label="Famille">
+          <option value="anniv">Anniversaire</option>
+          <option value="meres">Fête des mères</option>
+          <option value="peres">Fête des pères</option>
+          <option value="parents">Fête des parents / grands-parents</option>
+          <option value="naissance">Naissance</option>
+          <option value="mariage">Mariage / anniversaire de mariage</option>
+          </optgroup>
+          <optgroup label="Fêtes de l'année">
+          <option value="noel">Joyeux Noël</option>
+          <option value="nouvelan">Bonne année</option>
+          <option value="paques">Pâques</option>
+          </optgroup>
+          <optgroup label="Étapes de vie">
+          <option value="bapteme">Baptême / confirmation</option>
+          <option value="diplome">Réussite, diplôme, examen</option>
+          <option value="depart">Départ, retraite, déménagement</option>
+          <option value="guerison">Rétablissement, encouragement dans l'épreuve</option>
+          <option value="deuil">Réconfort après un deuil</option>
+          <option value="merci">Merci / reconnaissance</option>
+          <option value="bienvenue">Bienvenue (nouveau venu, nouvelle équipe)</option>
+          </optgroup>
+          <option value="custom">Autre… (je précise)</option>
+        </select>
+        <input id="oOccX" type="text" class="custX" hidden placeholder="Décris l'occasion"></div>
+      <div><label for="oFor">Pour qui ? (prénom, lien)</label>
+        <input id="oFor" type="text" placeholder="Ex. Maman, ou Sarah, ma sœur"></div>
+      <div><label for="oFrom">De la part de</label>
+        <input id="oFrom" type="text" placeholder="Ex. ses cinq enfants, l'équipe du dimanche"></div>
+      <div><label for="oPublic">Qui va l'écouter ?</label>
+        <select id="oPublic">
+          <option value="adultes">Adultes</option>
+          <option value="famille">Toute la famille, petits et grands</option>
+          <option value="ados">Ados / jeunes adultes</option>
+          <option value="enfants">Enfants</option>
+          <option value="seniors">Seniors</option>
+        </select></div>
+      <div><label for="oFaith">Place de la foi</label>
+        <select id="oFaith">
+          <option value="centre">Dieu au centre (prière, bénédiction, verset)</option>
+          <option value="discret">Discrète (une bénédiction, un clin d'œil)</option>
+          <option value="aucune">Aucune mention</option>
+        </select></div>
+      <div><label for="oStart">Point de départ</label>
+        <select id="oStart">
+          <option value="help">Aide-moi : j'ai quelques infos, écris les paroles</option>
+          <option value="draft">J'ai écrit ou dicté un texte : améliore-le et mets-le en forme</option>
+          <option value="asis">Je colle un texte à chanter tel quel (mise en forme Suno seulement)</option>
+        </select></div>
+    </div>
+    <label for="songText" style="display:block;margin:14px 0 4px;font-weight:700">Ton texte ou tes idées</label>
+    <p class="hint">Écris, colle, ou dicte avec le micro de ton clavier. Prénoms, souvenirs, qualités, anecdotes, phrases que la personne dit souvent : tout ce qui rend la chanson vraiment pour elle. Rien d'inventé ne sera ajouté sur la personne.</p>
+    <textarea id="songText" style="min-height:120px" placeholder="Ex. Maman, 60 ans le 12 mai. Elle chante en cuisinant, elle dit toujours « on verra demain », elle a tenu la famille après le départ de papa…"></textarea>
+  </div>
+
+  <div class="step wide" id="storyStep">
+    <div class="row two">
+      <div><label class="q" for="story">Quelle histoire ?</label>
+        <input id="story" type="text" placeholder="Ex. Daniel dans la fosse aux lions" autocomplete="off"></div>
+      <div><label class="q" for="ref">Référence</label>
+        <input id="ref" type="text" placeholder="Ex. Daniel 6 (facultatif)" autocomplete="off"></div>
+    </div>
+    <div class="bar"><button type="button" id="ideasBtn">Pas d'idée ? Propose-moi 5 histoires</button></div>
+    <div id="ideas" class="ideas"></div>
+    <details class="more"><summary>Partir d'un texte précis (facultatif)</summary>
+      <label for="srcText" style="display:block;margin:10px 0 4px">Texte de départ</label>
+      <p class="hint">Colle ici le passage biblique dans la version que tu veux entendre, ou ton propre texte (histoire, poème, témoignage). L'atelier s'en sert comme base et cite ce texte-là.</p>
+      <textarea id="srcText" placeholder="Ex. le texte de Daniel 6 dans ta Bible, ou une histoire que tu as écrite"></textarea>
+      <label for="oBible" style="display:block;margin:12px 0 4px">Version biblique</label>
+      <select id="oBible">
+        <option value="">Par défaut (version libre de droits selon la langue)</option>
+        <optgroup label="Libres de droits (citées mot à mot)">
+        <option value="Louis Segond 1910">Louis Segond 1910</option>
+        <option value="Darby">Darby</option>
+        <option value="Ostervald">Ostervald</option>
+        </optgroup>
+        <optgroup label="Sous droits (colle le texte ci-dessus pour une citation exacte)">
+        <option value="Segond 21">Segond 21</option>
+        <option value="NEG 1979">Nouvelle Édition de Genève 1979</option>
+        <option value="Bible du Semeur">Bible du Semeur</option>
+        <option value="Nouvelle Bible Segond">Nouvelle Bible Segond</option>
+        <option value="Parole de Vie">Parole de Vie</option>
+        <option value="Bible en français courant">Bible en français courant</option>
+        <option value="TOB">TOB</option>
+        <option value="Bible Nouvelle Français courant">Nouvelle Français courant</option>
+        </optgroup>
+        <option value="custom">Autre… (je précise)</option>
+      </select>
+      <input id="oBibleX" type="text" class="custX" hidden placeholder="Nom de la version">
+    </details>
+  </div>
+
+  <div class="step" id="goalStep">
+    <label class="q" for="goal">Que doit retenir ou faire l'enfant ?</label>
+    <p class="hint">Facultatif. Si tu laisses vide, l'atelier propose une idée et une action, signalées comme propositions.</p>
+    <textarea id="goal" placeholder="Ex. Prier même quand c'est difficile. Action : choisir un moment de prière fixe cette semaine."></textarea>
+  </div>
+
+  <div class="step" id="ctxStep">
+    <label class="q" for="ctx">Où ça se place dans l'année ?</label>
+    <div class="row two">
+      <select id="ctx">
+        <option value="">Hors planning</option>
+        <option>1er samedi du mois : Adoration par l'art</option>
+        <option>Cycle 1 : Ésaïe 61 (pardon, pureté, délivrance)</option>
+        <option>Cycle 2 : Intimité avec Dieu</option>
+        <option>Cycle 3 : Communion fraternelle</option>
+        <option>Cycle 4 : Parole de Dieu</option>
+        <option>Fête biblique</option>
+        <option>Célébration familles</option>
+      </select>
+      <input id="ctxMore" type="text" placeholder="Date ou fête (facultatif)">
+    </div>
+  </div>
+
+  <div class="step" id="agesStep">
+    <span class="q" id="agesL" style="font-weight:700;display:block;margin-bottom:8px">Pour quels âges ?</span>
+    <div class="chips" role="group" aria-labelledby="agesL">
+      <label><input type="checkbox" id="a46" checked> 4-6 ans</label>
+      <label><input type="checkbox" id="a710" checked> 7-10 ans</label>
+      <label><input type="checkbox" id="a1113"> 11-13 ans</label>
+      <label><input type="checkbox" id="aAd"> Adultes</label>
+    </div>
+    <div id="adultBox" hidden style="margin-top:10px"><label for="oAdult" style="display:block;font-size:.9rem;color:var(--soft);margin-bottom:4px">Quel public adulte ?</label>
+      <select id="oAdult">
+        <option value="jeunes">Jeunes adultes (18-30 ans)</option>
+        <option value="parents">Parents, en famille</option>
+        <option value="eglise">Groupe d'église, étude biblique</option>
+        <option value="seniors">Seniors</option>
+        <option value="curieux">Grand public, pas forcément croyant</option>
+        <option value="culte">Assemblée en culte (chant à reprendre)</option>
+        <option value="custom">Autre… (je précise)</option>
+      </select>
+      <input id="oAdultX" type="text" class="custX" hidden placeholder="Décris le public adulte"></div>
+    <p class="hint" style="margin-top:10px">Une version complète par public coché. Pour aller vite, n'en coche qu'un.</p>
+  </div>
+
+  <div class="step">
+    <label class="q" for="oLang">Dans quelle langue ?</label>
+    <select id="oLang">
+      <option value="fr" selected>Français</option>
+      <option value="it">Italien</option>
+      <option value="en">Anglais</option>
+      <option value="es">Espagnol</option>
+      <option value="de">Allemand</option>
+    </select>
+    <p class="hint" style="margin-top:10px">S'applique à tout ce que l'enfant entend, lit ou voit : paroles, récit du livret, textes à l'écran, fiche YouTube. Les notes pour toi et la fiche moniteur restent en français.</p>
+  </div>
+
+  <div class="step wide" id="sunoOpts">
+    <span class="q" style="font-weight:700;display:block;margin-bottom:10px">Réglages de l'audio Suno</span>
+    <div class="grid2">
+      <div><label for="oVoice">Qui raconte ?</label>
+        <select id="oVoice">
+          <optgroup label="Duos">
+          <option value="duo_ae">Adulte + enfant curieux</option>
+          <option value="duo_hf">Homme + femme</option>
+          <option value="duo_gp">Grand-père + petit-enfant (voix âgée, grave, chaleureuse)</option>
+          <option value="duo_gm">Grand-mère + petit-enfant (voix âgée, douce, qui chantonne)</option>
+          <option value="duo_comic">Duo comique : un sérieux, un rigolo</option>
+          <option value="duo_pere">Père + enfant, le soir</option>
+          <option value="duo_frs">Deux enfants (frère et sœur) qui se disputent l'histoire</option>
+          <option value="duo_guide">Guide-explorateur + jeune apprenti</option>
+          </optgroup>
+          <optgroup label="Solos">
+          <option value="solo_h">Un homme, voix chaude</option>
+          <option value="solo_f">Une femme, voix douce</option>
+          <option value="solo_e">Un enfant témoin</option>
+          <option value="solo_ado">Un ado qui raconte à ses copains</option>
+          <option value="solo_heros">Le héros biblique à la première personne</option>
+          <option value="solo_second">Un personnage secondaire qui a tout vu</option>
+          <option value="solo_hist">Un historien-archéologue passionné</option>
+          <option value="solo_gp">Un grand-père seul, au coin du feu (voix très âgée)</option>
+          <option value="solo_gm">Une grand-mère seule, en cuisine (voix âgée, tendre)</option>
+          <option value="solo_griot">Un griot, conteur africain, avec sa kora</option>
+          <option value="solo_comique">Un conteur comique, façon film muet / cabaret</option>
+          <option value="solo_poete">Un poète, voix posée, images fortes</option>
+          <option value="solo_sage">Un vieux sage d'Orient, lent et profond</option>
+          </optgroup>
+          <optgroup label="Groupes et formes spéciales">
+          <option value="cast">Plusieurs personnages + chœur d'enfants</option>
+          <option value="reporter">Reporter en direct, interviews sur place</option>
+          <option value="podcast">Podcast de deux amis qui enquêtent</option>
+          <option value="detective">Détective qui résout l'énigme avec l'auditeur</option>
+          <option value="lettre">Lettre lue, écrite par un personnage après coup</option>
+          <option value="chorale">Chorale d'enfants, personne ne parle</option>
+          <option value="rap_duo">Deux rappeurs qui se répondent</option>
+          <option value="famille">Toute une famille à table (plusieurs générations)</option>
+          <option value="troupe">Troupe de théâtre : narrateur + comédiens + chœur</option>
+          <option value="veillee">Veillée : un conteur et un public qui réagit</option>
+          </optgroup>
+          <optgroup label="Comiques et inhabituels">
+          <option value="commentateur">Commentateur sportif (match en direct, surexcité)</option>
+          <option value="meteo">Présentateur météo (bulletin qui dérape)</option>
+          <option value="chef">Chef cuisinier (l'histoire comme une recette)</option>
+          <option value="guide">Guide touristique (visite de l'histoire, groupe en retard)</option>
+          <option value="robot">Robot qui découvre les émotions</option>
+          <option value="grognon">Vieux grognon qui finit par être ému</option>
+          <option value="dramatique">Narrateur trop dramatique (tout est une tragédie)</option>
+          <option value="endormi">Narrateur qui s'endort (et se réveille en sursaut)</option>
+          <option value="youtubeur">Youtubeur surexcité (« les amis, vous n'allez pas y croire »)</option>
+          <option value="encheres">Commissaire-priseur (débit rapide, enchères)</option>
+          <option value="opera">Chanteur d'opéra (tout est chanté à pleine voix)</option>
+          <option value="pirate_v">Capitaine pirate (« moussaillons ! »)</option>
+          <option value="animal">Un animal de l'histoire qui raconte (âne, baleine, corbeau…)</option>
+          <option value="objet">Un objet de l'histoire qui raconte (la fronde, la barque, la jarre…)</option>
+          <option value="jumeaux">Jumeaux qui finissent les phrases l'un de l'autre</option>
+          <option value="maitre_eleve">Maître d'école et élève qui ne comprend rien</option>
+          <option value="savant">Savant fou qui explique tout avec des expériences</option>
+          <option value="bonimenteur">Bonimenteur de foire (« approchez, approchez ! »)</option>
+          </optgroup>
+          <option value="custom">Autre… (je précise)</option>
+        </select>
+        <input id="oVoiceX" type="text" class="custX" hidden placeholder="Décris ce que tu veux, en français"></div>
+      <div><label for="oTone">Ton du récit</label>
+        <select id="oTone">
+          <optgroup label="Tension et aventure">
+          <option value="suspense">Suspense grand film (bande-annonce)</option>
+          <option value="epic">Aventure épique</option>
+          <option value="enquete">Enquête à indices (l'auditeur devine)</option>
+          <option value="survie">Récit de survie, minute par minute</option>
+          </optgroup>
+          <optgroup label="Chaleur et émotion">
+          <option value="conte">Conte au coin du feu</option>
+          <option value="emotion">Émotion profonde, larmes et joie</option>
+          <option value="tendresse">Tendresse et réconfort</option>
+          <option value="lullaby">Berceuse douce</option>
+          </optgroup>
+          <optgroup label="Énergie et humour">
+          <option value="musical">Comédie musicale de film d'animation</option>
+          <option value="joy">Joyeux et dansant</option>
+          <option value="humour">Humour tendre, situations drôles</option>
+          <option value="stade">Ambiance stade, chant de supporters</option>
+          <option value="muet">Burlesque façon film muet (gags, rythme, piano)</option>
+          <option value="cartoon">Dessin animé déjanté (onomatopées, surprises)</option>
+          <option value="cabaret">Cabaret / music-hall (chic, clin d'œil)</option>
+          <option value="western">Western (grands espaces, duel, harmonica)</option>
+          <option value="pirates">Aventure de pirates / marins</option>
+          <option value="espion">Enquête d'espion (jazz feutré, suspense léger)</option>
+          </optgroup>
+          <optgroup label="Profondeur">
+          <option value="epique_sacre">Solennel et majestueux (gloire de Dieu)</option>
+          <option value="meditatif">Méditatif, silences, une question qui reste</option>
+          <option value="temoignage">Témoignage à cœur ouvert</option>
+          <option value="doc">Documentaire captivant (voix off de reportage)</option>
+          <option value="epopee">Épopée antique (comme un récit d'Homère)</option>
+          <option value="nostalgie">Nostalgie douce (souvenirs, sépia)</option>
+          <option value="espoir">Lever de soleil : de la nuit à l'espoir</option>
+          </optgroup>
+          <option value="custom">Autre… (je précise)</option>
+        </select>
+        <input id="oToneX" type="text" class="custX" hidden placeholder="Décris ce que tu veux, en français"></div>
+      <div><label for="oSing">Parlé ou chanté ?</label>
+        <select id="oSing">
+          <optgroup label="Surtout parlé">
+          <option value="spoken">Presque tout parlé + un refrain</option>
+          <option value="slam">Slam : parlé rythmé, rimes, musique dessous</option>
+          <option value="rap">Rap narratif, flow clair, refrain chanté</option>
+          <option value="audio_drama">Pièce radio : dialogues joués, musique d'ambiance</option>
+          </optgroup>
+          <optgroup label="Mixte">
+          <option value="mix">Couplets parlés, refrain chanté qui revient</option>
+          <option value="callresp">Appel-réponse : le meneur lance, les enfants répètent</option>
+          <option value="chant_parle">Chanté, avec un passage parlé au cœur de l'histoire</option>
+          </optgroup>
+          <optgroup label="Surtout chanté">
+          <option value="sung">Tout chanté (vraie chanson)</option>
+          <option value="hymne">Hymne-louange à reprendre en groupe</option>
+          <option value="cumul">Chanson à accumuler (chaque couplet ajoute un élément)</option>
+          <option value="dialogue_chante">Dialogue chanté entre personnages</option>
+          <option value="acapella">A cappella, voix et claps seulement</option>
+          </optgroup>
+          <option value="custom">Autre… (je précise)</option>
+        </select>
+        <input id="oSingX" type="text" class="custX" hidden placeholder="Décris ce que tu veux, en français"></div>
+      <div id="songTypeBox" hidden><label for="oSongType">Type de chanson</label>
+        <select id="oSongType">
+          <optgroup label="4-6 ans">
+          <option value="gestes">Comptine à gestes (on mime chaque phrase)</option>
+          <option value="repete">Chanson à répéter (le meneur chante, les enfants répètent)</option>
+          <option value="ronde">Ronde dansée (tourner, taper, sauter)</option>
+          <option value="berceuse">Berceuse chantée</option>
+          <option value="animaux">Chanson avec bruits d'animaux ou d'objets de l'histoire</option>
+          </optgroup>
+          <optgroup label="7-10 ans">
+          <option value="ballade">Ballade qui raconte (couplets = étapes de l'histoire)</option>
+          <option value="numero">Numéro de film d'animation (le héros chante son dilemme)</option>
+          <option value="canon">Canon à deux voix (facile à reprendre en groupe)</option>
+          <option value="question">Chanson question-réponse (un couplet demande, le suivant répond)</option>
+          <option value="fete">Chanson de fête (tout le monde debout)</option>
+          <option value="devinette">Chanson-devinette (on devine le personnage avant la fin)</option>
+          </optgroup>
+          <optgroup label="Adultes">
+          <option value="chanson_recit">Chanson-récit (ballade folk qui raconte, couplets longs)</option>
+          <option value="louange_adulte">Louange d'assemblée (refrain large, pont de déclaration)</option>
+          <option value="gospel_choeur">Gospel à chœur (meneur + réponses du chœur)</option>
+          <option value="comedie">Numéro comique chanté (couplets drôles, refrain entraînant)</option>
+          <option value="meditation">Méditation chantée (lente, répétitive, façon Taizé)</option>
+          <option value="hymne_classique">Hymne classique (4 strophes, mélodie solennelle)</option>
+          </optgroup>
+          <optgroup label="11-13 ans">
+          <option value="pop_hymne">Hymne pop ado (refrain à crier ensemble)</option>
+          <option value="rap_melo">Rap mélodique (couplets rappés chantés, refrain pop)</option>
+          <option value="ballade_intime">Ballade intime (piano-voix, une vérité qu'on ose dire)</option>
+          <option value="louange">Chant de louange moderne (à reprendre au culte)</option>
+          <option value="defi">Chanson-défi (chaque couplet lance une action concrète)</option>
+          <option value="temoignage_chante">Témoignage chanté à la première personne</option>
+          </optgroup>
+          <option value="custom">Autre… (je précise)</option>
+        </select>
+        <input id="oSongTypeX" type="text" class="custX" hidden placeholder="Décris le type de chanson"></div>
+      <div><label for="oColor">Couleur musicale</label>
+        <select id="oColor">
+          <optgroup label="Cinéma et orchestre">
+          <option value="orch">Orchestre de cinéma + tambours</option>
+          <option value="orient">Moyen-Orient ancien (oud, flûte, tambours sur cadre)</option>
+          <option value="celtic">Celtique (violon, flûte irlandaise, bodhrán)</option>
+          <option value="epic_choir">Chœur épique + percussions de bande-annonce</option>
+          </optgroup>
+          <optgroup label="Louange et gospel">
+          <option value="gospel">Gospel avec chorale</option>
+          <option value="worship">Louange moderne</option>
+          <option value="afrogospel">Afro-gospel (percussions, guitares, chœur)</option>
+          <option value="hymne_orgue">Hymne, orgue et chœur</option>
+          </optgroup>
+          <optgroup label="Pop et urbain (8-13 ans)">
+          <option value="pop">Pop enfant lumineuse</option>
+          <option value="pop_ado">Pop ado énergique, synthés</option>
+          <option value="hiphop">Hip-hop, beat propre, basse ronde</option>
+          <option value="afrobeats">Afrobeats dansant</option>
+          <option value="reggae">Reggae léger, chaleureux</option>
+          <option value="electro">Électro-pop, drops doux</option>
+          <option value="rock">Rock-pop guitares, refrain à crier</option>
+          <option value="latin">Latino joyeux (guitare, percussions)</option>
+          </optgroup>
+          <optgroup label="Doux et intime">
+          <option value="acou">Acoustique guitare-piano</option>
+          <option value="piano">Piano seul et cordes</option>
+          <option value="boite">Boîte à musique, harpe, célesta</option>
+          <option value="jazz">Jazz doux, swing léger</option>
+          </optgroup>
+          <optgroup label="Humour et spectacle">
+          <option value="muet_piano">Piano de film muet (ragtime, honky-tonk)</option>
+          <option value="cartoon_orch">Orchestre de dessin animé (cuivres, xylophone, effets)</option>
+          <option value="cirque">Cirque et fanfare (tuba, cymbales, orgue de foire)</option>
+          <option value="musichall">Music-hall / Broadway (big band, claquettes)</option>
+          <option value="chanson">Chanson française (accordéon, guitare manouche)</option>
+          <option value="swing">Swing big band (cuivres, contrebasse)</option>
+          <option value="ukulele">Ukulélé et sifflement, léger</option>
+          </optgroup>
+          <optgroup label="Aventure et cinéma de genre">
+          <option value="western_m">Western (guitare twang, harmonica, sifflement)</option>
+          <option value="shanty">Chant de marins (accordéon, violon, chœur d'hommes)</option>
+          <option value="spy">Jazz d'espion (cuivres sourds, vibraphone)</option>
+          <option value="scifi">Science-fiction (synthés spatiaux, chœurs)</option>
+          <option value="chiptune">Jeu vidéo rétro (chiptune 8-bit)</option>
+          <option value="marching">Fanfare militaire / marche (caisse claire)</option>
+          <option value="tango">Tango dramatique (bandonéon)</option>
+          </optgroup>
+          <optgroup label="Histoire et sacré">
+          <option value="baroque">Baroque (clavecin, cordes)</option>
+          <option value="gregorien">Chant grégorien et orgue</option>
+          <option value="lyre">Lyre, harpe et flûte antiques</option>
+          <option value="renaissance">Renaissance (luth, viole, chœur madrigal)</option>
+          </optgroup>
+          <optgroup label="Soul, blues, R&B">
+          <option value="soul">Soul / Motown (cuivres, chœurs, tambourin)</option>
+          <option value="blues">Blues (guitare slide, harmonica)</option>
+          <option value="rnb">R&B moderne, doux</option>
+          <option value="disco">Disco (cordes, basse, boule à facettes)</option>
+          <option value="bluegrass">Bluegrass (banjo rapide, violon, mandoline)</option>
+          </optgroup>
+          <optgroup label="Tradition et ailleurs">
+          <option value="hebrew">Fête juive (clarinette klezmer, violon, tambourin)</option>
+          <option value="african">Africain traditionnel (kora, balafon, djembé)</option>
+          <option value="folk">Folk-country, banjo, claps</option>
+          <option value="medieval">Médiéval (luth, flûte, tambourin)</option>
+          <option value="ethio">Corne de l'Afrique (krar, masenqo, tambours)</option>
+          <option value="caraibes">Caraïbes (steel drums, zouk, calypso)</option>
+          <option value="bollywood">Bollywood (tabla, sitar, grand chœur)</option>
+          <option value="andin">Andin (flûte de pan, charango)</option>
+          <option value="asie">Asie de l'Est (guzheng, flûte de bambou)</option>
+          <option value="arabe">Orient arabe (qanun, derbouka, chœur)</option>
+          <option value="lofi">Lo-fi chill (piano doux, vinyle, beat lent)</option>
+          </optgroup>
+          <option value="custom">Autre… (je précise)</option>
+        </select>
+        <input id="oColorX" type="text" class="custX" hidden placeholder="Décris ce que tu veux, en français"></div>
+      <div><label for="oHumor">Humour</label>
+        <select id="oHumor">
+          <option value="none">Aucun (sérieux)</option>
+          <option value="clin">Clin d'œil léger</option>
+          <option value="situation">Comique de situation (gags tirés de l'histoire)</option>
+          <option value="exag">Exagération (tout est énorme)</option>
+          <option value="absurde">Absurde et décalé</option>
+          <option value="jeux">Jeux de mots et rimes drôles</option>
+          <option value="running">Running gag (une blague qui revient)</option>
+          <option value="quiproquo">Quiproquos (on se comprend de travers)</option>
+          <option value="parodie">Parodie d'un genre (pub, journal télé, conte de fées)</option>
+          <option value="slapstick">Burlesque physique (chutes, courses, bruits)</option>
+          <option value="pince">Ironie douce, pince-sans-rire</option>
+          <option value="tendre">Humour tendre qui finit en émotion</option>
+          <option value="custom">Autre… (je précise)</option>
+        </select>
+        <input id="oHumorX" type="text" class="custX" hidden placeholder="Décris l'humour voulu"></div>
+      <div><label for="oDyn">La musique suit…</label>
+        <select id="oDyn">
+          <option value="emotions">Les émotions de l'histoire (change à chaque tournant)</option>
+          <option value="stable">Une ambiance stable du début à la fin</option>
+          <option value="crescendo">Un crescendo continu jusqu'au final</option>
+          <option value="contraste">Des contrastes comiques (la musique dérape, s'arrête, repart)</option>
+          <option value="cinema">Un film : thèmes par personnage, silences, coups d'orchestre</option>
+          <option value="custom">Autre… (je précise)</option>
+        </select>
+        <input id="oDynX" type="text" class="custX" hidden placeholder="Décris la dynamique voulue"></div>
+      <div><label for="oDecor">Décor sonore</label>
+        <select id="oDecor">
+          <option value="auto">Celui de l'histoire (automatique)</option>
+          <option value="desert">Désert (vent, sable, chameaux)</option>
+          <option value="savane">Savane (animaux, tambours lointains)</option>
+          <option value="mer">Mer et tempête (vagues, mouettes, tonnerre)</option>
+          <option value="lac">Lac et barque (rames, eau calme)</option>
+          <option value="ville">Ville antique (marché, foule, ânes)</option>
+          <option value="palais">Palais royal (trompettes, marbre, cour)</option>
+          <option value="temple">Temple (chœur lointain, encens, cloches)</option>
+          <option value="montagne">Montagne (vent, aigle, écho)</option>
+          <option value="foret">Forêt et jardin (oiseaux, ruisseau)</option>
+          <option value="nuit">Nuit étoilée (grillons, feu de camp)</option>
+          <option value="prison">Prison / fosse (chaînes, gouttes, écho)</option>
+          <option value="pluie">Pluie et orage</option>
+          <option value="village">Village et bergerie (brebis, cloches, forge)</option>
+          <option value="aucun">Aucun bruitage, musique seule</option>
+          <option value="custom">Autre… (je précise)</option>
+        </select>
+        <input id="oDecorX" type="text" class="custX" hidden placeholder="Décris le décor sonore"></div>
+      <div><label for="oVerse">Versets dans les paroles ?</label>
+        <select id="oVerse">
+          <option value="one">Un verset clé, cité mot à mot</option>
+          <option value="chorus">Le verset devient le refrain (pour le mémoriser)</option>
+          <option value="several">Plusieurs versets cités aux moments forts</option>
+          <option value="para">Aucune citation : l'histoire seule, références en notes</option>
+          <option value="wake">Pas de citation, mais une invitation finale à ouvrir sa Bible</option>
+        </select></div>
+      <div><label for="oDur">Durée visée</label>
+        <select id="oDur">
+          <option value="std">Environ 3 min 30</option>
+          <option value="short">Environ 2 min</option>
+          <option value="long">Environ 5 min (récit long)</option>
+          <option value="custom">Autre… (je précise)</option>
+        </select>
+        <input id="oDurX" type="text" class="custX" hidden placeholder="Décris ce que tu veux, en français"></div>
+      <div><label for="oMusicMore">Précision musicale</label>
+        <input id="oMusicMore" type="text" placeholder="Facultatif. Ex. piano seul à la fin"></div>
+    </div>
+    <p class="hint" style="margin-top:10px">Des combinaisons marchent mieux que d'autres : voir « Combinaisons conseillées » dans l’onglet Infos. Suno ne respecte pas toujours les changements de voix : génère deux ou trois versions du même texte avant de le modifier.</p>
+  </div>
+
+  <div class="step wide" id="livretOpts" hidden>
+    <span class="q" style="font-weight:700;display:block;margin-bottom:10px">Réglages du livret</span>
+    <div class="grid2">
+      <div><label for="oIllu">Style des illustrations</label>
+        <select id="oIllu">
+          <option value="3d">Film d'animation 3D, lumière de cinéma</option>
+          <option value="aqua">Aquarelle de livre pour enfants</option>
+          <option value="paper">Papier découpé, couleurs franches</option>
+          <option value="pencil">Crayon doux, tons pastel</option>
+          <option value="bd">Bande dessinée claire</option>
+          <option value="custom">Autre… (je précise)</option>
+        </select>
+        <input id="oIlluX" type="text" class="custX" hidden placeholder="Décris ce que tu veux, en français"></div>
+      <div><label for="oPages">Nombre de pages (6 à 30)</label>
+        <input id="oPages" type="number" min="6" max="30" value="15"></div>
+      <div><label for="oReader">Qui lit ?</label>
+        <select id="oReader">
+          <option value="adult">Un adulte lit à l'enfant</option>
+          <option value="child">L'enfant lit seul</option>
+        </select></div>
+      <div><label for="oFormat">Format des pages</label>
+        <select id="oFormat">
+          <option value="portrait A5">Portrait A5</option>
+          <option value="paysage A4">Paysage A4</option>
+          <option value="carré 21×21 cm">Carré 21×21</option>
+        </select></div>
+    </div>
+    <span id="pedaL" style="display:block;margin:14px 0 8px">Pages de pédagogie à inclure</span>
+    <div class="chips" role="group" aria-labelledby="pedaL" id="peda">
+      <label><input type="checkbox" value="Verset à mémoriser" checked> Verset</label>
+      <label><input type="checkbox" value="Questions de discussion" checked> Questions</label>
+      <label><input type="checkbox" value="Défi de la semaine (une ACTION concrète)" checked> Défi ACTION</label>
+      <label><input type="checkbox" value="Prière guidée" checked> Prière</label>
+      <label><input type="checkbox" value="Activité manuelle avec matériel simple"> Activité manuelle</label>
+      <label><input type="checkbox" value="Jeu de groupe"> Jeu</label>
+      <label><input type="checkbox" value="Page de coloriage (avec son prompt d'image au trait)"> Coloriage</label>
+      <label><input type="checkbox" value="Page pour les parents" checked> Page parents</label>
+    </div>
+  </div>
+
+  <div class="step wide" id="videoOpts" hidden>
+    <span class="q" style="font-weight:700;display:block;margin-bottom:10px">Réglages de la vidéo</span>
+    <div class="grid2">
+      <div><label for="oRatio">Format</label>
+        <select id="oRatio">
+          <option value="16:9">16:9 — YouTube classique</option>
+          <option value="9:16">9:16 — Shorts / Reels vertical</option>
+          <option value="1:1">1:1 — carré</option>
+        </select></div>
+      <div><label for="oPlans">Nombre de plans (8 à 30)</label>
+        <input id="oPlans" type="number" min="8" max="30" value="16"></div>
+      <div><label for="oTextOn">Texte à l'écran</label>
+        <select id="oTextOn">
+          <option value="key">Mots-clés seulement</option>
+          <option value="lyrics">Paroles complètes (karaoké)</option>
+          <option value="none">Aucun texte</option>
+        </select></div>
+      <div><label for="oAnimTool">Outil d'animation</label>
+        <input id="oAnimTool" type="text" placeholder="Facultatif. Ex. Kling, Runway, Veo"></div>
+    </div>
+  </div>
+
+  <div class="step" id="ficheStep">
+    <div class="chips"><label><input type="checkbox" id="mFiche"> Ajouter la fiche moniteur Fullpack (16 points)</label></div>
+  </div>
+
+  <div class="step">
+    <label class="q" for="extra">Consignes particulières</label>
+    <textarea id="extra" placeholder="Facultatif. Ex. matériel disponible, durée de la séance, point à éviter."></textarea>
+  </div>
+
+  <div class="actions wide">
+  <button class="primary" id="go" type="button">Produire le pack</button>
+  <div class="bar">
+    <button id="stop" type="button" hidden>Arrêter</button>
+    <button id="dl" type="button" hidden>Télécharger tout (.md)</button>
+    <button id="copyAll" type="button" hidden>Copier tout</button>
+  </div>
+  <p id="msg" class="muted" role="status" aria-live="polite"></p>
+  </div>
+</form>
+</section>
+<section id="tab-results" class="panel" role="tabpanel" aria-labelledby="tabbtn-results" hidden>
+<section id="resultsSec" hidden>
+  <h2 id="resultsTitle">Résultat</h2>
+  <div class="bar" style="margin:0 0 12px"><button type="button" id="backBtn">Modifier les réglages</button><button type="button" id="stop2" hidden>Arrêter</button><button type="button" id="copyAll2" hidden>Copier tout</button><button type="button" id="dl2" hidden>Télécharger (.md)</button></div>
+  <p id="msg2" class="muted" role="status" aria-live="polite"></p>
+  <div class="banner ok">Relis toujours le verset et les références dans ta Bible avant d'imprimer : l'atelier peut se tromper sur un mot à mot.</div>
+  <div id="results"></div>
+</section>
+<p class="muted empty" id="resEmpty">Aucun pack en cours. Règle l'atelier, puis « Produire le pack ».</p>
+</section>
+<section id="tab-lib" class="panel" role="tabpanel" aria-labelledby="tabbtn-lib" hidden>
+<section class="lib">
+  <h2>Historique</h2>
+  <p class="muted" id="libInfo">Chargement…</p>
+  <div class="row two" style="margin:0 0 12px"><input id="libSearch" type="search" aria-label="Rechercher dans l'historique" placeholder="Rechercher (histoire, occasion, module, mot du texte…)"><button type="button" id="libExport">Exporter tout (.md)</button></div>
+  <ul id="lib"></ul>
+</section>
+</section>
+<section id="tab-info" class="panel" role="tabpanel" aria-labelledby="tabbtn-info" hidden>
+<section class="combos">
+  <h2>Combinaisons conseillées</h2>
+  <p class="muted">Propositions de départ, par âge. Rien n'empêche de mélanger.</p>
+  <ul>
+    <li><strong>4-6 ans</strong> : grand-parent + petit-enfant · conte au coin du feu · appel-réponse · boîte à musique ou acoustique · 2 min.</li>
+    <li><strong>4-6 ans (fête)</strong> : chorale d'enfants · joyeux et dansant · chanson à accumuler · pop enfant.</li>
+    <li><strong>7-10 ans</strong> : adulte + enfant curieux · suspense grand film · parlé + un refrain · orchestre + tambours · 3 min 30.</li>
+    <li><strong>7-10 ans (enquête)</strong> : détective · enquête à indices · pièce radio · Moyen-Orient ancien.</li>
+    <li><strong>11-13 ans</strong> : ado qui raconte à ses copains · témoignage à cœur ouvert · rap narratif ou slam · hip-hop ou afrobeats.</li>
+    <li><strong>11-13 ans (profondeur)</strong> : le héros à la première personne · méditatif · chanté avec passage parlé · piano et cordes ou louange moderne.</li>
+    <li><strong>Adultes (groupe d'église)</strong> : vieux sage d'Orient ou poète · épopée antique ou méditatif · chanté avec passage parlé, méditation chantée · lyre et harpe, grégorien ou louange moderne.</li>
+    <li><strong>Humour pour les 7-10</strong> : commentateur sportif ou narrateur qui s'endort · dessin animé déjanté · parlé + un refrain · orchestre de dessin animé · humour : comique de situation · la musique suit : contrastes comiques.</li>
+    <li><strong>Émotion forte</strong> : le héros à la première personne · lever de soleil · chanté avec passage parlé · orchestre de cinéma · humour : aucun · la musique suit : les émotions de l'histoire · décor : celui de l'histoire.</li>
+    <li><strong>Adultes (humour, soirée)</strong> : conteur comique ou duo comique · burlesque film muet ou cabaret · numéro comique chanté · piano de film muet, cirque ou music-hall.</li>
+    <li><strong>Grand-parent</strong> : grand-père ou grand-mère + petit-enfant · conte au coin du feu ou nostalgie douce · parlé + un refrain · acoustique, boîte à musique ou chanson française.</li>
+    <li><strong>Chant pour quelqu'un (adultes)</strong> : solo femme ou duo homme + femme · émotion profonde ou humour tendre · tout chanté, ballade intime ou hymne pop · acoustique, piano-cordes ou gospel.</li>
+    <li><strong>Tous âges, célébration</strong> : plusieurs personnages + chœur · solennel et majestueux · hymne-louange · chœur épique ou afro-gospel.</li>
+  </ul>
+</section>
+<section class="apikey" id="apiSec">
+  <h2>Génération directe (clé API)</h2>
+  <p class="muted">Hors de Claude.ai, la page peut écrire les livrables elle-même avec ta propre clé API. La clé reste dans ce navigateur (stockage local) et n'est envoyée qu'au fournisseur choisi. Chaque génération est facturée sur ton compte API.</p>
+  <div class="grid2">
+    <div><label for="apiProv">Fournisseur</label>
+      <select id="apiProv"><option value="anthropic">Anthropic (Claude)</option><option value="openai">OpenAI (ChatGPT)</option></select></div>
+    <div><label for="apiModel">Modèle</label>
+      <input id="apiModel" type="text" placeholder="Ex. claude-sonnet-5-5"></div>
+    <div><label for="apiKey">Clé API</label>
+      <input id="apiKey" type="password" autocomplete="off" placeholder="sk-…"></div>
+  </div>
+  <div class="chips" style="margin-top:12px"><label><input type="checkbox" id="apiRemember" checked> Mémoriser la clé sur cet appareil (sinon : jusqu'à la fermeture de l'onglet)</label></div>
+  <div class="bar"><button type="button" id="apiSave">Enregistrer la clé</button><button type="button" id="apiTest">Tester</button><button type="button" id="apiClear">Retirer la clé</button></div>
+  <p id="apiMsg" class="muted" role="status" aria-live="polite"></p>
+</section>
+<section class="help">
+  <h2>Comment ça marche</h2>
+  <ul>
+    <li>Choisis ce que tu veux fabriquer, l'histoire, l'âge, la langue, puis les réglages du média.</li>
+    <li>« Produire le pack » écrit chaque module sous tes yeux ; il se range ensuite dans l'historique, avec chaque version et chaque prompt.</li>
+    <li>Sous chaque module : Affiner (une retouche), Autre version, Voir / modifier le prompt.</li>
+    <li>Les blocs encadrés se copient en un clic : Titre, Style, Exclure et Lyrics vont dans Suno ; les prompts d'images dans ChatGPT.</li>
+    <li>Relis toujours les versets dans ta Bible avant d'imprimer ou de publier.</li>
+  </ul>
+</section>
+</section>
+<footer class="credit">Créé par Merhawi Ghebrenegus · L'Atelier des Histoires · <span id="year"></span> · version 19</footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id)};
+var sample=null, db=null, downloads=null;
+var S={jobs:[],running:false,ctl:null,meta:null,packId:null};
+var LS_KEY="atelier_histoires_packs_v1", LS_FORM="atelier_histoires_form_v2";
+
+/* ---------- Règles communes ---------- */
+var LANG={
+ fr:{fr:"français",en:"French",bible:"Louis Segond 1910"},
+ it:{fr:"italien",en:"Italian",bible:"Riveduta (Luzzi) 1927"},
+ en:{fr:"anglais",en:"English",bible:"World English Bible (WEB)"},
+ es:{fr:"espagnol",en:"Spanish",bible:"Reina-Valera 1909"},
+ de:{fr:"allemand",en:"German",bible:"Luther 1912"}
+};
+function L(m){return LANG[(m&&m.lang)||"fr"]||LANG.fr}
+var PD_VERSIONS=["Louis Segond 1910","Darby","Ostervald"];
+function bibleRule(m,l){
+  var v=(m&&m.bible)||"";if(v==="custom")v=(m.bibleX||"").trim();
+  if(!v) return "Versets cités mot à mot : "+l.bible+". Si tu n'es pas certain du mot à mot, donne la référence et écris [à vérifier].";
+  if(PD_VERSIONS.indexOf(v)>=0) return "Versets cités mot à mot : "+v+". Si tu n'es pas certain du mot à mot, donne la référence et écris [à vérifier].";
+  return "Version biblique souhaitée : "+v+". Cette traduction est protégée : ne la reproduis pas de mémoire. Si le passage est fourni dans le TEXTE FOURNI, cite-le tel quel. Sinon, écris la référence et un repère [verset à insérer — "+v+"] à l'endroit voulu, et n'écris jamais une autre traduction en la présentant comme celle-ci.";
+}
+function rules(m){
+  var l=L(m),other=l!==LANG.fr;
+  return [
+"Tu es concepteur de curriculum et directeur artistique pour un ministère chrétien (enfants, jeunes et adultes). Tu livres un contenu fini, prêt à l'emploi, lisible sur mobile.",
+"",
+"LANGUE DU CONTENU : "+l.fr.toUpperCase()+"."+(other?" Tout ce qui est destiné aux enfants et au public (titre, paroles, récit, versets, prières, questions, textes à l'écran, fiche YouTube) est écrit DIRECTEMENT en "+l.fr+", de façon native et naturelle pour un enfant de cette langue : pas de traduction mot à mot du français, rimes et expressions propres à la langue. Les parties destinées à l'organisateur (Timing, Guide animateur, Montage, descriptions d'illustration, Sources) restent en français.":""),
+"",
+"RÈGLES PERMANENTES",
+"- Mot de l'année 2026-2027 : ACTION (Jacques 1:22). Le contenu se termine par une action concrète ou une question adressée à celui qui écoute ou lit.",
+"- Pour les enfants : rien qui fasse peur ; pardon, pureté, délivrance en langage rassurant. Pour les adultes : on peut nommer les réalités dures, avec pudeur.",
+"- N'emploie jamais les mots « magie » ni « magique », ni leur équivalent dans la langue du contenu.",
+"- Cite chaque référence biblique (livre, chapitre, verset). "+bibleRule(m,l),
+"- Seul personnage inventé autorisé : un enfant-témoin narrateur, signalé comme inventé. Les paroles de Dieu ou de Jésus sont des reformulations fidèles, référencées.",
+"- Dans une courte section finale « Sources », distingue : TEXTE BIBLIQUE (références), TRADITION (ce qui vient de l'usage et non du texte), PROPOSITIONS (formulations et idées de ta part).",
+"- N'invente aucun fait, chiffre ou constat qui « sonne vrai ». Si un détail n'est pas dans le texte biblique, dis-le.",
+"- Format : titres markdown (#, ##, ###), listes à tirets, pas de tableaux. Commence directement par le livrable, sans phrase d'introduction ni conclusion adressée à moi.",
+"",
+"COMITÉ DE RELECTURE (silencieux)",
+"Avant d'écrire, examine ton livrable comme le feraient quatre relecteurs : un pédagogue de la petite enfance (est-ce compréhensible et vivable à cet âge ?), un théologien (est-ce fidèle au texte, sans ajout présenté comme biblique ?), un professionnel du média visé (est-ce que ça fonctionne vraiment dans Suno, dans un livre, à l'écran ?), un parent (est-ce que je laisserais mon enfant devant ?). Corrige ce qu'ils auraient relevé, sans reproduire le débat. Termine par une section « Points de vigilance » de 2 à 4 lignes : ce qu'ils auraient discuté et ce que tu as tranché, avec ton niveau de confiance (faible / moyen / élevé) sur le mot à mot des versets."
+  ].join("\n");
+}
+function vopt(T,v,x){ if(v==="custom") return {fr:"CHOIX LIBRE : "+(x||"non précisé, à ton jugement"),en:x||""}; return T[v]||T[Object.keys(T)[0]]; }
+function sopt(T,v,x,pre){ if(v==="custom") return pre+(x||"non précisé, à ton jugement"); return T[v]||T[Object.keys(T)[0]]; }
+function illu(o){ return o.illu==="custom"?(o.illuX||"style illustré cohérent, au jugement de l'illustrateur"):(ILLU[o.illu]||ILLU["3d"]); }
+function vid(m){ return m.video||{ratio:"16:9",plans:"16",text:"key",tool:""}; }
+var TEXTON={key:"un mot-clé ou une phrase très courte",lyrics:"les paroles exactes prononcées pendant le plan, pour un affichage type karaoké",none:"aucun texte à l'écran ; indique « — »"};
+
+var ADULT={jeunes:"jeunes adultes de 18 à 30 ans : ton actuel, sincère, sans jargon d'église, questions de vie (choix, avenir, relations, sens)",parents:"parents, écoutant en famille : tendresse, responsabilité, transmission, un mot pour les enfants et un pour les adultes",eglise:"un groupe d'église ou d'étude biblique : précision théologique, pistes de discussion, références de versets à ouvrir ensemble",seniors:"seniors : tempo posé, articulation claire, mémoire, fidélité de Dieu sur toute une vie, références à leur époque bienvenues",curieux:"grand public pas forcément croyant : aucune supposition de foi, aucun jargon, l'histoire parle d'elle-même, le sens est proposé et jamais imposé",culte:"une assemblée en culte : refrain reprenable par tous, paroles tournées vers Dieu, structure simple, tonalité chantable"};
+function ageText(age,m){ if(age!=="adultes")return AGE[age]; var a=m&&m.adult; var d=a==="custom"?(m.adultX||"public adulte non précisé"):(ADULT[a]||ADULT.jeunes); return AGE.adultes+" Public précis : "+d+"."; }
+function brief(m){
+  var L=["LA DEMANDE","- Histoire : "+m.story];
+  L.push("- Référence : "+(m.ref||"non précisée : identifie le passage le plus connu et indique-le en une ligne"));
+  L.push("- Ce que l'enfant doit retenir ou faire : "+(m.goal||"non précisé : propose-le et signale que c'est une proposition"));
+  if(m.ctx||m.ctxMore) L.push("- Place dans l'année : "+[m.ctx,m.ctxMore].filter(Boolean).join(" — "));
+  if(m.extra) L.push("- Consignes particulières : "+m.extra);
+  if(m.srcText) L.push("","TEXTE FOURNI PAR L'UTILISATEUR (base obligatoire du contenu ; s'il contient le passage biblique, c'est CE texte que tu cites mot à mot, pas une autre traduction) :","<<<","" + m.srcText.slice(0,6000),">>>");
+  return L.join("\n");
+}
+var AGE={
+ "4-6":"TRANCHE D'ÂGE : 4-6 ans. Phrases très courtes, mots simples, gestes et répétitions, verset raccourci à une phrase facile à mémoriser (donne aussi la référence complète).",
+ "7-10":"TRANCHE D'ÂGE : 7-10 ans. Vocabulaire plus riche, questions ouvertes, l'enfant peut chercher le passage dans sa Bible, verset complet.",
+ "adultes":"PUBLIC ADULTE : aucune simplification enfantine ; profondeur, nuances, questions d'adulte (foi, doute, choix, responsabilité). Vocabulaire riche, images fortes, références précises au texte biblique et à son contexte. Pas de « petit défi » : une invitation ou une question qui reste.",
+ "11-13":"TRANCHE D'ÂGE : 11-13 ans (préados). Ton jamais enfantin ni mièvre : on parle vrai, on respecte leur intelligence, on nomme les doutes et les choix difficiles. Références à leur quotidien (école, amis, réseaux, pression du groupe) sans jargon forcé. Humour second degré accepté. Verset complet, et une question qui les suit dans la semaine."
+};
+
+/* ---------- Variantes Suno ---------- */
+var VOICE={
+ duo_ae:{fr:"DUO : un narrateur adulte à la voix chaude et un enfant curieux qui pose des questions et réagit. Les blocs alternent ; jamais deux voix dans le même bloc. Chaque bloc commence par sa balise de voix, par exemple [Narrator – warm adult male, spoken] ou [Child – curious young voice, spoken].",en:"warm adult male narrator, curious child voice, call and response"},
+ duo_hf:{fr:"DUO HOMME + FEMME : deux narrateurs adultes qui se passent le récit. Les blocs alternent ; jamais deux voix dans le même bloc, sauf le refrain chanté ensemble. Chaque bloc commence par sa balise de voix.",en:"male and female narrator duet, alternating, harmonies on chorus"},
+ duo_gp:{fr:"DUO GRAND-PÈRE + PETIT-ENFANT : le grand-père a une voix VRAIMENT âgée : grave, un peu rauque, lente, avec des pauses, qui s'éclaircit la gorge, qui dit « mon petit », « de mon temps », qui rit doucement. Le petit coupe, s'étonne, demande « et après, Papi ? ». Blocs alternés ; chaque bloc du grand-père commence par [Grandfather – very old man, deep gravelly slow voice, spoken] et chaque bloc de l'enfant par [Child – small curious voice, spoken].",en:"very old grandfather narrator, deep gravelly weathered voice, slow and warm, small curious child voice"},
+ duo_gm:{fr:"DUO GRAND-MÈRE + PETIT-ENFANT : la grand-mère a une voix VRAIMENT âgée : douce, un peu tremblante, chantante, qui fredonne entre deux phrases, qui dit « mon trésor », « viens là ». Le petit s'installe, pose des questions. Blocs alternés ; balise [Grandmother – elderly woman, soft trembling warm voice, spoken] et [Child – small curious voice, spoken].",en:"elderly grandmother narrator, soft aged trembling voice, humming, small child voice"},
+ duo_comic:{fr:"DUO COMIQUE : un narrateur sérieux, posé, et un compère rigolo qui commente, exagère, se trompe et se fait corriger. Les faits de l'histoire restent justes ; c'est le compère qui fait rire. Blocs alternés, balise de voix par bloc.",en:"straight man narrator and goofy sidekick voice, comedic timing"},
+ duo_pere:{fr:"DUO PÈRE + ENFANT, LE SOIR : voix d'homme calme et proche, enfant qui lutte contre le sommeil et pose une dernière question. Blocs alternés, balise de voix par bloc.",en:"calm father bedtime voice, sleepy child voice, intimate"},
+ duo_frs:{fr:"DUO FRÈRE + SŒUR : deux enfants qui racontent la même histoire et se corrigent l'un l'autre (« non, c'est pas comme ça ! »), complicité et rythme vif. Blocs alternés, balise de voix en tête de bloc.",en:"two playful kid voices, boy and girl, bantering, energetic"},
+ duo_guide:{fr:"DUO GUIDE + APPRENTI : un explorateur ou guide qui connaît les lieux et un jeune apprenti qui découvre. On avance dans l'histoire comme dans une expédition. Blocs alternés.",en:"confident adventurer guide voice, eager young apprentice voice"},
+ solo_h:{fr:"SOLO HOMME : un seul narrateur, voix chaude et posée. Aucun dialogue à deux voix : les paroles des personnages sont rapportées par le narrateur.",en:"warm deep male storyteller voice, solo"},
+ solo_f:{fr:"SOLO FEMME : une seule narratrice, voix douce et claire. Aucun dialogue à deux voix : les paroles des personnages sont rapportées par la narratrice.",en:"warm gentle female storyteller voice, solo"},
+ solo_e:{fr:"SOLO ENFANT : un enfant raconte à la première personne, comme témoin de l'histoire (personnage inventé, signalé comme tel). Phrases d'enfant, émerveillement.",en:"young child narrator voice, innocent, clear, solo"},
+ solo_ado:{fr:"SOLO ADO : un adolescent de 13-14 ans raconte l'histoire à ses copains, comme on raconte un truc incroyable qu'on a vu. Langage naturel, pas de mots d'adulte, enthousiasme vrai, petites apartés (« attends, le meilleur arrive »).",en:"teen narrator voice, casual, excited, storytelling to friends"},
+ solo_heros:{fr:"LE HÉROS À LA PREMIÈRE PERSONNE : le personnage biblique principal raconte lui-même ce qu'il a vécu, ses peurs, ce qu'il a compris. Les faits restent ceux du texte biblique ; ses pensées intérieures sont signalées comme propositions dans les Sources.",en:"first-person character voice, intimate, reflective, dramatic"},
+ solo_second:{fr:"UN TÉMOIN SECONDAIRE : un personnage présent dans le texte mais peu mis en avant (serviteur, soldat, voisin, marin…) raconte ce qu'il a vu de côté. Angle inattendu, respect du texte.",en:"side character narrator, observational, surprised, warm"},
+ solo_hist:{fr:"HISTORIEN-ARCHÉOLOGUE PASSIONNÉ : il fait vivre l'histoire comme une découverte, avec des détails concrets d'époque (vêtements, lieux, objets) clairement marqués comme contexte historique et non comme texte biblique.",en:"enthusiastic scholar narrator voice, documentary style, articulate"},
+ solo_gp:{fr:"GRAND-PÈRE SEUL : une voix VRAIMENT âgée, grave, rauque, lente, avec des silences, des « hmm », un rire doux ; il raconte comme s'il y était. Balise [Grandfather – very old man, deep gravelly slow voice, spoken] en tête.",en:"very old grandfather storyteller, deep gravelly weathered voice, slow, fireside"},
+ solo_gm:{fr:"GRAND-MÈRE SEULE : voix VRAIMENT âgée, douce, un peu tremblante, qui fredonne ; elle raconte en cuisinant, bruits de cuisine discrets entre crochets. Balise [Grandmother – elderly woman, soft trembling warm voice, spoken].",en:"elderly grandmother storyteller, soft aged trembling voice, humming, kitchen ambience"},
+ solo_griot:{fr:"GRIOT : conteur africain, voix chaude et rythmée, formules répétées, appels au public (« écoutez ! »), kora en fond. Fidèle au texte biblique.",en:"West African griot storyteller voice, rhythmic, warm, kora accompaniment"},
+ solo_comique:{fr:"CONTEUR COMIQUE : façon film muet ou cabaret, voix expressive, surjouée, pauses pour l'effet, onomatopées, mais l'histoire reste exacte et respectueuse.",en:"vaudeville comic narrator, expressive, exaggerated, playful timing"},
+ solo_poete:{fr:"POÈTE : voix posée, images fortes, phrases courtes, silences habités ; on raconte par touches.",en:"poetic narrator, measured calm voice, spacious delivery"},
+ solo_sage:{fr:"VIEUX SAGE D'ORIENT : voix lente, grave, profonde, qui pèse chaque mot, avec des proverbes ; très respectueux du texte.",en:"ancient wise elder voice, deep, slow, solemn"},
+ famille:{fr:"TOUTE UNE FAMILLE À TABLE : grand-parent, parents, ados, petits ; chacun a sa voix (balise par bloc), on se coupe, on rit, on finit par une prière ou un chant ensemble.",en:"multi-generational family voices around a table, lively, warm"},
+ troupe:{fr:"TROUPE DE THÉÂTRE : un narrateur, des comédiens pour chaque rôle, un chœur pour les moments forts ; balise de voix par bloc, jamais deux voix dans un bloc.",en:"theatre troupe, narrator, character actors, choir"},
+ veillee:{fr:"VEILLÉE : un conteur devant un public qui réagit (rires, « oh ! », reprises en chœur, indiqués entre crochets) ; ambiance feu de camp.",en:"campfire storyteller with reacting audience, crowd murmurs, intimate"},
+ commentateur:{fr:"COMMENTATEUR SPORTIF : l'histoire est racontée comme un match en direct, débit rapide, montées de voix, « et là… incroyable ! », ralentis, score ; un co-commentateur peut relancer. Les faits restent ceux du texte.",en:"excited sports commentator voice, fast play-by-play, crowd roar"},
+ meteo:{fr:"PRÉSENTATEUR MÉTÉO : bulletin qui annonce les événements de l'histoire comme des prévisions (« tempête sur le lac, accalmie prévue ») et qui dérape à mesure que l'histoire avance.",en:"TV weather presenter voice, polished then increasingly flustered"},
+ chef:{fr:"CHEF CUISINIER : l'histoire est une recette (« prenez un berger, ajoutez un géant… »), accent de cuisine, bruits de casseroles entre crochets ; le sens de l'histoire arrive au dressage.",en:"enthusiastic chef voice, kitchen clatter, recipe narration"},
+ guide:{fr:"GUIDE TOURISTIQUE : visite guidée des lieux de l'histoire, groupe de touristes en retard, « par ici s'il vous plaît », anecdotes de contexte marquées comme contexte historique.",en:"tour guide voice, megaphone, tourist group murmurs"},
+ robot:{fr:"ROBOT : voix mécanique qui raconte et découvre une émotion à chaque étape (« erreur : larme détectée »), devient de plus en plus humain ; ne jamais ridiculiser la foi.",en:"robotic monotone voice slowly becoming warm, bleeps"},
+ grognon:{fr:"VIEUX GROGNON : il râle sur tout, ne veut pas raconter, raconte quand même, et finit ému malgré lui. Voix bourrue, soupirs.",en:"grumpy old man voice, gruff, sighing, secretly moved"},
+ dramatique:{fr:"NARRATEUR TROP DRAMATIQUE : chaque détail est une tragédie, voix de théâtre, musique qui exagère, puis une vraie émotion au moment clé.",en:"overly dramatic theatrical narrator, melodramatic, orchestral stings"},
+ endormi:{fr:"NARRATEUR QUI S'ENDORT : bâillements, phrases qui ralentissent, ronflement, réveil en sursaut au moment fort ; l'enfant doit le réveiller.",en:"sleepy narrator, yawning, slowing down, sudden wake-ups"},
+ youtubeur:{fr:"YOUTUBEUR SUREXCITÉ : « les amis, vous n'allez pas y croire », suspense artificiel, « abonnez-vous à la suite », mais contenu fidèle et finale sincère.",en:"hyper-excited vlogger voice, fast, energetic, clickbait style"},
+ encheres:{fr:"COMMISSAIRE-PRISEUR : débit très rapide, enchères sur les événements (« une fois, deux fois, adjugé ! »), coups de marteau entre crochets.",en:"auctioneer rapid-fire chant voice, gavel hits"},
+ opera:{fr:"CHANTEUR D'OPÉRA : tout est chanté à pleine voix lyrique, même les détails banals, orchestre grandiose ; comique par le décalage, respect du texte.",en:"operatic tenor and soprano, full lyrical voice, grand orchestra"},
+ pirate_v:{fr:"CAPITAINE PIRATE : « moussaillons ! », voix rocailleuse, jurons de pirate inoffensifs (« mille sabords »), équipage qui répond en chœur.",en:"gruff pirate captain voice, crew shouting back, sea sounds"},
+ animal:{fr:"UN ANIMAL DE L'HISTOIRE RACONTE : choisis l'animal présent dans le texte (l'âne, la baleine, le corbeau, le lion…), point de vue drôle et naïf, signalé comme invention narrative.",en:"funny animal narrator voice, naive point of view"},
+ objet:{fr:"UN OBJET DE L'HISTOIRE RACONTE : la fronde, la barque, la jarre, le manteau… point de vue inattendu, signalé comme invention narrative, faits fidèles.",en:"quirky object narrator voice, deadpan, unexpected point of view"},
+ jumeaux:{fr:"JUMEAUX : deux voix identiques qui finissent les phrases l'un de l'autre, se contredisent, se réconcilient ; blocs alternés très courts.",en:"two matching twin voices, rapid alternating lines"},
+ maitre_eleve:{fr:"MAÎTRE D'ÉCOLE ET ÉLÈVE : le maître explique, l'élève comprend tout de travers, le maître corrige ; c'est l'élève qui fait rire, le maître qui transmet.",en:"patient teacher voice, confused pupil voice, classroom"},
+ savant:{fr:"SAVANT FOU : il explique l'histoire avec des « expériences » et des éclairs, formules absurdes, mais conclusion juste et simple.",en:"mad scientist voice, cackling, lab bubbling, electric zaps"},
+ bonimenteur:{fr:"BONIMENTEUR DE FOIRE : « approchez, approchez ! », tambour, promesses exagérées, et l'histoire tient ses promesses.",en:"carnival barker voice, drum roll, crowd"},
+ cast:{fr:"PLUSIEURS PERSONNAGES : un narrateur, puis chaque personnage a sa voix propre (balise de voix en tête de bloc, jamais deux voix dans un bloc). Un chœur d'enfants chante le refrain.",en:"narrator with distinct character voices, children's choir on chorus"},
+ reporter:{fr:"REPORTER EN DIRECT : un journaliste est « sur place » au moment des faits et interroge les témoins (balise de voix par intervenant). Urgence, questions courtes, le reportage avance avec l'histoire. Les réponses des témoins restent fidèles au texte.",en:"live news reporter voice, urgent, interview snippets, crowd ambience"},
+ podcast:{fr:"PODCAST DE DEUX AMIS : deux voix adultes complices qui « enquêtent » sur l'histoire, se posent des questions, s'étonnent, s'interpellent. Blocs alternés, balise de voix en tête.",en:"two friendly podcast hosts, conversational, curious, laid-back"},
+ detective:{fr:"DÉTECTIVE : un enquêteur résout l'histoire comme une énigme et s'adresse directement à l'auditeur (« et toi, qu'est-ce que tu aurais fait ? »). Indices révélés un à un, silence avant chaque révélation.",en:"detective narrator voice, mysterious, addressing the listener, suspenseful"},
+ lettre:{fr:"LETTRE : un personnage de l'histoire écrit, après coup, à quelqu'un qu'il aime, pour lui raconter ce qui s'est passé. Une seule voix, intime, qui lit la lettre. Les faits restent ceux du texte.",en:"intimate voice reading a letter, tender, reflective"},
+ chorale:{fr:"CHORALE D'ENFANTS, personne ne parle : toute l'histoire est chantée par un chœur d'enfants avec parfois une voix soliste d'enfant. Phrases simples, répétitions.",en:"children's choir, child soloist, no spoken narration"},
+ rap_duo:{fr:"DEUX RAPPEURS : deux voix (homme et femme, ou deux ados) se répondent en rap, chacun un couplet, refrain chanté ensemble. Flow clair, chaque mot compréhensible.",en:"two rappers trading verses, male and female, clear diction, sung hook"}
+};
+var TONE={
+ suspense:{fr:"GRAND FILM À SUSPENSE, façon bande-annonce : la tension monte, silence complet avant chaque révélation, puis retour plus fort. Jamais effrayant.",en:"cinematic trailer, suspense build, dramatic pauses"},
+ epic:{fr:"AVENTURE ÉPIQUE : élan, courage, grands espaces, héros qui avance malgré l'obstacle.",en:"epic adventure, heroic, driving percussion"},
+ enquete:{fr:"ENQUÊTE À INDICES : l'histoire est présentée comme un mystère à résoudre ; les indices arrivent un par un, l'auditeur est invité à deviner avant la révélation.",en:"mystery, clue by clue, playful tension, reveal moments"},
+ survie:{fr:"RÉCIT DE SURVIE, minute par minute : on vit le danger de l'intérieur, souffle court, puis la délivrance. Intense mais jamais effrayant pour l'âge visé.",en:"survival drama, tense, breathless, relief at the end"},
+ conte:{fr:"CONTE AU COIN DU FEU : « Il y a très longtemps… », rythme posé, formules qui reviennent, chaleur et proximité.",en:"fireside storytelling, folk tale, intimate, gentle"},
+ emotion:{fr:"ÉMOTION PROFONDE : on ose les larmes et la joie, les moments de doute, les retrouvailles. Sincère, jamais larmoyant.",en:"deeply emotional, heartfelt, swelling, cathartic"},
+ tendresse:{fr:"TENDRESSE ET RÉCONFORT : pour un enfant inquiet ; voix enveloppante, phrases rassurantes, Dieu qui prend soin.",en:"tender, comforting, soft, reassuring"},
+ lullaby:{fr:"BERCEUSE DOUCE : lent, rassurant, pour un temps calme ou le coucher.",en:"gentle lullaby, soft, soothing, slow"},
+ musical:{fr:"COMÉDIE MUSICALE DE FILM D'ANIMATION FAMILIAL : les personnages chantent ce qu'ils ressentent, refrain accrocheur, final lumineux.",en:"animated family film musical, theatrical, uplifting finale"},
+ joy:{fr:"JOYEUX ET DANSANT : on tape dans les mains, gestes à faire, énergie de fête.",en:"joyful upbeat kids song, handclaps, danceable"},
+ humour:{fr:"HUMOUR TENDRE : situations drôles tirées de l'histoire elle-même, petites exagérations, jamais de moquerie des personnages ni de Dieu.",en:"light-hearted, comedic timing, playful, warm"},
+ stade:{fr:"AMBIANCE STADE : chant de supporters, slogans scandés, foule qui reprend, tambours, pour une histoire de victoire.",en:"stadium anthem, crowd chant, stomps and claps, triumphant"},
+ epique_sacre:{fr:"SOLENNEL ET MAJESTUEUX : la grandeur de Dieu, le respect, des silences habités ; on parle moins mais chaque mot pèse.",en:"solemn, majestic, reverent, grand"},
+ meditatif:{fr:"MÉDITATIF : rythme lent, silences, une question posée qui reste ouverte à la fin ; pour réfléchir plus que pour bouger.",en:"meditative, spacious, contemplative, minimal"},
+ temoignage:{fr:"TÉMOIGNAGE À CŒUR OUVERT : raconté comme on confie quelque chose de vrai, avec les hésitations, la fragilité et la force.",en:"confessional, honest, intimate, raw"},
+ muet:{fr:"BURLESQUE FAÇON FILM MUET : rythme de gags, courses-poursuites, chutes, surprises, piano de cinéma muet qui souligne chaque geste ; le narrateur commente comme un bonimenteur ; l'histoire reste exacte, on rit des situations, jamais de Dieu ni des personnages dans ce qu'ils ont de sacré.",en:"silent film slapstick, honky-tonk piano, playful chase rhythm"},
+ cartoon:{fr:"DESSIN ANIMÉ DÉJANTÉ : onomatopées, effets sonores entre crochets, changements de rythme brusques, voix élastiques ; énergie maximale, respect du texte.",en:"cartoon zany, sound effects, elastic voices, fast changes"},
+ cabaret:{fr:"CABARET / MUSIC-HALL : chic, clin d'œil, numéro de scène, roulement de tambour avant les révélations.",en:"cabaret music hall, showbiz, drum rolls, winking charm"},
+ western:{fr:"WESTERN : grands espaces, poussière, harmonica, tension du duel avant la révélation ; le héros qui tient bon.",en:"western, harmonica, dusty wide open spaces, showdown tension"},
+ pirates:{fr:"AVENTURE DE PIRATES / MARINS : tempête, cordages, chant de marins au refrain, accordéon ; parfait pour les histoires de mer.",en:"pirate adventure, sea shanty chorus, accordion, storm"},
+ espion:{fr:"ENQUÊTE D'ESPION : jazz feutré, suspense léger, chuchotements, mission à accomplir.",en:"spy thriller, smoky jazz, light suspense, whispers"},
+ epopee:{fr:"ÉPOPÉE ANTIQUE : récit à la manière des grands poèmes, formules répétées, souffle, lyre ou harpe.",en:"ancient epic poem, lyre, grand sweeping narration"},
+ nostalgie:{fr:"NOSTALGIE DOUCE : souvenirs, tendresse, le temps qui passe, piano et cordes.",en:"nostalgic, sepia warmth, gentle piano and strings"},
+ espoir:{fr:"LEVER DE SOLEIL : on part de la nuit (doute, peur) pour aller vers la lumière ; la musique s'ouvre progressivement.",en:"from darkness to dawn, slow build to radiant hope"},
+ doc:{fr:"DOCUMENTAIRE CAPTIVANT : voix off de reportage, faits précis, montée progressive, comme un grand documentaire nature ou histoire.",en:"documentary narration, authoritative, cinematic underscore"}
+};
+var SING={
+ spoken:"PARLÉ : presque tout est dit, avec la balise [Spoken Word]. Un seul refrain chanté d'environ 15 secondes, au sommet du récit.",
+ slam:"SLAM : texte parlé mais rythmé, avec des rimes et des répétitions, la musique dessous ; balise [Spoken Word] avec mention rhythmic. Un court refrain chanté possible.",
+ rap:"RAP NARRATIF : couplets rappés, flow clair et lent, chaque mot compréhensible pour un enfant, rimes simples ; refrain chanté et mémorisable. Balise [Rap verse] et [Chorus].",
+ audio_drama:"PIÈCE RADIO : dialogues joués entre personnages, musique d'ambiance et bruitages indiqués entre crochets, narrateur qui relie les scènes. Pas de refrain obligatoire.",
+ mix:"MIXTE : couplets parlés ([Spoken Word]), refrain chanté qui revient 2 à 3 fois, assez simple pour être repris par les enfants.",
+ callresp:"APPEL-RÉPONSE : un meneur lance une phrase courte, les enfants ([Children's Choir]) la répètent ; toute la structure fonctionne par échos. Idéal pour apprendre un verset.",
+ chant_parle:"CHANTÉ AVEC UN PASSAGE PARLÉ : vraie chanson, mais au cœur de l'histoire la musique s'arrête ([Drums stop]) pour un moment parlé intime, puis repart plus fort.",
+ sung:"CHANTÉ : vraie chanson, couplets / refrain / pont. Lignes de 4 à 8 mots, refrain très simple à mémoriser, rimes naturelles.",
+ hymne:"HYMNE-LOUANGE : chanson à reprendre en groupe, refrain large, mélodie montante, dernier refrain a cappella puis tutti. Paroles tournées vers Dieu.",
+ cumul:"CHANSON À ACCUMULER : chaque couplet reprend les éléments précédents et en ajoute un (comme une comptine), pour mémoriser les étapes de l'histoire.",
+ dialogue_chante:"DIALOGUE CHANTÉ : les personnages se répondent en chantant, chacun sa voix (balise de voix par bloc), comme un duo de comédie musicale.",
+ acapella:"A CAPPELLA : voix, claps et percussions corporelles uniquement, aucun instrument ; harmonies simples."
+};
+var COLOR={
+ orch:"cinematic orchestra, taiko and frame drums, strings, brass",
+ orient:"ancient Middle Eastern, oud, wooden flute, frame drums, shofar-like horn",
+ celtic:"celtic folk, fiddle, tin whistle, bodhrán, uplifting",
+ epic_choir:"epic trailer choir, hybrid orchestral, big percussion hits, risers",
+ gospel:"gospel choir, hammond organ, piano, handclaps",
+ worship:"modern worship, warm pads, guitar swells, building drums",
+ afrogospel:"afro-gospel, congas and shakers, bright guitars, full choir, joyful",
+ hymne_orgue:"traditional hymn, pipe organ, cathedral choir, stately",
+ pop:"bright kids pop, ukulele, glockenspiel, claps",
+ pop_ado:"energetic teen pop, synths, punchy drums, big chorus",
+ hiphop:"clean hip-hop beat, boom bap drums, warm bass, piano chops",
+ afrobeats:"afrobeats, log drums, syncopated percussion, bright guitar riff, danceable",
+ reggae:"light reggae, offbeat guitar skank, warm bass, laid-back",
+ electro:"electro-pop, soft synth drops, sidechain pads, bright arps",
+ rock:"pop-rock, driving electric guitars, anthemic chorus, live drums",
+ latin:"latin pop, nylon guitar, congas, brass stabs, festive",
+ acou:"acoustic guitar, piano, soft percussion",
+ piano:"solo piano, string quartet, gentle, cinematic",
+ boite:"music box, harp, celesta, dreamy, delicate",
+ jazz:"soft jazz, brushed drums, upright bass, light swing, warm",
+ hebrew:"klezmer-inspired, clarinet, violin, tambourine, festive dance",
+ african:"West African traditional, kora, balafon, djembe, call and response",
+ folk:"folk country, banjo, acoustic guitar, foot stomps, handclaps",
+ medieval:"medieval folk, lute, recorder, tambourine, courtly",
+ muet_piano:"silent film piano, ragtime, honky-tonk upright piano, comedic, brisk",
+ cartoon_orch:"classic cartoon orchestra, brass stabs, xylophone, slide whistle, playful sound effects",
+ cirque:"circus fanfare, tuba, cymbals, calliope fairground organ, marching snare",
+ musichall:"Broadway musical, big band brass, tap dance rhythm, showtune",
+ chanson:"French chanson, accordion, gypsy jazz guitar, upright bass, Parisian",
+ swing:"swing big band, brass section, walking bass, brushed drums, 1940s",
+ ukulele:"ukulele, whistling, light claps, cheerful, breezy",
+ western_m:"spaghetti western, twangy guitar, harmonica, whistling, trotting rhythm",
+ shanty:"sea shanty, accordion, fiddle, stomping, male choir chorus",
+ spy:"spy jazz, muted trumpet, vibraphone, walking bass, sleek",
+ scifi:"sci-fi orchestral, spacey synth pads, choir, deep bass pulses",
+ chiptune:"retro video game chiptune, 8-bit synths, upbeat, playful",
+ marching:"marching band, snare drum cadence, brass, triumphant",
+ tango:"dramatic tango, bandoneon, violin, piano, staccato",
+ baroque:"baroque, harpsichord, string ensemble, ornate, stately",
+ gregorien:"gregorian chant, male choir, church organ, reverent, cathedral reverb",
+ lyre:"ancient lyre, harp, wooden flute, meditative, antique",
+ renaissance:"renaissance, lute, viola da gamba, madrigal choir",
+ soul:"Motown soul, horn section, backing vocals, tambourine, groovy",
+ blues:"blues, slide guitar, harmonica, shuffle drums, raw",
+ rnb:"modern R&B, smooth vocals, soft beat, warm keys",
+ disco:"disco, string stabs, funky bass, four on the floor, glittering",
+ bluegrass:"bluegrass, fast banjo, fiddle, mandolin, foot stomps",
+ ethio:"Ethiopian and Eritrean traditional, krar, masenqo, kebero drums, pentatonic",
+ caraibes:"Caribbean, steel drums, calypso, zouk groove, sunny",
+ bollywood:"Bollywood, tabla, sitar, big choir, dramatic strings",
+ andin:"Andean folk, pan flute, charango, bombo drum",
+ asie:"East Asian, guzheng, bamboo flute, gentle percussion",
+ arabe:"Arabic orchestra, qanun, oud, darbuka, choir",
+ lofi:"lo-fi chill, soft piano, vinyl crackle, slow beat, cozy"
+};
+var VERSE={
+ one:"VERSETS : cite UN verset clé mot à mot (traduction indiquée dans les règles), annoncé par sa référence dite à voix haute (ex. « Psaume 23, verset 1 »). Le reste est raconté.",
+ chorus:"VERSETS : le verset clé EST le refrain, cité mot à mot ou très légèrement adapté pour le chant (si adapté, le signaler dans les Sources). Il revient au moins trois fois ; référence dite une fois à voix haute.",
+ several:"VERSETS : cite 2 à 4 versets mot à mot aux moments forts, chacun annoncé par sa référence, sans alourdir le récit.",
+ para:"VERSETS : aucune citation mot à mot dans les paroles. L'histoire est racontée librement mais fidèlement. Les références précises vont dans la section Sources, pas dans le texte chanté ou parlé.",
+ wake:"VERSETS : aucune citation mot à mot. L'histoire se termine par une invitation adressée à l'enfant à ouvrir sa Bible à la référence donnée (dite à voix haute) pour lire la suite lui-même."
+};
+var SONGTYPE={
+ gestes:{fr:"COMPTINE À GESTES : chaque phrase correspond à un geste simple indiqué entre crochets pour l'animateur dans le Guide (pas dans les paroles), structure très répétitive, 2 à 3 mots nouveaux maximum.",en:"action song for toddlers, simple repetitive melody"},
+ repete:{fr:"CHANSON À RÉPÉTER : le meneur chante une ligne courte, le chœur d'enfants la répète à l'identique ([Children's Choir]). Toute la chanson fonctionne ainsi.",en:"echo song, leader and children's choir repeating"},
+ ronde:{fr:"RONDE DANSÉE : tempo de marche, consignes de mouvement dans le Guide (tourner, taper, sauter), refrain qui revient souvent.",en:"circle dance song, steady walking tempo, playful"},
+ berceuse:{fr:"BERCEUSE CHANTÉE : lente, douce, voix seule et peu d'instruments, refrain rassurant.",en:"sung lullaby, soft, slow, gentle"},
+ animaux:{fr:"CHANSON AVEC BRUITS : les sons de l'histoire (animaux, vent, pluie, trompettes…) sont intégrés aux paroles pour que les enfants les fassent.",en:"playful kids song with sound effects and animal noises"},
+ ballade:{fr:"BALLADE NARRATIVE : chaque couplet raconte une étape de l'histoire dans l'ordre, le refrain porte le message central.",en:"narrative ballad, verse-driven storytelling"},
+ numero:{fr:"NUMÉRO DE FILM D'ANIMATION : le héros chante son dilemme ou son espoir à la première personne, montée dramatique, final lumineux.",en:"animated musical character number, theatrical build, big finale"},
+ canon:{fr:"CANON : mélodie simple qui peut être chantée en décalé par deux groupes ; indique le point d'entrée du second groupe dans le Guide.",en:"simple round / canon, two overlapping voice groups"},
+ question:{fr:"QUESTION-RÉPONSE : un couplet pose une question (à Dieu, au héros, à l'enfant), le couplet suivant répond.",en:"question and answer song, two alternating parts"},
+ fete:{fr:"CHANSON DE FÊTE : énergie maximale, claps, refrain court à hurler, pont où tout le monde saute.",en:"celebration party song, claps, shout-along chorus"},
+ devinette:{fr:"CHANSON-DEVINETTE : les couplets donnent des indices sur le personnage ou l'événement sans le nommer, révélation au dernier refrain.",en:"guessing game song, clues in verses, reveal at the end"},
+ chanson_recit:{fr:"CHANSON-RÉCIT : ballade folk, couplets longs qui racontent dans l'ordre, refrain qui porte le sens, pont de bascule.",en:"folk storytelling ballad, long verses, narrative"},
+ louange_adulte:{fr:"LOUANGE D'ASSEMBLÉE : paroles adressées à Dieu, refrain large reprenable, pont de déclaration répété, tonalité chantable par tous.",en:"congregational worship anthem, singable chorus, declaration bridge"},
+ gospel_choeur:{fr:"GOSPEL À CHŒUR : un meneur lance, le chœur répond ; montée progressive, final a cappella puis tutti.",en:"gospel call and response, choir, building to a cappella finale"},
+ comedie:{fr:"NUMÉRO COMIQUE CHANTÉ : couplets drôles tirés des situations de l'histoire, refrain entraînant, chute au pont ; jamais de moquerie du sacré.",en:"comic song, witty verses, catchy chorus, comedic timing"},
+ meditation:{fr:"MÉDITATION CHANTÉE : lente, répétitive, quelques phrases qui reviennent (façon chant de Taizé), silences, voix douces en harmonie.",en:"meditative chant, repetitive, slow, soft harmonies, Taizé style"},
+ hymne_classique:{fr:"HYMNE CLASSIQUE : quatre strophes régulières, même mélodie, vocabulaire noble, orgue ou piano.",en:"classic hymn, four regular stanzas, stately melody"},
+ pop_hymne:{fr:"HYMNE POP ADO : refrain large et facile à crier ensemble, couplets qui parlent vrai, pré-refrain qui monte.",en:"teen pop anthem, huge singalong chorus, pre-chorus lift"},
+ rap_melo:{fr:"RAP MÉLODIQUE : couplets mi-rappés mi-chantés, flow clair, refrain pop chanté, autotune léger accepté.",en:"melodic rap, sung hook, modern, clear diction"},
+ ballade_intime:{fr:"BALLADE INTIME : piano-voix ou guitare-voix, une vérité qu'on ose dire, montée au dernier refrain.",en:"intimate piano ballad, vulnerable, building last chorus"},
+ louange:{fr:"CHANT DE LOUANGE MODERNE : paroles adressées à Dieu, refrain reprenable au culte, pont de déclaration.",en:"modern worship anthem, congregational chorus, declaration bridge"},
+ defi:{fr:"CHANSON-DÉFI : chaque couplet lance une action concrète de la semaine, le refrain engage (« je le fais »).",en:"motivational challenge song, punchy verses, commitment chorus"},
+ temoignage_chante:{fr:"TÉMOIGNAGE CHANTÉ : à la première personne, honnête, de la difficulté à la délivrance, sans mièvrerie.",en:"first-person testimony song, honest, emotional arc"}
+};
+var OCC={anniv:"un anniversaire",meres:"la fête des mères",peres:"la fête des pères",parents:"la fête des parents ou des grands-parents",naissance:"une naissance",mariage:"un mariage ou un anniversaire de mariage",noel:"Noël",nouvelan:"la nouvelle année",paques:"Pâques",bapteme:"un baptême ou une confirmation",diplome:"une réussite (diplôme, examen)",depart:"un départ (retraite, déménagement, fin de mission)",guerison:"un rétablissement ou un encouragement dans l'épreuve",deuil:"un réconfort après un deuil",merci:"un merci, une reconnaissance",bienvenue:"une bienvenue"};
+var PUBLIC={adultes:"des adultes",famille:"toute la famille, petits et grands (mots simples, refrain que les enfants peuvent reprendre)",ados:"des ados et jeunes adultes (ton actuel, jamais mièvre)",enfants:"des enfants (phrases courtes, gestes possibles)",seniors:"des seniors (tempo posé, paroles distinctes, références à leur époque bienvenues)"};
+var FAITH={centre:"Dieu est au centre : la chanson est aussi une prière ou une bénédiction ; un verset peut être cité (règle des versets ci-dessous).",discret:"La foi est présente discrètement : une bénédiction, une phrase de confiance, sans sermon.",aucune:"Aucune mention religieuse."};
+var START={help:"ÉCRIS LES PAROLES à partir des informations fournies. N'invente aucun fait, prénom, souvenir ou trait de caractère qui n'est pas dans le texte fourni ; si tu manques de matière, reste général et chaleureux et signale dans « Points de vigilance » ce qu'il serait bon d'ajouter.",draft:"AMÉLIORE LE TEXTE fourni : garde ses idées, ses mots forts et ses souvenirs, corrige le rythme, les rimes et la structure pour que ça se chante. Ne rajoute pas de faits sur la personne.",asis:"TEXTE À CHANTER TEL QUEL : ne réécris pas les paroles. Ajoute uniquement les balises Suno de structure et de voix, découpe en sections, et signale dans « Points de vigilance » les lignes trop longues pour être chantées, sans les modifier."};
+function pSong(m){
+  var o=m.suno,l=L(m),V=vopt(VOICE,o.voice,o.voiceX),T=vopt(TONE,o.tone,o.toneX),CO=sopt(COLOR,o.color,o.colorX,""),occ=m.occ==="custom"?(m.occX||"une occasion non précisée"):(OCC[m.occ]||"une occasion");
+  var sens=(m.occ==="deuil"||m.occ==="guerison");
+  return [
+"Tu es parolier et directeur artistique. Tu écris une chanson sur mesure, prête à coller dans Suno AI (mode Custom), qui sera offerte à une personne réelle.",
+"LANGUE DES PAROLES : "+l.fr+". Écriture native, rimes et expressions propres à la langue.",
+"",
+"LA CHANSON",
+"- Occasion : "+occ+".",
+"- Pour : "+(m.forWho||"non précisé")+". De la part de : "+(m.fromWho||"non précisé")+".",
+"- Public qui écoutera : "+(PUBLIC[m.pub]||PUBLIC.adultes)+".",
+"- "+(FAITH[m.faith]||FAITH.centre),
+"- "+(START[m.start]||START.help),
+sens?"- OCCASION SENSIBLE : pudeur, pas de formules toutes faites, pas de promesse de guérison ni d'explication de la souffrance ; on reste à côté de la personne. Ne jamais parler à la place du défunt.":"",
+"- Ton : "+T.fr,
+"- Voix : "+V.fr,
+"- Parlé ou chanté : "+sopt(SING,o.sing,o.singX,"CHOIX LIBRE : "),
+(SUNG_MODES.indexOf(o.sing)>=0?"- Type de chanson : "+vopt(SONGTYPE,o.songType,o.songTypeX).fr:""),
+"- Couleur musicale : "+CO+(o.more?" ; précision demandée : "+o.more:""),
+"- "+humorLine(o),
+"- "+dynLine(o),
+"- "+(o.dur==="custom"?"Durée visée : "+(o.durX||"non précisée")+", sans dépasser 4 900 caractères.":DUR[o.dur]),
+"- Versets : "+bibleRule(m,l)+" Un verset seulement si la place de la foi le permet.",
+"",
+"TEXTE OU IDÉES FOURNIS PAR L'UTILISATEUR :","<<<",(m.songText||"(rien)"),">>>",
+"",
+"RÈGLES D'ÉCRITURE",
+"- Dire le prénom tôt et le répéter dans le refrain si c'est naturel. Des détails concrets valent mieux que des compliments généraux.",
+"- Pas de clichés de carte de vœux, pas de mots que la personne n'emploierait jamais. Chaque ligne chantée : 4 à 10 mots.",
+"- Un moment de chute ou de sourire au pont, puis le dernier refrain plus large.",
+"- Rien hors crochets dans Lyrics ; toute indication (voix, silence, instrument) va entre crochets, en anglais, courte.",
+"- Champ Style : en anglais, 8 à 15 descripteurs séparés par des virgules, premier = genre dominant, voix décrites, instruments, BPM, « "+l.en+" vocals ». Aucun nom d'artiste.",
+"",
+"Donne d'abord les blocs à copier, exactement avec ces marqueurs :",
+"<<<TITRE>>>","(titre en "+l.fr+", 80 caractères maximum)","<<<FIN>>>",
+"<<<STYLE>>>","(descripteurs en anglais)","<<<FIN>>>",
+"<<<EXCLURE>>>","(3 à 6 éléments à exclure, en anglais)","<<<FIN>>>",
+"<<<LYRICS>>>","(texte complet avec balises)","<<<FIN>>>",
+"Ensuite : ## Pour l'offrir (3 idées concrètes : moment, mise en scène, qui chante avec), ## Points de vigilance (2 à 4 lignes : ce qui manque, ce qui est risqué, ce que tu as supposé), en français."
+  ].filter(function(x){return x!==""}).join("\n");
+}
+var HUMOR={
+ none:{fr:"HUMOUR : aucun, ton sérieux.",en:""},
+ clin:{fr:"HUMOUR : clin d'œil léger, une ou deux touches de sourire, sans casser l'émotion.",en:"light playful touches"},
+ situation:{fr:"HUMOUR : comique de situation tiré de l'histoire elle-même (ce qui est vraiment cocasse dans le texte), jamais ajouté contre le sens.",en:"situational comedy"},
+ exag:{fr:"HUMOUR : exagération, tout est énorme, les chiffres et les adjectifs enflent, puis retour au vrai.",en:"over-the-top exaggerated comedy"},
+ absurde:{fr:"HUMOUR : absurde et décalé, logique bizarre, détails inattendus ; on revient toujours au texte.",en:"absurdist quirky comedy"},
+ jeux:{fr:"HUMOUR : jeux de mots, rimes drôles, allitérations, dans la langue du contenu.",en:"witty wordplay, playful rhymes"},
+ running:{fr:"HUMOUR : un running gag (une blague ou une phrase qui revient 3 à 4 fois et paye à la fin).",en:"recurring joke callback"},
+ quiproquo:{fr:"HUMOUR : quiproquos entre les voix, on se comprend de travers, puis tout s'éclaire.",en:"comedic misunderstandings"},
+ parodie:{fr:"HUMOUR : parodie d'un genre (publicité, journal télévisé, conte de fées, documentaire animalier…) appliquée à l'histoire.",en:"genre parody"},
+ slapstick:{fr:"HUMOUR : burlesque physique, chutes, courses, portes qui claquent, bruitages entre crochets.",en:"slapstick physical comedy, sound effects"},
+ pince:{fr:"HUMOUR : ironie douce, pince-sans-rire, remarques à côté, jamais méchant.",en:"deadpan dry wit"},
+ tendre:{fr:"HUMOUR : on rit d'abord, et l'humour s'efface pour laisser place à l'émotion au moment clé.",en:"warm comedy turning heartfelt"}
+};
+var DYN={
+ emotions:{fr:"DYNAMIQUE MUSICALE : la musique SUIT LES ÉMOTIONS de l'histoire et change à chaque tournant : peur → tempo retenu, tonalité mineure, instruments graves ; attente → pulsation, montée ; joie → tempo vif, majeur, cuivres ou claps ; tristesse → piano seul, cordes, silence ; victoire → tutti, chœur. Indique chaque bascule entre crochets au début de la section ([Tempo slows, minor key, low strings], [Drums stop], [Full orchestra, major key, triumphant]). Prévois au moins 4 changements nets.",en:"dynamic mood shifts following the story, tempo and key changes"},
+ stable:{fr:"DYNAMIQUE MUSICALE : une ambiance stable et cohérente du début à la fin, variations légères seulement.",en:"consistent mood throughout"},
+ crescendo:{fr:"DYNAMIQUE MUSICALE : crescendo continu, de presque rien jusqu'au final le plus large ; chaque section ajoute un instrument.",en:"continuous build, layered crescendo to a huge finale"},
+ contraste:{fr:"DYNAMIQUE MUSICALE : contrastes comiques : la musique s'emballe puis dérape ([Record scratch]), s'arrête net ([Drums stop]), repart ailleurs, hésite, se trompe de genre pendant deux mesures ; les ruptures soulignent les gags.",en:"comedic musical contrasts, record scratches, abrupt stops and restarts"},
+ cinema:{fr:"DYNAMIQUE MUSICALE : comme un film : un thème musical par personnage principal (indiqué entre crochets), silences avant les révélations, coups d'orchestre sur les actions, retour du thème au final.",en:"film score with character themes, silences, orchestral hits"}
+};
+var DECOR={
+ auto:{fr:"DÉCOR SONORE : choisis les bruitages d'ambiance qui correspondent aux lieux réels de l'histoire, indiqués entre crochets au début des sections concernées.",en:""},
+ desert:{fr:"DÉCOR SONORE : désert (vent, sable, chameaux, chaleur), en bruitages discrets entre crochets.",en:"desert wind ambience"},
+ savane:{fr:"DÉCOR SONORE : savane (animaux lointains, insectes, tambours au loin), en bruitages discrets entre crochets.",en:"savanna wildlife ambience, distant drums"},
+ mer:{fr:"DÉCOR SONORE : mer et tempête (vagues, mouettes, tonnerre, cordages), bruitages entre crochets, la tempête monte avec l'histoire.",en:"ocean waves, storm, seagulls"},
+ lac:{fr:"DÉCOR SONORE : lac et barque (rames, eau calme, oiseaux), bruitages entre crochets.",en:"calm lake, rowing boat, water"},
+ ville:{fr:"DÉCOR SONORE : ville antique (marché, foule, ânes, marchands), bruitages entre crochets.",en:"ancient city market crowd ambience"},
+ palais:{fr:"DÉCOR SONORE : palais royal (trompettes, pas sur le marbre, murmures de la cour), bruitages entre crochets.",en:"royal palace, fanfare, echoing hall"},
+ temple:{fr:"DÉCOR SONORE : temple (chœur lointain, cloches, résonance), bruitages entre crochets.",en:"temple reverb, distant choir, bells"},
+ montagne:{fr:"DÉCOR SONORE : montagne (vent, aigle, écho), bruitages entre crochets.",en:"mountain wind, eagle, echo"},
+ foret:{fr:"DÉCOR SONORE : forêt et jardin (oiseaux, ruisseau, feuilles), bruitages entre crochets.",en:"forest birds, stream, leaves"},
+ nuit:{fr:"DÉCOR SONORE : nuit étoilée (grillons, feu de camp qui crépite, hibou), bruitages entre crochets.",en:"night crickets, campfire crackle"},
+ prison:{fr:"DÉCOR SONORE : prison ou fosse (chaînes, gouttes, écho, porte lourde), bruitages entre crochets, sans effrayer.",en:"dungeon echo, chains, dripping water"},
+ pluie:{fr:"DÉCOR SONORE : pluie et orage (gouttes, tonnerre lointain), bruitages entre crochets.",en:"rain and distant thunder"},
+ village:{fr:"DÉCOR SONORE : village et bergerie (brebis, cloches, forge, enfants qui jouent), bruitages entre crochets.",en:"village, sheep, bells, blacksmith"},
+ aucun:{fr:"DÉCOR SONORE : aucun bruitage, musique et voix seulement.",en:""}
+};
+/* Une sauvegarde ancienne peut contenir une clé qui n'existe plus : on retombe sur la valeur par défaut. */
+function pick(T,k,def){return T[k]||T[def]}
+function humorLine(o){var h=o.humor||"none";if(h==="custom")return "HUMOUR : "+(o.humorX||"au jugement");return pick(HUMOR,h,"none").fr}
+function dynLine(o){var d=o.dyn||"emotions";if(d==="custom")return "DYNAMIQUE MUSICALE : "+(o.dynX||"au jugement");return pick(DYN,d,"emotions").fr}
+function decorLine(o){var d=o.decor||"auto";if(d==="custom")return "DÉCOR SONORE : "+(o.decorX||"au jugement")+", bruitages entre crochets.";return pick(DECOR,d,"auto").fr}
+function extraStyle(o){
+  var h=o.humor||"none",d=o.dyn||"emotions",c=o.decor||"auto";
+  return [[h,o.humorX,HUMOR,"none"],[d,o.dynX,DYN,"emotions"],[c,o.decorX,DECOR,"auto"]].map(function(x){
+    return x[0]==="custom"?(x[1]||""):pick(x[2],x[0],x[3]).en;
+  }).filter(Boolean);
+}
+var SUNG_MODES=["sung","hymne","cumul","dialogue_chante","acapella","chant_parle"];
+var DUR={
+ std:"Durée visée : environ 3 min 30. LYRICS entre 3 500 et 4 900 caractères, espaces et balises comprises. Jamais plus de 4 900.",
+ short:"Durée visée : environ 2 min. LYRICS entre 1 800 et 2 600 caractères, espaces et balises comprises.",
+ long:"Durée visée : environ 5 min. LYRICS au maximum de 4 900 caractères, écriture dense, peu de répétitions ; indique dans le Timing où couper si Suno s'arrête avant la fin."
+};
+var ILLU={
+ "3d":"film d'animation 3D cinématographique, lumière chaude de cinéma, personnages expressifs aux formes douces",
+ aqua:"aquarelle de livre pour enfants, papier texturé, contours légers, couleurs tendres",
+ paper:"papier découpé en couches, couleurs franches, ombres portées douces",
+ pencil:"crayon de couleur doux, tons pastel, trait visible",
+ bd:"bande dessinée ligne claire, aplats de couleur, contours nets"
+};
+
+function pSuno(m,age){
+  var o=m.suno,l=L(m),V=vopt(VOICE,o.voice,o.voiceX),T=vopt(TONE,o.tone,o.toneX),CO=sopt(COLOR,o.color,o.colorX,"");
+  return [rules(m),"",brief(m),"",ageText(age,m),"",
+"LIVRABLE : un conte musical prêt à coller dans Suno AI (mode Custom). Paroles en "+l.fr+".",
+"",
+"CHOIX ARTISTIQUES (à respecter dans le style ET dans l'écriture des paroles)",
+"- Voix : "+V.fr,
+"- Ton : "+T.fr,
+"- Parlé ou chanté : "+sopt(SING,o.sing,o.singX,"CHOIX LIBRE : "),
+(SUNG_MODES.indexOf(o.sing)>=0?"- Type de chanson : "+vopt(SONGTYPE,o.songType,o.songTypeX).fr:""),
+"- Couleur musicale : "+CO+(o.more?" ; précision demandée : "+o.more:""),
+"- "+humorLine(o)+(o.humor&&o.humor!=="none"?" Règle absolue : on rit des situations et des narrateurs, jamais de Dieu, de Jésus, de la prière ni de ce qui est sacré dans le texte ; les faits restent exacts.":""),
+"- "+dynLine(o),
+"- "+decorLine(o),
+"- "+(o.dur==="custom"?"Durée visée : "+(o.durX||"non précisée")+". Adapte la longueur des LYRICS (compte environ 1 200 caractères par minute en parlé, 900 en chanté) sans jamais dépasser 4 900 caractères.":DUR[o.dur]),
+"- "+(VERSE[o.verse]||VERSE.one),
+"- Fin : une action ou une question adressée directement à "+(age==="adultes"?"l'auditeur":"l'enfant qui écoute")+".",
+"",
+"RÈGLES TECHNIQUES SUNO",
+"- Champ Style : en anglais, descripteurs séparés par des virgules, pas de phrases. 8 à 15 descripteurs, 200 à 400 caractères (maximum absolu 1 000). Le PREMIER descripteur est le genre dominant. Ordre : genre, ambiance, voix décrites précisément, instruments, tempo chiffré en BPM, production. Points de départ à adapter : « "+[T.en,V.en,(SUNG_MODES.indexOf(o.sing)>=0?vopt(SONGTYPE,o.songType,o.songTypeX).en:""),CO].concat(extraStyle(o)).filter(Boolean).join(", ")+" ». Ajoute « "+l.en+" vocals, sung and spoken in "+l.en+" ». Aucun nom d'artiste, de studio ni de marque.",
+"- Champ Lyrics : tout ce qui n'est pas entre crochets sera prononcé. Donc toute indication (voix, silence, instrument, intensité) va ENTRE CROCHETS, en anglais, courte. Balises de structure : [Intro] [Verse] [Pre-Chorus] [Chorus] [Bridge] [Outro]. Balises de jeu : [Spoken Word] [Whispered] [Children's Choir] [Instrumental Break] [Drums stop] [Build-up]. Pas d'astérisques, pas de didascalies hors crochets.",
+"- Mots hébreux ou noms propres difficiles : écris-les selon la phonétique de la langue des paroles ("+l.fr+") quand ils risquent d'être mal prononcés"+(l===LANG.fr?" (exemple : « Soukotte »)":"")+".",
+"- Avant de répondre, vérifie toi-même : aucune indication hors crochets, aucune ligne de plus de 12 mots dans les parties chantées, longueur des LYRICS dans la fourchette, premier descripteur du Style = genre dominant.",
+"- Ce que tu ne veux pas entendre va dans le champ Exclure, pas dans le Style.",
+"",
+"Donne d'abord les blocs à copier, exactement avec ces marqueurs :",
+"<<<TITRE>>>","(titre en "+l.fr+", 80 caractères maximum)","<<<FIN>>>",
+"<<<STYLE>>>","(descripteurs en anglais)","<<<FIN>>>",
+"<<<EXCLURE>>>","(3 à 6 éléments à exclure, en anglais, séparés par des virgules)","<<<FIN>>>",
+"<<<LYRICS>>>","(texte complet avec balises)","<<<FIN>>>",
+"Ensuite : ## Timing (repères approximatifs, en liste), ## Guide animateur (l'action à faire vivre après l'écoute), puis « Sources »."].join("\n");
+}
+function pLivret(m,age){
+  var o=m.livret, n=Math.max(6,Math.min(30,parseInt(o.pages,10)||15)),
+      peda=(o.peda&&o.peda.length)?o.peda:["Verset à mémoriser","Questions de discussion","Défi de la semaine"],
+      storyPages=Math.max(4,n-2-peda.length), total=2+storyPages+peda.length;
+  return [rules(m),"",brief(m),"",ageText(age,m),"",
+"LIVRABLE : un livret illustré de "+total+" pages exactement (couverture, récit, pages demandées, sources) qui raconte l'histoire puis la fait vivre. Texte des pages en "+L(m).fr+".",
+"Style d'illustration, identique sur toutes les pages : "+illu(o)+".",
+"Format des pages : "+(o.format||"portrait A5")+". Lecture : "+(o.reader==="child"?"l'enfant lit seul, phrases courtes, un mot important en gras par page":"un adulte lit à l'enfant, le texte peut être un peu plus riche et rythmé pour la voix")+".",
+"",
+"STRUCTURE",
+"- Page 1 : couverture (titre, sous-titre, référence biblique).",
+"- Pages 2 à "+(storyPages+1)+" : le récit, une scène par page. Pour chaque page : « ### Page N — titre court », puis le TEXTE de la page ("+(age==="4-6"?"20 à 40 mots":age==="11-13"?"80 à 130 mots":age==="adultes"?"120 à 200 mots":"50 à 90 mots")+"), puis « Illustration : » description de l'image en une ou deux phrases.",
+"- Pages suivantes, une par élément demandé : "+peda.join(" ; ")+".",
+"- Dernière page : « Sources ».",
+"",
+"Termine par UN bloc prêt à coller dans ChatGPT pour générer toutes les illustrations avec des personnages cohérents : style global, fiche de chaque personnage (âge apparent, visage, vêtements, couleurs), format portrait, aucune écriture dans l'image, puis un prompt numéroté par page.",
+"<<<PROMPT CHATGPT — ILLUSTRATIONS>>>","(texte)","<<<FIN>>>"].join("\n");
+}
+function pVideo(m,age,sunoText){
+  var v=vid(m),plans=Math.max(8,Math.min(30,parseInt(v.plans,10)||16));
+  return [rules(m),"",brief(m),"",ageText(age,m),"",
+"CONTEXTE : l'audio de la vidéo est le conte Suno ci-dessous. Tu construis la vidéo YouTube qui l'accompagne : images fixes générées dans ChatGPT, puis animées une à une dans un outil image-vers-vidéo, puis montées sur l'audio.",
+"Style visuel, identique partout : "+illu(m.livret)+". Format "+v.ratio+(v.ratio==="9:16"?" (vertical : sujets centrés, texte dans le tiers supérieur)":"")+"."+(v.tool?" Outil d'animation prévu : "+v.tool+" ; adapte les prompts d'animation à ce qu'il comprend bien.":""),
+"",
+"=== CONTE SUNO (référence, ne pas réécrire) ===",sunoText.slice(0,9000),"=== FIN DU CONTE ===",
+"",
+"LIVRABLE",
+"## Découpage — "+plans+" plans qui suivent l'ordre des sections du conte. Pour chaque plan : « ### Plan N », le repère (section et premiers mots couverts), la description de l'image, le texte à l'écran ("+TEXTON[v.text]+", en "+L(m).fr+"), le mouvement d'animation souhaité.",
+"## Fiches personnages — pour la cohérence d'une image à l'autre.",
+"Puis deux blocs à copier :",
+"<<<PROMPT CHATGPT — IMAGES "+v.ratio+">>>","(style global, fiches personnages résumées, aucune écriture dans l'image, puis un prompt numéroté par plan)","<<<FIN>>>",
+"<<<PROMPTS ANIMATION>>>","(un prompt court en anglais par plan, numéroté, décrivant seulement le mouvement : caméra, personnage, éléments d'ambiance ; 5 à 8 secondes)","<<<FIN>>>",
+"## Montage — étapes dans l'ordre, du fichier audio au fichier final. Précise que les durées réelles se calent sur l'audio une fois généré, car la durée exacte n'est pas connue à l'avance.",
+"## Publication YouTube (en "+L(m).fr+") — 3 titres possibles, une description, des chapitres avec repères à ajuster sur l'audio final, 10 mots-clés, et un bloc :",
+"<<<PROMPT CHATGPT — MINIATURE>>>","(texte)","<<<FIN>>>",
+"Rappelle en une ligne de vérifier dans YouTube Studio le réglage d'audience « conçue pour les enfants ».",
+"Puis « Sources »."].join("\n");
+}
+function pFiche(m,age){return [rules({lang:"fr"}),"",brief(m),"",ageText(age,m),"",
+"LIVRABLE : une fiche moniteur Fullpack complète, dans cet ordre exact, 16 points numérotés :",
+"1. Titre — 2. Objectif moniteur — 3. Idée principale (une phrase) — 4. Verset à mémoriser — 5. Audio/vidéo (ce qu'il faut préparer ou diffuser) — 6. Préparation (matériel, mise en place) — 7. Brise-glace — 8. Introduction — 9. Enseignement (texte que le moniteur peut dire tel quel ; "+(age==="4-6"?"5 à 7 minutes":age==="11-13"?"12 à 15 minutes, avec un vrai débat":age==="adultes"?"15 à 20 minutes, avec étude du texte":"10 à 12 minutes")+") — 10. Activité — 11. Temps avec Dieu — 12. Questions de révision — 13. Défi de la semaine (une ACTION concrète) — 14. Étoile (rappel : une étoile si verset appris par cœur et défi relevé) — 15. Connexion parents (message court à envoyer) — 16. Notes équipe.",
+"Puis la section « Sources »."].join("\n");}
+
+function refreshDependents(key){S.jobs.forEach(function(x,k){if(x.dep===key&&x.status!=="done"){x.prompt="";var d=$("job-"+k);if(d){var pre=d.querySelector(".mpre");if(pre)pre.textContent="";var pt=d.querySelector(".ptxt");if(pt&&!pt.hidden)pt.value=promptFor(x)}paint(k)}})}
+function fmtDate(iso){try{return new Date(iso).toLocaleString("fr-FR",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}catch(e){return iso||""}}
+function recordVersion(j,action,promptUsed){
+  j.versions=j.versions||[];
+  j.versions.push({at:new Date().toISOString(),action:action,prompt:promptUsed||j.prompt||"",text:j.text||""});
+  if(j.versions.length>20)j.versions=j.versions.slice(-20);
+}
+var ACTION_LABEL={generate:"Génération",refine:"Affinage",variant:"Autre version",more:"Suite du texte",manual:"Collé à la main",restore:"Restauration",edited:"Prompt modifié"};
+function depOf(j){ if(!j.dep)return null; for(var i=0;i<S.jobs.length;i++) if(S.jobs[i].key===j.dep) return S.jobs[i]; return null; }
+function promptFor(j){
+  var m=S.meta;
+  if(j.kind==="suno")return pSuno(m,j.age);
+  if(j.kind==="livret")return pLivret(m,j.age);
+  if(j.kind==="fiche")return pFiche(m,j.age);
+  if(j.kind==="song")return pSong(m);
+  if(j.kind==="video"){var d=depOf(j);return pVideo(m,j.age,(d&&d.text)||"[Colle ici le conte Suno]");}
+  return j.prompt||"";
+}
+
+/* ---------- Utilitaires ---------- */
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function md(t){
+  var out=[],inUl=false;
+  t.split("\n").forEach(function(raw){
+    if(/^\s*```/.test(raw)) return;
+    var l=esc(raw).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>");
+    var m;
+    if((m=l.match(/^\s*[-*•]\s+(.*)/))){ if(!inUl){out.push("<ul>");inUl=true} out.push("<li>"+m[1]+"</li>"); return; }
+    if(inUl){out.push("</ul>");inUl=false}
+    if((m=l.match(/^#{3,}\s+(.*)/))) out.push("<h4>"+m[1]+"</h4>");
+    else if((m=l.match(/^#{1,2}\s+(.*)/))) out.push("<h3>"+m[1]+"</h3>");
+    else if(l.trim()) out.push("<p>"+l+"</p>");
+  });
+  if(inUl) out.push("</ul>");
+  return out.join("");
+}
+var LIMITS={"LYRICS":4900,"STYLE":1000,"TITRE":80,"EXCLURE":1000};
+function renderText(t){
+  var re=/<<<\s*([^>]+?)\s*>>>\n?([\s\S]*?)(?:<<<\s*FIN\s*>>>|$)/g, html="", last=0, m;
+  while((m=re.exec(t))){
+    if(m[1].toUpperCase()==="FIN"){ html+=md(t.slice(last,m.index)); last=m.index+m[0].indexOf(">>>")+3; re.lastIndex=last; continue; }
+    html+=md(t.slice(last,m.index));
+    var name=m[1].toUpperCase().split(/\s/)[0], body=m[2].replace(/\s+$/,""), lim=LIMITS[name], n=body.length;
+    html+='<div class="copybox"><div class="top"><span class="name">'+esc(m[1])+'</span>'+
+      '<span class="count'+(lim&&n>lim?" over":"")+'">'+n+' caractères'+(lim?" / "+lim+" max":"")+'</span>'+
+      '<button type="button" data-copy="1">Copier</button></div><pre>'+esc(body)+'</pre></div>';
+    last=re.lastIndex;
+    if(m[0].length===0) re.lastIndex++;
+  }
+  html+=md(t.slice(last));
+  return html;
+}
+function copy(text,btn){
+  var done=function(){ if(btn){var o=btn.textContent;btn.textContent="Copié";setTimeout(function(){btn.textContent=o},1400)} };
+  var fb=function(){ var ta=document.createElement("textarea");ta.value=text;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();try{document.execCommand("copy");done()}catch(e){$("msg").textContent="Copie impossible ici : sélectionne le texte à la main."}ta.remove(); };
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done,fb)}else fb();
+}
+function errCopy(code){
+  var M={not_granted:"Tu n'as pas autorisé cette page à utiliser Claude. Recharge la page pour qu'elle te le redemande.",
+    rate_limited:"Limite d'usage atteinte. Réessaie un peu plus tard.",session_expired:"Session expirée : reconnecte-toi à Claude.",
+    refused:"Claude a décliné cette demande. Reformule l'histoire ou les consignes.",prompt_too_large:"Demande trop longue : raccourcis les consignes.",
+    empty_completion:"Aucun texte produit. Réessaie avec une demande plus simple.",invalid_json:"Réponse illisible. Réessaie.",
+    bad_key:"Clé API refusée : vérifie-la (onglet Infos).",
+    invalid_request:"Le fournisseur a refusé la demande (nom du modèle ou réglage invalide ?).",
+    model_not_found:"Modèle introuvable : vérifie son nom dans l'onglet Infos.",
+    overloaded:"Le service est surchargé. Réessaie dans un instant.",
+    network:"Connexion impossible : vérifie ton réseau."};
+  return M[code]||"Interruption du service. Tu peux relancer.";
+}
+/* Message affiché sous un module en erreur : texte clair + détail technique éventuel. */
+function errNote(e){
+  var n=errCopy(e&&e.code),d=e&&e.message;
+  return d&&/^(invalid_request|model_not_found|upstream_error|overloaded|rate_limited)$/.test(e.code)?n+" ("+String(d).slice(0,160)+")":n;
+}
+
+/* ---------- Formulaire ---------- */
+function mode(){var r=document.querySelector('input[name="mode"]:checked');return r?r.value:"A"}
+function syncMode(){var v=mode(),D=(v==="D");$("sunoOpts").hidden=(v==="B");$("livretOpts").hidden=(v==="A"||D);$("videoOpts").hidden=(v!=="C");
+  ["storyStep","goalStep","ctxStep","agesStep","ficheStep"].forEach(function(id){$(id).hidden=D});$("occOpts").hidden=!D;
+  $("go").textContent=D?"Écrire la chanson":"Produire le pack";}
+function syncCustom(){[].forEach.call(document.querySelectorAll("select"),function(sel){var x=$(sel.id+"X");if(x)x.hidden=sel.value!=="custom"});$("songTypeBox").hidden=SUNG_MODES.indexOf($("oSing").value)<0;$("adultBox").hidden=!$("aAd").checked;}
+function readForm(){
+  return {mode:mode(),occ:$("oOcc").value,occX:$("oOccX").value.trim(),forWho:$("oFor").value.trim(),fromWho:$("oFrom").value.trim(),pub:$("oPublic").value,faith:$("oFaith").value,start:$("oStart").value,songText:$("songText").value.trim(),story:$("story").value.trim(),ref:$("ref").value.trim(),goal:$("goal").value.trim(),srcText:$("srcText").value.trim(),bible:$("oBible").value,bibleX:$("oBibleX").value.trim(),
+    ctx:$("ctx").value,ctxMore:$("ctxMore").value.trim(),extra:$("extra").value.trim(),
+    lang:$("oLang").value,a46:$("a46").checked,a710:$("a710").checked,a1113:$("a1113").checked,aAd:$("aAd").checked,adult:$("oAdult").value,adultX:$("oAdultX").value.trim(),fiche:$("mFiche").checked,
+    suno:{voice:$("oVoice").value,voiceX:$("oVoiceX").value.trim(),tone:$("oTone").value,toneX:$("oToneX").value.trim(),sing:$("oSing").value,singX:$("oSingX").value.trim(),songType:$("oSongType").value,songTypeX:$("oSongTypeX").value.trim(),color:$("oColor").value,colorX:$("oColorX").value.trim(),dur:$("oDur").value,durX:$("oDurX").value.trim(),verse:$("oVerse").value,humor:$("oHumor").value,humorX:$("oHumorX").value.trim(),dyn:$("oDyn").value,dynX:$("oDynX").value.trim(),decor:$("oDecor").value,decorX:$("oDecorX").value.trim(),more:$("oMusicMore").value.trim()},
+    video:{ratio:$("oRatio").value,plans:$("oPlans").value,text:$("oTextOn").value,tool:$("oAnimTool").value.trim()},
+    livret:{illu:$("oIllu").value,illuX:$("oIlluX").value.trim(),pages:$("oPages").value,reader:$("oReader").value,format:$("oFormat").value,peda:[].slice.call(document.querySelectorAll("#peda input:checked")).map(function(x){return x.value})}};
+}
+function setSel(id,v){var el=$(id);if(!el||v==null)return;for(var i=0;i<el.options.length;i++)if(el.options[i].value===v){el.value=v;return}}
+function setForm(m,withStory){
+  if(!m)return;
+  var r=document.querySelector('input[name="mode"][value="'+(m.mode||"A")+'"]');if(r)r.checked=true;
+  if(m.occ)setSel("oOcc",m.occ);if(m.pub)setSel("oPublic",m.pub);if(m.faith)setSel("oFaith",m.faith);if(m.start)setSel("oStart",m.start);
+  if(withStory){["occX","forWho","fromWho","songText"].forEach(function(k){var id={occX:"oOccX",forWho:"oFor",fromWho:"oFrom",songText:"songText"}[k];if(m[k]!=null)$(id).value=m[k]})}
+  if(m.bible!=null)setSel("oBible",m.bible); if(withStory&&m.bibleX!=null)$("oBibleX").value=m.bibleX; if(withStory&&m.srcText!=null)$("srcText").value=m.srcText;
+  if(withStory)["story","ref","goal","ctxMore","extra"].forEach(function(k){if(m[k]!=null)$(k).value=m[k]});
+  if(m.ctx!=null&&withStory)setSel("ctx",m.ctx);
+  setSel("oLang",LANG[m.lang]?m.lang:"fr");
+  if(m.a46!=null)$("a46").checked=m.a46; if(m.a710!=null)$("a710").checked=m.a710; if(m.a1113!=null)$("a1113").checked=m.a1113; if(m.aAd!=null)$("aAd").checked=m.aAd; if(m.adult)setSel("oAdult",m.adult); if(withStory&&m.adultX!=null)$("oAdultX").value=m.adultX; if(m.fiche!=null)$("mFiche").checked=m.fiche;
+  var s=m.suno||{};[["oVoice","voice"],["oTone","tone"],["oSing","sing"],["oSongType","songType"],["oColor","color"],["oDur","dur"],["oVerse","verse"],["oHumor","humor"],["oDyn","dyn"],["oDecor","decor"]].forEach(function(p){if(s[p[1]])setSel(p[0],s[p[1]])});
+  if(withStory&&s.more!=null)$("oMusicMore").value=s.more;
+  if(withStory)["voice","tone","sing","songType","color","dur","humor","dyn","decor"].forEach(function(k){if(s[k+"X"]!=null)$("o"+k.charAt(0).toUpperCase()+k.slice(1)+"X").value=s[k+"X"]});
+  var l=m.livret||{};if(l.illu)setSel("oIllu",l.illu);if(withStory&&l.illuX!=null)$("oIlluX").value=l.illuX;if(l.pages)$("oPages").value=l.pages;if(l.reader)setSel("oReader",l.reader);if(l.format)setSel("oFormat",l.format);
+  var v=m.video||{};if(v.ratio)setSel("oRatio",v.ratio);if(v.plans)$("oPlans").value=v.plans;if(v.text)setSel("oTextOn",v.text);if(withStory&&v.tool!=null)$("oAnimTool").value=v.tool;
+  syncCustom();
+  if(l.peda)[].forEach.call(document.querySelectorAll("#peda input"),function(x){x.checked=l.peda.indexOf(x.value)>=0});
+  syncMode();
+}
+function buildJobs(m){
+  var ages=[];if(m.a46)ages.push("4-6");if(m.a710)ages.push("7-10");if(m.a1113)ages.push("11-13");if(m.aAd)ages.push("adultes");
+  var J=[];
+  if(m.mode==="D"){J.push({key:"song",kind:"song",age:"",label:"Chant · "+(m.occ==="custom"?(m.occX||"occasion"):($("oOcc").selectedOptions[0]||{}).text||"occasion")+(m.forWho?" · "+m.forWho:"")});ages=[];}
+  ages.forEach(function(a){
+    if(m.mode==="A"||m.mode==="C")J.push({key:"suno-"+a,kind:"suno",age:a,label:"Audio Suno · "+(a==="adultes"?"adultes":a+" ans")});
+    if(m.mode==="B"||m.mode==="C")J.push({key:"livret-"+a,kind:"livret",age:a,label:"Livret · "+(a==="adultes"?"adultes":a+" ans")});
+    if(m.mode==="C")J.push({key:"video-"+a,kind:"video",age:a,dep:"suno-"+a,label:"Kit vidéo YouTube · "+(a==="adultes"?"adultes":a+" ans")});
+    if(m.fiche)J.push({key:"fiche-"+a,kind:"fiche",age:a,label:"Fiche moniteur Fullpack · "+(a==="adultes"?"adultes":a+" ans")});
+  });
+  var tag=(m.lang&&m.lang!=="fr")?" · "+L(m).fr:"";
+  J.forEach(function(j){if(j.kind!=="fiche")j.label+=tag;j.text="";j.status="wait";j.note="";j.prompt=""});
+  return J;
+}
+
+/* ---------- Affichage ---------- */
+var STL={wait:"en attente",run:"en cours…",done:"prêt",err:"à relancer",stop:"arrêté"};
+function drawJobs(){
+  var box=$("results");box.innerHTML="";
+  S.jobs.forEach(function(j,i){
+    var d=document.createElement("details");d.className="job";d.id="job-"+i;if(i===0)d.open=true;
+    d.innerHTML='<summary><span class="dot"></span><span>'+esc(j.label)+'</span><span class="status"></span></summary>'+
+      '<div class="body"><div class="manual" hidden><p class="manual-title">Sans génération automatique, en 3 gestes :</p>'+
+      '<ol class="manual-steps"><li>Copie le prompt ci-dessous.</li><li>Colle-le dans Claude ou ChatGPT et attends la réponse complète.</li><li>Colle la réponse dans la case du bas et clique « Afficher le résultat ».</li></ol>'+
+      '<div class="copybox"><div class="top"><span class="name">Prompt à copier</span><button type="button" data-act="mprompt">Copier le prompt</button></div><pre class="mpre"></pre></div>'+
+      '<div class="bar"><a class="btnlink" href="https://claude.ai/new" target="_blank" rel="noopener">Ouvrir Claude</a><a class="btnlink" href="https://chatgpt.com/" target="_blank" rel="noopener">Ouvrir ChatGPT</a></div>'+
+      '<textarea class="mpaste" aria-label="Réponse de l\'IA à coller" placeholder="Colle ici la réponse complète de l\'IA"></textarea><div class="bar"><button type="button" class="primary" data-act="mshow" style="width:auto">Afficher le résultat</button></div></div>'+
+      '<div class="out"></div><p class="muted note"></p><div class="bar">'+
+      '<button type="button" data-act="copy">Copier ce module</button>'+
+      '<button type="button" data-act="redo">Régénérer</button>'+
+      '<button type="button" data-act="more" hidden>Continuer le texte</button>'+
+      '<button type="button" data-act="prompt">Copier le prompt</button></div>'+
+      '<div class="refine"><textarea class="rtxt" aria-label="Modification à appliquer à ce module" placeholder="Affiner ce module : ex. « raccourcis l\'intro », « plus de suspense au plan 5 », « change le verset pour… »"></textarea>'+
+      '<div class="bar"><button type="button" data-act="refine">Affiner</button><button type="button" data-act="variant">Autre version</button><button type="button" data-act="editp">Voir / modifier le prompt</button></div>'+
+      '<textarea class="ptxt" hidden spellcheck="false" aria-label="Prompt envoyé à Claude"></textarea></div>'+
+      '<details class="vers"><summary>Versions de ce module</summary><div class="verlist"></div></details></div>';
+    box.appendChild(d);paint(i);
+  });
+  $("resultsSec").hidden=!S.jobs.length;syncBadges();
+}
+function paint(i){
+  var j=S.jobs[i],d=$("job-"+i);if(!d)return;
+  d.querySelector(".dot").className="dot "+(j.status==="run"?"run":j.status==="done"?"done":j.status==="err"?"err":"");
+  d.querySelector(".status").textContent=STL[j.status]||"";
+  var man=d.querySelector(".manual");man.hidden=(j.status==="done")||(j.status==="run")||(!!sample&&S.running);if(!man.hidden){var pre=d.querySelector(".mpre");if(!pre.textContent){j.prompt=j.prompt||promptFor(j);pre.textContent=j.prompt}}
+  d.querySelector(".out").innerHTML=j.text?renderText(j.text):(j.status==="run"?"<p class='muted'>Claude réfléchit… le texte arrive d'ici une minute environ.</p>":(j.dep&&j.status==="wait"?"<p class='muted'>Démarre dès que l'audio Suno du même âge est écrit.</p>":""));
+  d.querySelector(".note").textContent=j.note||"";
+  d.querySelector('[data-act="more"]').hidden=!j.truncated;
+  d.querySelector('[data-act="redo"]').disabled=S.running||!sample;
+  [].forEach.call(d.querySelectorAll('[data-act="refine"],[data-act="variant"]'),function(b){b.disabled=S.running||!sample||!j.text});
+  var vl=d.querySelector(".verlist"),vers=j.versions||[];d.querySelector(".vers").hidden=!vers.length;d.querySelector(".vers>summary").textContent="Versions de ce module ("+vers.length+")";
+  var vkey=vers.length+":"+((vers[vers.length-1]||{}).at||"");
+  if(vl&&vl.dataset.n!==vkey){vl.dataset.n=vkey;vl.innerHTML="";vers.forEach(function(v,vi){var el=document.createElement("div");el.className="ver";el.innerHTML='<div class="vh"><strong></strong><span class="when"></span><button type="button" data-rv="'+vi+'" style="margin-left:auto;min-height:36px;padding:6px 12px">Revenir à cette version</button></div>';el.querySelector("strong").textContent=(vi+1)+". "+(ACTION_LABEL[v.action]||v.action);el.querySelector(".when").textContent=fmtDate(v.at)+" · "+(v.text||"").length+" car.";vl.appendChild(el)})}
+}
+/* Pendant le flux, on ne redessine que le texte, et au plus 4 fois par seconde :
+   moins de travail, et la sélection / le bouton « Copier » ne sautent plus à chaque mot. */
+var soonT={};
+function paintSoon(i){
+  if(soonT[i])return;
+  soonT[i]=setTimeout(function(){soonT[i]=0;var d=$("job-"+i),j=S.jobs[i];if(d&&j&&j.text)d.querySelector(".out").innerHTML=renderText(j.text)},250);
+}
+
+/* ---------- Appels à Claude ---------- */
+function runJob(i,opts){
+  var j=S.jobs[i];opts=opts||{};
+  if(j.dep){var d=depOf(j);if(!d||!d.text||d.status!=="done"){j.status="err";j.note="Il faut d'abord un audio Suno terminé pour cet âge : régénère-le, puis relance ce module.";paint(i);return Promise.resolve()}}
+  var base="",input,P=j.prompt||promptFor(j),action="generate",promptUsed=P,prev=j.text||"";
+  /* Les affinages ne stockent que leur consigne : le prompt initial est déjà gardé par le module. */
+  if(opts.more&&j.text){ action="more";promptUsed="Continuer le texte (prompt initial inchangé)"; }
+  else if(opts.refine&&j.text){ action="refine";promptUsed="Affiner : "+opts.refine+" (prompt initial inchangé)"; }
+  else if(opts.variant&&j.text){ action="variant";promptUsed="Autre version (prompt initial inchangé)"; }
+  else if(opts.prompt){ action="edited";promptUsed=opts.prompt; }
+  if(opts.more&&j.text){ base=j.text; input=[{role:"user",content:P},{role:"assistant",content:j.text},{role:"user",content:"Continue exactement là où tu t'es arrêté, sans rien répéter ni commenter."}]; }
+  else if(opts.refine&&j.text){ input=[{role:"user",content:P},{role:"assistant",content:j.text},{role:"user",content:"Modification demandée : "+opts.refine+"\n\nReprends le livrable COMPLET en appliquant cette modification. Même format, mêmes marqueurs <<< >>>, aucun commentaire."}]; j.text=""; }
+  else if(opts.variant&&j.text){ input=P+"\n\nVARIANTE : propose une approche nettement différente de la version précédente (angle d'entrée, structure, images, refrain), tout en restant dans le cadre. Version précédente, à ne pas répéter :\n"+j.text.slice(0,3500); j.text=""; }
+  else { j.prompt=opts.prompt||promptFor(j); input=j.prompt; j.text=""; }
+  j.status="run";j.note="";j.truncated=false;paint(i);
+  return sample(input,{signal:S.ctl.signal,cache:opts.fresh?false:true,
+    onText:function(u){j.text=base+u.text;paintSoon(i)}})
+  .then(function(r){ j.text=base+r.text; j.status="done"; j.truncated=!!r.truncated;
+    if(r.truncated) j.note="Texte coupé par la limite de longueur : utilise « Continuer le texte ».";
+    recordVersion(j,action,promptUsed);paint(i); refreshDependents(j.key); })
+  .catch(function(e){
+    var got=!!(e&&e.text&&e.code!=="refused");
+    if(got) j.text=base+e.text;
+    else j.text=base||prev;   /* rien reçu : on garde la version précédente */
+    if(e&&e.code==="cancelled"){j.status="stop";j.note="Arrêté."}
+    else{j.status="err";j.note=errNote(e)+(!got&&prev?" La version précédente est conservée.":"")}
+    paint(i);
+    if(e&&/^(not_granted|bad_key|rate_limited|session_expired|model_not_found)$/.test(e.code)) throw e; /* inutile d'enchaîner les autres modules */
+  });
+}
+function runAll(indices,opts){
+  S.running=true;S.ctl=new AbortController();
+  $("go").disabled=true;$("stop").hidden=false;$("msg").textContent="Production en cours. Tu peux lire les modules au fur et à mesure.";
+  S.jobs.forEach(function(_,i){paint(i)});
+  var halt=false;
+  function phase(list){
+    var queue=list.slice();
+    function worker(){
+      if(halt||!queue.length||S.ctl.signal.aborted) return Promise.resolve();
+      var i=queue.shift();
+      return runJob(i,opts).then(worker,function(){halt=true});
+    }
+    return Promise.all([worker(),worker()]);
+  }
+  var p1=indices.filter(function(i){return !S.jobs[i].dep}), p2=indices.filter(function(i){return S.jobs[i].dep});
+  return phase(p1).then(function(){return phase(p2)}).then(function(){
+    S.running=false;$("go").disabled=false;$("stop").hidden=true;
+    /* Modules jamais lancés (arrêt manuel ou limite atteinte) : on ne les laisse pas « en attente » pour toujours. */
+    indices.forEach(function(i){var j=S.jobs[i];if(j.status==="wait"){j.status="stop";j.note="Non lancé : production interrompue. « Régénérer » pour le produire."}});
+    var ok=S.jobs.filter(function(j){return j.status==="done"}).length;
+    $("msg").textContent=ok+" module(s) prêt(s) sur "+S.jobs.length+".";
+    $("dl").hidden=!ok;$("copyAll").hidden=!ok;
+    S.jobs.forEach(function(_,i){paint(i)});
+    if(ok) savePack();
+  });
+}
+function allMarkdown(){
+  var m=S.meta||{};
+  return "# "+(m.story||"Pack")+(m.ref?" ("+m.ref+")":"")+"\n\n"+S.jobs.filter(function(j){return j.text}).map(function(j){
+    return "---\n\n# "+j.label+"\n\n"+j.text.replace(/<<<\s*FIN\s*>>>/g,"").replace(/<<<\s*([^>]+?)\s*>>>/g,"\n**[$1 — à copier]**\n");
+  }).join("\n\n");
+}
+
+/* ---------- Idées d'histoires ---------- */
+$("ideasBtn").onclick=function(){
+  var btn=this,box=$("ideas");
+  if(!sample){$("msg").textContent="Suggestions indisponibles sans génération directe : ajoute ta clé API dans l'onglet Infos.";return}
+  var m=readForm(),known=LIB.map(function(p){return p.title}).filter(Boolean).slice(0,20);
+  btn.disabled=true;box.innerHTML="<p class='muted'>Recherche d'idées…</p>";
+  var ag=[m.a46?"4-6 ans":"",m.a710?"7-10 ans":"",m.a1113?"11-13 ans":"",m.aAd?"adultes":""].filter(Boolean).join(", ")||"4 à 13 ans";
+  sample.json(["Propose 5 histoires de la Bible adaptées à un public : "+ag+(m.aAd&&!m.a46&&!m.a710&&!m.a1113?"":", racontables sans faire peur")+".",
+    (m.ctx||m.ctxMore)?"Elles doivent bien servir ce moment de l'année : "+[m.ctx,m.ctxMore].filter(Boolean).join(" — ")+".":"Varie Ancien et Nouveau Testament.",
+    m.goal?"Objectif visé : "+m.goal:"",
+    known.length?"Évite celles déjà faites : "+known.join(" ; ")+".":"",
+    'Réponds uniquement par un tableau JSON de 5 objets {"titre": string, "reference": string, "pourquoi": string (une phrase courte)}. Références exactes (livre et chapitre).'].filter(Boolean).join("\n"),
+    {cache:false})
+  .then(function(arr){
+    box.innerHTML="";
+    (Array.isArray(arr)?arr:[]).slice(0,5).forEach(function(it){
+      var b=document.createElement("button");b.type="button";
+      var t=document.createElement("strong");t.textContent=String(it.titre||"")+" · "+String(it.reference||"");
+      var s=document.createElement("small");s.textContent=String(it.pourquoi||"");
+      b.appendChild(t);b.appendChild(s);
+      b.onclick=function(){$("story").value=String(it.titre||"");$("ref").value=String(it.reference||"");box.innerHTML="";$("goal").focus()};
+      box.appendChild(b);
+    });
+    if(!box.children.length)box.innerHTML="<p class='muted'>Aucune idée reçue. Réessaie.</p>";
+  },function(e){box.innerHTML="";if(!e||e.code!=="cancelled")$("msg").textContent=errCopy(e&&e.code)})
+  .then(function(){btn.disabled=false});
+};
+
+/* ---------- Bibliothèque ---------- */
+function packData(){return {title:S.meta.story,ref:S.meta.ref||"",mode:S.meta.mode||"A",createdAt:S.createdAt,updatedAt:new Date().toISOString(),meta:S.meta,
+  jobs:S.jobs.map(function(j){return {key:j.key,kind:j.kind||"",age:j.age||"",dep:j.dep||"",label:j.label,prompt:j.prompt||"",text:j.text,status:j.status==="done"?"done":(j.text?"stop":"wait"),versions:j.versions||[]}})};}
+function lsRead(){try{return JSON.parse(localStorage.getItem(LS_KEY)||"[]")}catch(e){return []}}
+/* Chaque pack est sérialisé une seule fois ; on garde les plus récents jusqu'à un budget (~2 M de caractères,
+   sous le quota habituel du navigateur, 5 Mo comptés en UTF-16). Si le navigateur refuse quand même, on retire le plus ancien et on réessaie. */
+function lsWrite(all){
+  var kept=[],size=2,total=Math.min(all.length,100);
+  for(var k=0;k<total;k++){
+    var str=JSON.stringify(all[k]);
+    if(kept.length&&size+str.length+1>2000000)break; /* ~2 M caractères : sous le quota de 5 Mo compté en UTF-16 (Chrome, Safari) */
+    kept.push(str);size+=str.length+1;
+  }
+  while(kept.length){
+    try{
+      localStorage.setItem(LS_KEY,"["+kept.join(",")+"]");
+      if(kept.length<total)$("msg").textContent="Stockage local presque plein : les packs les plus anciens ont été retirés. Exporte l'historique pour les garder.";
+      return;
+    }catch(e){kept.pop()}
+  }
+  $("msg").textContent="Stockage local plein : exporte l'historique puis supprime d'anciens packs.";
+}
+function savePack(){
+  var data=packData();
+  if(db){
+    var ref=S.packId?db.collection("packs").doc(S.packId):db.collection("packs").doc();
+    S.packId=ref.id;
+    return ref.set(data).then(loadLib,function(){ $("msg").textContent+=" Sauvegarde en ligne impossible, pack gardé sur cet appareil."; lsSave(data); });
+  }
+  lsSave(data);
+}
+function lsSave(data){ if(!S.packId)S.packId="l"+Date.now(); data.id=S.packId; var a=lsRead().filter(function(p){return p.id!==data.id}); a.unshift(data); lsWrite(a); loadLib(); }
+var LIB=[];
+function loadLib(){
+  var local=lsRead().map(function(p){p._local=true;return p});
+  if(!db){LIB=local;return drawLib()}
+  db.collection("packs").get().then(function(s){
+    LIB=s.docs.map(function(d){var p=d.data()||{};p.id=d.id;return p}).concat(local);
+    drawLib();
+  },function(){LIB=local;drawLib()});
+}
+var MODE_LABEL={A:"Audio Suno",B:"Livret",C:"Vidéo YouTube",D:"Chant pour quelqu'un"};
+function optText(selId,val){var sel=$(selId);if(!sel||val==null)return val||"";var o=sel.querySelector('option[value="'+String(val).replace(/"/g,'\\"')+'"]');return o?o.textContent:String(val)}
+function settingsOf(m){
+  if(!m)return [];var r=[];
+  var modeL=MODE_LABEL[m.mode||"A"]||"";r.push(["Parcours",modeL]);
+  if(m.mode==="D"){r.push(["Occasion",m.occ==="custom"?(m.occX||""):optText("oOcc",m.occ)]);if(m.forWho)r.push(["Pour",m.forWho]);if(m.fromWho)r.push(["De la part de",m.fromWho]);r.push(["Public",optText("oPublic",m.pub)]);r.push(["Foi",optText("oFaith",m.faith)]);r.push(["Point de départ",optText("oStart",m.start)]);if(m.songText)r.push(["Texte fourni",m.songText.slice(0,300)+(m.songText.length>300?"…":"")]);}
+  else{if(m.ref)r.push(["Référence",m.ref]);if(m.goal)r.push(["Objectif",m.goal]);if(m.ctx||m.ctxMore)r.push(["Place dans l'année",[m.ctx,m.ctxMore].filter(Boolean).join(" — ")]);
+    r.push(["Public",[m.a46?"4-6":"",m.a710?"7-10":"",m.a1113?"11-13":"",m.aAd?"adultes ("+(m.adult==="custom"?(m.adultX||""):optText("oAdult",m.adult))+")":""].filter(Boolean).join(", ")]);if(m.srcText)r.push(["Texte de départ",m.srcText.slice(0,300)+(m.srcText.length>300?"…":"")]);if(m.bible)r.push(["Version biblique",m.bible==="custom"?(m.bibleX||""):m.bible]);}
+  r.push(["Langue",optText("oLang",m.lang||"fr")]);
+  var o=m.suno||{};if(m.mode!=="B"){r.push(["Voix",o.voice==="custom"?(o.voiceX||""):optText("oVoice",o.voice)]);r.push(["Ton",o.tone==="custom"?(o.toneX||""):optText("oTone",o.tone)]);r.push(["Parlé / chanté",o.sing==="custom"?(o.singX||""):optText("oSing",o.sing)]);
+    if(SUNG_MODES.indexOf(o.sing)>=0)r.push(["Type de chanson",o.songType==="custom"?(o.songTypeX||""):optText("oSongType",o.songType)]);r.push(["Couleur",o.color==="custom"?(o.colorX||""):optText("oColor",o.color)]);if(m.mode!=="D")r.push(["Versets",optText("oVerse",o.verse)]);r.push(["Humour",o.humor==="custom"?(o.humorX||""):optText("oHumor",o.humor||"none")]);r.push(["La musique suit",o.dyn==="custom"?(o.dynX||""):optText("oDyn",o.dyn||"emotions")]);if(m.mode!=="D")r.push(["Décor sonore",o.decor==="custom"?(o.decorX||""):optText("oDecor",o.decor||"auto")]);r.push(["Durée",o.dur==="custom"?(o.durX||""):optText("oDur",o.dur)]);if(o.more)r.push(["Précision",o.more]);}
+  var l=m.livret||{};if(m.mode==="B"||m.mode==="C"){r.push(["Illustrations",l.illu==="custom"?(l.illuX||""):optText("oIllu",l.illu)]);r.push(["Pages",l.pages||""]);r.push(["Lecture",optText("oReader",l.reader)]);r.push(["Format",l.format||""]);if(l.peda&&l.peda.length)r.push(["Pédagogie",l.peda.join(", ")]);}
+  var v=m.video||{};if(m.mode==="C"){r.push(["Format vidéo",v.ratio||""]);r.push(["Plans",v.plans||""]);r.push(["Texte à l'écran",optText("oTextOn",v.text)]);if(v.tool)r.push(["Outil d'animation",v.tool]);}
+  if(m.fiche)r.push(["Fiche moniteur","oui"]);if(m.extra)r.push(["Consignes",m.extra]);
+  return r.filter(function(x){return x[1]});
+}
+function packMatches(p,q){
+  if(!q)return true;q=q.toLowerCase();
+  var hay=[p.title,p.ref,MODE_LABEL[p.mode||"A"]].concat((p.jobs||[]).map(function(j){return j.label+" "+(j.text||"")})).join(" ").toLowerCase();
+  return hay.indexOf(q)>=0;
+}
+function verBlock(j,vi,v,pi){
+  var d=document.createElement("div");d.className="ver";
+  d.innerHTML='<div class="vh"><strong></strong><span class="when"></span><span class="muted"></span>'+
+    '<button type="button" data-vp="1" style="margin-left:auto;min-height:36px;padding:6px 12px">Prompt</button><button type="button" data-vt="1" style="min-height:36px;padding:6px 12px">Texte</button><button type="button" data-vr="1" style="min-height:36px;padding:6px 12px">Restaurer</button></div>'+
+    '<pre class="vp" hidden></pre><pre class="vt" hidden></pre>';
+  d.querySelector("strong").textContent=(vi+1)+". "+(ACTION_LABEL[v.action]||v.action||"Version");
+  d.querySelector(".when").textContent=fmtDate(v.at);
+  d.querySelector(".muted").textContent=(v.text||"").length+" car.";
+  d.querySelector(".vp").textContent=v.prompt||"(prompt non conservé)";
+  d.querySelector(".vt").textContent=v.text||"";
+  d.querySelector("[data-vp]").onclick=function(){var e=d.querySelector(".vp");e.hidden=!e.hidden};
+  d.querySelector("[data-vt]").onclick=function(){var e=d.querySelector(".vt");e.hidden=!e.hidden};
+  d.querySelector("[data-vr]").onclick=function(){restoreVersion(pi,j.key,vi)};
+  return d;
+}
+function restoreVersion(pi,jobKey,vi){
+  var p=LIB[pi];if(!p||S.running)return;
+  openPack(p);
+  var j=null,idx=-1;S.jobs.forEach(function(x,k){if(x.key===jobKey){j=x;idx=k}});
+  if(!j)return;var v=(j.versions||[])[vi];if(!v)return;
+  j.text=v.text;j.prompt=v.prompt&&v.action==="generate"?v.prompt:j.prompt;j.status="done";recordVersion(j,"restore",v.prompt);paint(idx);savePack();
+  $("msg").textContent="Version "+(vi+1)+" restaurée pour « "+j.label+" ».";
+}
+function drawLib(){
+  LIB.sort(function(a,b){return String(b.updatedAt||b.createdAt||"").localeCompare(String(a.updatedAt||a.createdAt||""))});
+  var q=($("libSearch").value||"").trim();
+  var shown=LIB.filter(function(p){return packMatches(p,q)});
+  $("libInfo").textContent=LIB.length?((db?"Historique gardé avec cette page, sur tous tes appareils. ":"Historique gardé sur cet appareil uniquement. ")+LIB.length+" pack(s)"+(q?", "+shown.length+" affiché(s)":"")+". Chaque module conserve ses versions : prompt envoyé, texte obtenu, date."):"Aucun pack pour l'instant. Le premier se range ici tout seul, avec son prompt et son texte.";
+  var ul=$("lib");ul.innerHTML="";
+  shown.forEach(function(p){
+    var i=LIB.indexOf(p);
+    var li=document.createElement("li");
+    var d=fmtDate(p.updatedAt||p.createdAt);
+    li.innerHTML='<div class="head"><div class="t"><strong></strong><small></small></div><button type="button" data-open="'+i+'">Ouvrir</button><button type="button" data-det="'+i+'">Détails</button><button type="button" data-del="'+i+'" aria-label="Supprimer ce pack">Suppr.</button></div><div class="det"></div>';
+    li.querySelector("strong").textContent=p.title||"Sans titre";
+    var nv=(p.jobs||[]).reduce(function(n,j){return n+((j.versions||[]).length||(j.text?1:0))},0);
+    li.querySelector("small").textContent=[MODE_LABEL[p.mode||"A"],p.ref,d,(p.jobs||[]).length+" module(s)",nv+" version(s)"].filter(Boolean).join(" · ");
+    ul.appendChild(li);
+  });
+  syncBadges();
+}
+function drawDetails(li,p,pi){
+  var det=li.querySelector(".det");if(det.dataset.built)return;det.dataset.built="1";
+  var dl=document.createElement("dl");dl.className="kv";
+  settingsOf(p.meta).forEach(function(kv){var dt=document.createElement("dt");dt.textContent=kv[0];var dd=document.createElement("dd");dd.textContent=kv[1];dl.appendChild(dt);dl.appendChild(dd)});
+  det.appendChild(dl);
+  (p.jobs||[]).forEach(function(j){
+    var h=document.createElement("h4");h.textContent=j.label+" — "+((j.versions||[]).length||(j.text?1:0))+" version(s)";det.appendChild(h);
+    var vers=(j.versions&&j.versions.length)?j.versions:(j.text?[{at:p.updatedAt||p.createdAt,action:"generate",prompt:j.prompt,text:j.text}]:[]);
+    if(!vers.length){var e=document.createElement("p");e.className="muted";e.textContent="Aucun texte produit pour ce module.";det.appendChild(e)}
+    vers.forEach(function(v,vi){det.appendChild(verBlock(j,vi,v,pi))});
+  });
+}
+function allHistoryMarkdown(){
+  return LIB.map(function(p){
+    var out=["# "+(p.title||"Sans titre")+" — "+MODE_LABEL[p.mode||"A"]+" — "+fmtDate(p.updatedAt||p.createdAt),""];
+    settingsOf(p.meta).forEach(function(kv){out.push("- "+kv[0]+" : "+kv[1])});out.push("");
+    (p.jobs||[]).forEach(function(j){out.push("## "+j.label);var vers=(j.versions&&j.versions.length)?j.versions:(j.text?[{at:p.updatedAt,action:"generate",prompt:j.prompt,text:j.text}]:[]);
+      vers.forEach(function(v,vi){out.push("### Version "+(vi+1)+" — "+(ACTION_LABEL[v.action]||v.action)+" — "+fmtDate(v.at),"","#### Prompt","```",v.prompt||"","```","","#### Texte","",(v.text||"").replace(/<<<\s*FIN\s*>>>/g,"").replace(/<<<\s*([^>]+?)\s*>>>/g,"\n**[$1]**\n"),"")});
+    });
+    return out.join("\n");
+  }).join("\n\n---\n\n");
+}
+function openPack(p){
+  if(S.running)return;
+  S.meta=p.meta||{story:p.title,ref:p.ref};S.packId=p.id;S.createdAt=p.createdAt;
+  if(!S.meta.suno)S.meta.suno=readForm().suno; if(!S.meta.livret)S.meta.livret=readForm().livret;
+  S.jobs=(p.jobs||[]).map(function(j){return {key:j.key,kind:j.kind||"",age:j.age||"",dep:j.dep||"",label:j.label,prompt:j.prompt||"",text:j.text||"",status:j.status||"done",note:"",versions:(j.versions||[]).slice()}});
+  setForm(S.meta,true);
+  $("resultsTitle").textContent=S.meta.story||"Résultat";
+  drawJobs();$("copyAll").hidden=false;$("dl").hidden=false;
+  showTab("results");
+}
+function delPack(p){
+  if(!confirm("Supprimer « "+(p.title||"ce pack")+" » ?"))return;
+  if(p._local||!db){lsWrite(lsRead().filter(function(x){return x.id!==p.id}));loadLib()}
+  else db.collection("packs").doc(p.id).delete().then(loadLib,loadLib);
+}
+
+/* ---------- Événements ---------- */
+[].forEach.call(document.querySelectorAll('input[name="mode"]'),function(r){r.onchange=syncMode});
+[].forEach.call(document.querySelectorAll("select"),function(sel){sel.addEventListener("change",syncCustom)});
+$("aAd").addEventListener("change",syncCustom);
+$("go").onclick=function(){
+  var m=readForm();
+  if(m.mode==="D"){ if(!m.songText&&m.start!=="help"){$("msg").textContent="Colle ou dicte ton texte dans « Ton texte ou tes idées ».";$("songText").focus();return}
+    if(!m.songText&&!m.forWho){$("msg").textContent="Dis au moins pour qui c'est, ou donne quelques infos.";$("oFor").focus();return}
+    m.story=(($("oOcc").selectedOptions[0]||{}).text||"Chant")+(m.forWho?" pour "+m.forWho:""); }
+  else{ if(!m.story){$("msg").textContent="Indique d'abord l'histoire.";$("story").focus();return}
+  if(!m.a46&&!m.a710&&!m.a1113&&!m.aAd){$("msg").textContent="Coche au moins un public.";return} }
+  var planned=buildJobs(m);
+  /* Avec sa propre clé API, chaque module est une facture : on demande confirmation au-delà de 4 appels. */
+  if(sample&&sample.isApiKey&&planned.length>4&&!confirm(planned.length+" modules vont être générés avec ta clé API (chacun est facturé sur ton compte). Continuer ?"))return;
+  try{localStorage.setItem(LS_FORM,JSON.stringify(m))}catch(e){}
+  S.meta=m;S.packId=null;S.createdAt=new Date().toISOString();S.jobs=planned;
+  $("resultsTitle").textContent=m.story;drawJobs();
+  if(!sample){$("msg").textContent=(window.claude&&window.claude.use&&$("noSample").hidden)?"Connexion à Claude en cours… la production démarrera toute seule. Sinon, suis les 3 gestes dans chaque module.":"Ici, la génération passe par Claude ou ChatGPT : suis les 3 gestes dans chaque module.";showTab("results");return}
+  runAll(S.jobs.map(function(_,i){return i}));
+  showTab("results");
+};
+$("stop").onclick=function(){if(S.ctl)S.ctl.abort()};
+$("stop2").onclick=function(){$("stop").click()};$("copyAll2").onclick=function(){copy(allMarkdown(),this)};$("dl2").onclick=function(){$("dl").click()};$("backBtn").onclick=function(){showTab("atelier")};
+(function(){var mo=new MutationObserver(function(){$("msg2").textContent=$("msg").textContent;$("stop2").hidden=$("stop").hidden;$("copyAll2").hidden=$("copyAll").hidden;$("dl2").hidden=$("dl").hidden});
+ mo.observe($("msg"),{childList:true,characterData:true,subtree:true});[$("stop"),$("copyAll"),$("dl")].forEach(function(el){mo.observe(el,{attributes:true,attributeFilter:["hidden"]})});})();
+$("copyAll").onclick=function(){copy(allMarkdown(),this)};
+/* Enregistre un texte en .md : API de la plateforme si présente, sinon téléchargement navigateur, sinon presse-papiers. */
+function saveFile(filename,text,okMsg,btn){
+  if(downloads){
+    downloads.save({filename:filename,data:text}).then(function(){$("msg").textContent=okMsg},function(e){
+      if(e&&e.code==="declined")return;
+      copy(text,btn);
+      $("msg").textContent="Téléchargement impossible ici : le texte a été copié dans le presse-papiers.";
+    });
+    return;
+  }
+  try{
+    var u=URL.createObjectURL(new Blob([text],{type:"text/markdown"})),a=document.createElement("a");
+    a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(u)},2000);
+    $("msg").textContent=okMsg;
+  }catch(e){copy(text,btn)}
+}
+function slug(s){return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,50)}
+$("dl").onclick=function(){saveFile((slug(S.meta&&S.meta.story)||"pack")+".md",allMarkdown(),"Fichier enregistré.",this)};
+$("results").addEventListener("click",function(ev){
+  var b=ev.target.closest("button");if(!b)return;
+  if(b.dataset.copy){copy(b.closest(".copybox").querySelector("pre").textContent,b);return}
+  var d=b.closest("details.job");if(!d)return;var i=+d.id.split("-")[1],j=S.jobs[i];
+  if(b.dataset.rv!=null){var vv=(j.versions||[])[+b.dataset.rv];if(vv){j.text=vv.text;j.status="done";recordVersion(j,"restore",vv.prompt);paint(i);savePack();$("msg").textContent="Version "+(+b.dataset.rv+1)+" rétablie."}return}
+  if(b.dataset.act==="copy")copy(j.text.replace(/<<<[^>]*>>>/g,""),b);
+  if(b.dataset.act==="mprompt"){j.prompt=j.prompt||promptFor(j);copy(j.prompt,b)}
+  if(b.dataset.act==="mshow"){var tx=d.querySelector(".mpaste").value.trim();if(!tx){$("msg").textContent="Colle d'abord la réponse de l'IA dans la case.";return}j.text=tx;j.status="done";j.note="";recordVersion(j,"manual",j.prompt||promptFor(j));paint(i);refreshDependents(j.key);S.jobs.some(function(x){return x.status==="done"})&&($("copyAll").hidden=false,$("dl").hidden=false);savePack();$("msg").textContent="Résultat affiché et rangé dans l'historique."}
+  if(b.dataset.act==="prompt")copy(j.prompt||promptFor(j),b);
+  if(b.dataset.act==="redo"&&sample&&!S.running){var pt=d.querySelector(".ptxt");runAll([i],{fresh:true,prompt:(!pt.hidden&&pt.value.trim())?pt.value.trim():null})}
+  if(b.dataset.act==="refine"&&sample&&!S.running){var r=d.querySelector(".rtxt").value.trim();if(!r){$("msg").textContent="Écris d'abord la modification souhaitée.";return}runAll([i],{refine:r,fresh:true});d.querySelector(".rtxt").value=""}
+  if(b.dataset.act==="variant"&&sample&&!S.running)runAll([i],{variant:true,fresh:true});
+  if(b.dataset.act==="editp"){var pt2=d.querySelector(".ptxt");if(pt2.hidden){pt2.value=j.prompt||promptFor(j);pt2.hidden=false;b.textContent="Masquer le prompt"}else{var nv=pt2.value.trim();if(nv&&nv!==(j.prompt||promptFor(j))){j.prompt=nv;var mp=d.querySelector(".mpre");if(mp)mp.textContent=nv}pt2.hidden=true;b.textContent="Voir / modifier le prompt"}}
+  if(b.dataset.act==="more"&&sample&&!S.running)runAll([i],{more:true,fresh:true});
+});
+$("lib").addEventListener("click",function(ev){
+  var b=ev.target.closest("button");if(!b)return;
+  if(b.dataset.open!=null)openPack(LIB[+b.dataset.open]);
+  if(b.dataset.del!=null)delPack(LIB[+b.dataset.del]);
+  if(b.dataset.det!=null){var li=b.closest("li"),pi=+b.dataset.det;drawDetails(li,LIB[pi],pi);li.classList.toggle("open");b.textContent=li.classList.contains("open")?"Replier":"Détails"}
+});
+var searchT;
+$("libSearch").addEventListener("input",function(){clearTimeout(searchT);searchT=setTimeout(drawLib,150)});
+$("libExport").onclick=function(){
+  var md=allHistoryMarkdown();if(!md){$("msg").textContent="Historique vide.";return}
+  saveFile("atelier-historique.md",md,"Historique enregistré.",this);
+};
+/* Évite de perdre une production en cours (jusqu'à plusieurs minutes de génération payante) sur un rechargement ou une fermeture accidentels. */
+window.addEventListener("beforeunload",function(ev){if(S.running){ev.preventDefault();ev.returnValue=""}});
+
+/* ---------- Onglets ---------- */
+function showTab(name,keepScroll){
+  [].forEach.call(document.querySelectorAll(".tabs [data-tab]"),function(b){var on=b.dataset.tab===name;b.setAttribute("aria-selected",on?"true":"false");b.tabIndex=on?0:-1});
+  ["atelier","results","lib","info"].forEach(function(n){$("tab-"+n).hidden=(n!==name)});
+  if(keepScroll)return;
+  var calm=window.matchMedia&&matchMedia("(prefers-reduced-motion:reduce)").matches;
+  try{window.scrollTo({top:0,behavior:calm?"auto":"smooth"})}catch(e){}
+}
+$("tab-results").hidden=true;
+(function(){
+  var tabs=[].slice.call(document.querySelectorAll(".tabs [data-tab]"));
+  tabs.forEach(function(b,k){
+    b.onclick=function(){showTab(b.dataset.tab)};
+    /* Clavier : flèches / Début / Fin déplacent et activent l'onglet (motif WAI-ARIA « tabs »). */
+    b.addEventListener("keydown",function(ev){
+      var n=ev.key==="ArrowRight"?k+1:ev.key==="ArrowLeft"?k-1:ev.key==="Home"?0:ev.key==="End"?tabs.length-1:null;
+      if(n===null)return;ev.preventDefault();
+      var t=tabs[(n+tabs.length)%tabs.length];showTab(t.dataset.tab,true);t.focus();
+    });
+  });
+})();
+function syncBadges(){var n=S.jobs.length,b=$("badgeRes");b.hidden=!n;b.textContent=n;$("resEmpty").hidden=!!n;var l=$("badgeLib");l.hidden=!LIB.length;l.textContent=LIB.length;}
+
+/* ---------- Génération directe par clé API ---------- */
+var LS_API="atelier_histoires_api_v1";
+var API_DEFAULT_MODEL={anthropic:"claude-sonnet-5-5",openai:"gpt-4.1"};
+/* Clé : localStorage si « mémoriser » est coché, sinon sessionStorage (effacée à la fermeture de l'onglet).
+   Chaque stockage est essayé séparément : l'un peut être bloqué (navigation privée) sans empêcher l'autre. */
+function store(kind,fn){try{return fn(window[kind])}catch(e){return null}}
+function apiRead(){
+  var raw=store("localStorage",function(st){return st.getItem(LS_API)})||store("sessionStorage",function(st){return st.getItem(LS_API)});
+  try{return JSON.parse(raw||"null")}catch(e){return null}
+}
+function apiWrite(c,persist){
+  ["localStorage","sessionStorage"].forEach(function(k){store(k,function(st){st.removeItem(LS_API)})});
+  if(!c)return;
+  var json=JSON.stringify(c);
+  if(persist===false||store("localStorage",function(st){st.setItem(LS_API,json);return true})===null)
+    store("sessionStorage",function(st){st.setItem(LS_API,json)});
+}
+function toMessages(input){
+  var arr=typeof input==="string"?[{role:"user",content:input}]:input.slice();
+  var out=[];arr.forEach(function(t){var last=out[out.length-1];if(last&&last.role===t.role)last.content+="\n\n"+t.content;else out.push({role:t.role,content:t.content})});
+  return out;
+}
+function sseLines(res,onData,signal){
+  var reader=res.body.getReader(),dec=new TextDecoder(),buf="";
+  function pump(){return reader.read().then(function(r){
+    if(r.done){if(buf.trim())onData(buf);return}
+    buf+=dec.decode(r.value,{stream:true});var parts=buf.split("\n");buf=parts.pop();
+    parts.forEach(function(line){if(line.indexOf("data:")===0)onData(line.slice(5).trim())});
+    if(signal&&signal.aborted){reader.cancel();return}
+    return pump();
+  })}
+  return pump();
+}
+function makeApiSampler(cfg){
+  var RETRY_MS=[1500,4500]; /* deux nouvelles tentatives sur 429 / 5xx, seulement tant qu'aucun texte n'est arrivé */
+  function pause(ms,signal){
+    return new Promise(function(resolve,reject){
+      var t=setTimeout(resolve,ms);
+      if(signal)signal.addEventListener("abort",function(){clearTimeout(t);reject({code:"cancelled",message:"annulé",text:""})},{once:true});
+    });
+  }
+  function httpError(status,raw){
+    var d=raw;try{var j=JSON.parse(raw);d=(j.error&&(j.error.message||j.error))||raw}catch(e){}
+    var code=status===401||status===403?"bad_key":status===429?"rate_limited":status===404?"model_not_found":status===400?"invalid_request":status===529?"overloaded":"upstream_error";
+    return {code:code,message:"HTTP "+status+" "+String(d).slice(0,300)};
+  }
+  function call(input,opts){
+    opts=opts||{};var msgs=toMessages(input),text="",url,headers,body;
+    var model=cfg.model||API_DEFAULT_MODEL[cfg.provider];
+    if(cfg.provider==="anthropic"){
+      url="https://api.anthropic.com/v1/messages";
+      headers={"content-type":"application/json","x-api-key":cfg.key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
+      body={model:model,max_tokens:8000,stream:true,messages:msgs};
+    }else{
+      url="https://api.openai.com/v1/chat/completions";
+      headers={"content-type":"application/json","authorization":"Bearer "+cfg.key};
+      body={model:model,stream:true,messages:msgs};
+    }
+    var payload=JSON.stringify(body);
+    function attempt(n){
+      return fetch(url,{method:"POST",headers:headers,body:payload,signal:opts.signal}).then(function(res){
+        if(!res.ok){return res.text().then(function(t){
+          var transient=(res.status===429&&!/insufficient_quota|credit balance|billing/i.test(t))||res.status===529||res.status>=500;
+          if(transient&&n<RETRY_MS.length)return pause(RETRY_MS[n],opts.signal).then(function(){return attempt(n+1)});
+          throw httpError(res.status,t);
+        })}
+        var truncated=false;
+        return sseLines(res,function(d){
+          if(d==="[DONE]")return;var j;try{j=JSON.parse(d)}catch(e){return}
+          var delta="";
+          if(cfg.provider==="anthropic"){ if(j.type==="content_block_delta"&&j.delta&&j.delta.text)delta=j.delta.text; if(j.type==="message_delta"&&j.delta&&j.delta.stop_reason==="max_tokens")truncated=true; if(j.type==="error")throw {code:j.error&&j.error.type==="overloaded_error"?"overloaded":"upstream_error",message:(j.error&&j.error.message)||"erreur"}; }
+          else{ var c=j.choices&&j.choices[0]; if(c&&c.delta&&c.delta.content)delta=c.delta.content; if(c&&c.finish_reason==="length")truncated=true; }
+          if(delta){text+=delta;if(opts.onText)opts.onText({text:text,delta:delta})}
+        },opts.signal).then(function(){
+          if(opts.signal&&opts.signal.aborted)throw {code:"cancelled",message:"annulé",text:text};
+          if(!text.trim())throw {code:"empty_completion",message:"vide"};
+          return {text:text,truncated:truncated,modelTierApplied:"default"};
+        });
+      });
+    }
+    return attempt(0).catch(function(e){
+      if(e&&e.name==="AbortError")throw {code:"cancelled",message:"annulé",text:text};
+      if(e&&e.code){if(text&&e.text==null)e.text=text;throw e}
+      throw {code:e instanceof TypeError?"network":"upstream_error",message:String(e&&e.message||e),text:text};
+    });
+  }
+  call.json=function(input,opts){return call(input,opts).then(function(r){var t=r.text,m=t.match(/```(?:json)?\s*([\s\S]*?)```/);if(m)t=m[1];var a=t.indexOf("["),o=t.indexOf("{"),i=(a<0)?o:(o<0?a:Math.min(a,o));var end=Math.max(t.lastIndexOf("]"),t.lastIndexOf("}"));try{return JSON.parse(t.slice(i,end+1))}catch(e){throw {code:"invalid_json",message:"JSON illisible",text:r.text}}})};
+  call.limits=function(){return Promise.resolve({maxPromptBytes:65536})};
+  call.isApiKey=true;
+  return call;
+}
+function applyApiKey(){
+  var c=apiRead();
+  if(c&&c.key&&(!sample||sample.isApiKey)){sample=makeApiSampler(c);$("noSample").hidden=true;$("apiMsg").textContent="Clé enregistrée pour "+(c.provider==="anthropic"?"Anthropic":"OpenAI")+" · modèle "+(c.model||API_DEFAULT_MODEL[c.provider])+". La génération directe est active.";S.jobs.forEach(function(_,i){paint(i)});return true}
+  if((!c||!c.key)&&sample&&sample.isApiKey){sample=null;$("noSample").hidden=false;S.jobs.forEach(function(_,i){paint(i)})}
+  return false;
+}
+(function(){
+  var c=apiRead();if(c){$("apiProv").value=c.provider||"anthropic";$("apiModel").value=c.model||"";$("apiKey").value=c.key||"";try{$("apiRemember").checked=!!localStorage.getItem(LS_API)}catch(e){}}
+  $("apiProv").addEventListener("change",function(){if(!$("apiModel").value.trim()||Object.keys(API_DEFAULT_MODEL).some(function(k){return API_DEFAULT_MODEL[k]===$("apiModel").value.trim()}))$("apiModel").value=API_DEFAULT_MODEL[$("apiProv").value]});
+  $("apiModel").placeholder="Ex. "+API_DEFAULT_MODEL.anthropic;
+  $("apiSave").onclick=function(){var k=$("apiKey").value.trim();if(!k){$("apiMsg").textContent="Colle d'abord ta clé.";return}apiWrite({provider:$("apiProv").value,model:$("apiModel").value.trim(),key:k},$("apiRemember").checked);applyApiKey()};
+  $("apiClear").onclick=function(){apiWrite(null);$("apiKey").value="";$("apiMsg").textContent="Clé retirée de ce navigateur.";applyApiKey()};
+  $("apiTest").onclick=function(){var k=$("apiKey").value.trim();if(!k){$("apiMsg").textContent="Colle d'abord ta clé.";return}var t=makeApiSampler({provider:$("apiProv").value,model:$("apiModel").value.trim(),key:k});$("apiMsg").textContent="Test en cours…";t("Réponds uniquement par le mot : OK",{}).then(function(r){$("apiMsg").textContent="Réponse reçue : « "+r.text.trim().slice(0,40)+" ». La clé fonctionne."},function(e){$("apiMsg").textContent="Échec : "+(e&&e.message||e&&e.code||"erreur")+". Vérifie la clé, le modèle, et que ton compte API a du crédit."})};
+  $("goApi").onclick=function(){showTab("info");$("apiSec").scrollIntoView({behavior:"smooth"})};
+})();
+
+/* ---------- Démarrage ---------- */
+try{setForm(JSON.parse(localStorage.getItem(LS_FORM)||"null"),false)}catch(e){}
+syncMode();syncCustom();loadLib();$("year").textContent=new Date().getFullYear();
+applyApiKey();
+var C=window.claude;
+if(C&&C.use){
+  C.use("sample").then(function(s){if(s)sample=s;else if(!sample)$("noSample").hidden=false;
+    var waiting=[];S.jobs.forEach(function(j,i){if(j.status==="wait"&&!j.text)waiting.push(i)});
+    if(s&&waiting.length&&!S.running){$("msg").textContent="Accès à Claude obtenu : production lancée.";runAll(waiting)}
+    else S.jobs.forEach(function(_,i){paint(i)})});
+  C.use("db").then(function(d){db=d;loadLib()});
+  C.use("downloads").then(function(d){downloads=d});
+}else{if(!sample)$("noSample").hidden=false}
+})();
+</script>
+</body>
+</html>
