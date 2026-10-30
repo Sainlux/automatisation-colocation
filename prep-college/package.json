@@ -1,0 +1,18 @@
+{
+  "name": "prep-college-2026",
+  "version": "2026.1.0",
+  "description": "Plateforme d'apprentissage et de révision pour le collège (6e à 3e), programmes 2026",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^1.3.0"
+  }
+}
