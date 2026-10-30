@@ -130,7 +130,7 @@ export function createApp(db) {
       return { ok: true };
     }],
 
-    ['GET', /^\/api\/me$/, (req) => requireUser(req)],
+    ['GET', /^\/api\/me$/, (req) => currentStudent(req) ?? null], // null si personne n'est connecté
 
     ['PUT', /^\/api\/me\/avatar$/, async (req) => {
       const me = requireUser(req);

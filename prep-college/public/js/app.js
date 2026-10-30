@@ -146,7 +146,7 @@ function changePinScreen(currentPin, first = null) {
 // ================================================================ Accueil d’un niveau
 function levelSwitch(current) {
   return `<nav class="level-switch" aria-label="Changer de niveau">${LEVELS.map((l) =>
-    `<a href="#/niveau/${l}" style="--c:${TEACHERS[l].theme.primary}" aria-current="${l === current}">${levelLabel(l)}${l === me.level ? ' (ma classe)' : ''}</a>`).join('')}</nav>`;
+    `<a href="#/niveau/${l}" style="--lvl:${TEACHERS[l].theme.primary}" aria-current="${l === current}">${levelLabel(l)}${l === me.level ? ' (ma classe)' : ''}</a>`).join('')}</nav>`;
 }
 
 function levelHome(level) {

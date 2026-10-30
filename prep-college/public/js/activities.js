@@ -21,6 +21,7 @@ export function training({ level, subject }) {
   const subj = subjectOf(level, subject);
   const stats = { done: 0, good: 0, streak: 0 };
   let lastGen = null;
+  const scoreText = () => `${stats.good} / ${stats.done} réussie${stats.good > 1 ? 's' : ''}${stats.streak >= 3 ? ` · série de ${stats.streak} 🔥` : ''}`;
 
   function next() {
     // Évite de retomber deux fois de suite sur le même type de question.
@@ -34,7 +35,7 @@ export function training({ level, subject }) {
     render(`
       <div class="ex-head">
         ${backLink(level, subject)}
-        <span class="score" aria-label="Score">${stats.good} / ${stats.done}${stats.streak >= 3 ? ` · série de ${stats.streak} 🔥` : ''}</span>
+        <span class="score" id="score">${scoreText()}</span>
       </div>
       <section class="sheet" aria-labelledby="q">
         <span class="skill-tag">${esc(subj?.icon)} ${esc(subj?.name)} · ${esc(ex.skill)}</span>
@@ -68,6 +69,7 @@ export function training({ level, subject }) {
       const ok = isCorrect(ex, given);
       stats.done += 1;
       if (ok) { stats.good += 1; stats.streak += 1; } else stats.streak = 0;
+      $('#score').textContent = scoreText();
       saveAttempt({ level, subject, module: 'training', skill: ex.skill, correct: ok ? 1 : 0, total: 1, hints, durationS: Math.round((Date.now() - started) / 1000) });
 
       if (ex.type === 'qcm') {
