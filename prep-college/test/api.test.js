@@ -126,3 +126,25 @@ test('calcul DNB 2026', () => {
   assert.equal(computeDnb(5, {}).admitted, false);
   assert.equal(computeDnb(20, { french: 100, maths: 100, hist_geo: 100, sciences: 100, oral: 100 }).honor, 'Mention Très bien avec félicitations du jury');
 });
+
+test('premier code sans ancien code, puis ancien code exigé et limité', async () => {
+  const s = await login('Isaë');
+  const first = await call('/api/me/pin', { method: 'PUT', cookie: s.cookie, body: { newPin: '1593' } });
+  assert.equal(first.status, 200);
+  assert.equal((await call('/api/me/pin', { method: 'PUT', cookie: s.cookie, body: { newPin: '7777' } })).status, 401);
+  for (let i = 0; i < 4; i++) await call('/api/me/pin', { method: 'PUT', cookie: s.cookie, body: { currentPin: '0001', newPin: '7777' } });
+  assert.equal((await call('/api/me/pin', { method: 'PUT', cookie: s.cookie, body: { currentPin: '1593', newPin: '7777' } })).status, 429);
+});
+
+test('un cookie mal encodé ne casse pas l’API', async () => {
+  const r = await call('/api/students', { cookie: 'x=%E0%A4%A' });
+  assert.equal(r.status, 200);
+  assert.equal((await fetch(base + '/%E0')).status, 200); // repli sur l'application, pas d'erreur 500
+  assert.equal((await call('/api/me')).data, null);
+});
+
+test('prénom en double insensible à la casse', async () => {
+  const sam = await login('Samuel');
+  const r = await call('/api/admin/students', { method: 'POST', cookie: sam.cookie, body: { name: 'zoé', level: '6eme' } });
+  assert.equal(r.status, 409);
+});

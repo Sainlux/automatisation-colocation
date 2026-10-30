@@ -2,6 +2,8 @@ import { SUBJECTS, LEVEL_LABEL } from '../public/js/curriculum.js';
 
 const subjectName = (level, id) => SUBJECTS[level]?.find((s) => s.id === id)?.name || id;
 const pct = (c, t) => (t ? Math.round((c / t) * 100) : 0);
+// Jour calendaire à Paris (les dates SQLite sont en UTC).
+const parisDay = (iso) => new Date(iso.replace(' ', 'T') + 'Z').toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
 
 // Analyse locale des résultats : toujours disponible, sans réseau.
 export function analyzeAttempts(attempts) {
@@ -14,7 +16,7 @@ export function analyzeAttempts(attempts) {
     totals.correct += a.correct;
     totals.total += a.total;
     totals.hints += a.hints;
-    days.add(a.createdAt.slice(0, 10));
+    days.add(parisDay(a.createdAt));
 
     const sk = `${a.level}|${a.subject}`;
     const s = bySubject.get(sk) || { level: a.level, subject: a.subject, name: subjectName(a.level, a.subject), correct: 0, total: 0 };
@@ -67,7 +69,7 @@ export function analyzeAttempts(attempts) {
 // --- Coach IA (optionnel) : nécessite ANTHROPIC_API_KEY et le paquet @anthropic-ai/sdk ---
 
 const SYSTEM = `Tu es le coach pédagogique bienveillant de Prep'Collège 2026, une appli de révision pour collégiens (11-15 ans).
-On te donne les statistiques d'un élève. Rédige en français, en tutoyant l'élève, un bilan de 4 à 6 phrases maximum :
+On te donne les statistiques anonymes d'un élève. Rédige en français, en tutoyant l'élève, un bilan de 4 à 6 phrases maximum :
 1) une réussite concrète à féliciter, 2) les 1 ou 2 notions prioritaires à retravailler et comment,
 3) un objectif simple pour les prochains jours. Ton encourageant, jamais culpabilisant. Pas de titre, pas de liste, pas de markdown.
 N'invente aucun chiffre absent des données.`;
@@ -78,7 +80,7 @@ let clientPromise;
 async function getClient() {
   if (!process.env.ANTHROPIC_API_KEY) return null;
   clientPromise ??= import('@anthropic-ai/sdk')
-    .then(({ default: Anthropic }) => new Anthropic())
+    .then(({ default: Anthropic }) => new Anthropic({ timeout: 20000, maxRetries: 1 }))
     .catch(() => null);
   return clientPromise;
 }
@@ -93,7 +95,6 @@ export async function aiCoachSummary(student, analysis) {
   if (!client) return null;
 
   const data = {
-    prenom: student.name,
     niveau: LEVEL_LABEL[student.level],
     reussite_globale: `${analysis.totals.rate} % sur ${analysis.totals.total} questions`,
     jours_actifs: analysis.totals.activeDays,

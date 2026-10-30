@@ -88,6 +88,7 @@ export function createRepo(db) {
     getSession: db.prepare('SELECT student_id AS studentId FROM session WHERE token = ? AND expires_at > ?'),
     deleteSession: db.prepare('DELETE FROM session WHERE token = ?'),
     deleteSessionsOf: db.prepare('DELETE FROM session WHERE student_id = ?'),
+    deleteOtherSessions: db.prepare('DELETE FROM session WHERE student_id = ? AND token <> ?'),
     purgeSessions: db.prepare('DELETE FROM session WHERE expires_at <= ?'),
     addAttempt: db.prepare(`INSERT INTO attempt (student_id, level, subject, module, skill, correct, total, hints, duration_s)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
@@ -119,6 +120,7 @@ export function createRepo(db) {
     getSessionStudent: (token) => q.getSession.get(token, Date.now())?.studentId,
     deleteSession: (token) => q.deleteSession.run(token),
     deleteSessionsOf: (id) => q.deleteSessionsOf.run(id),
+    deleteOtherSessions: (id, keepToken) => q.deleteOtherSessions.run(id, keepToken ?? ''),
     purgeSessions: () => q.purgeSessions.run(Date.now()),
     addAttempt: (studentId, a) =>
       q.addAttempt.run(studentId, a.level, a.subject, a.module, a.skill, a.correct, a.total, a.hints, a.durationS),

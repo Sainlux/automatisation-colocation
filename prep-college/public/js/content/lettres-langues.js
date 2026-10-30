@@ -1893,7 +1893,7 @@ const ARTS4 = {
     ]),
     bank('Vocabulaire plastique', "Pense aux notions : cadrage, point de vue, matière, couleur.", [
       ["Qu'est-ce qu'une plongée en photographie ?", 'une prise de vue du dessus', ['une prise de vue du dessous', 'une vue de face', 'un très gros plan'], "La plongée écrase le sujet ; la contre-plongée (du dessous) le grandit."],
-      ["Que sont les couleurs complémentaires du bleu ?", "l'orange", ['le vert', 'le violet', 'le noir'], "Complémentaires : bleu/orange, rouge/vert, jaune/violet. Juxtaposées, elles se renforcent."],
+      ["Quelle est la couleur complémentaire du bleu ?", "l'orange", ['le vert', 'le violet', 'le noir'], "Complémentaires : bleu/orange, rouge/vert, jaune/violet. Juxtaposées, elles se renforcent."],
       ["Qu'est-ce qu'un ready-made (Marcel Duchamp) ?", "un objet manufacturé choisi et exposé comme œuvre d'art", ['une peinture rapide', 'une sculpture en bronze', 'un dessin préparatoire'], "Fontaine (1917) est un urinoir signé « R. Mutt »."],
       ["Qu'est-ce qu'un collage ?", 'une technique qui assemble des éléments collés sur un support', ['une peinture à l’eau', 'une sculpture taillée', 'un moulage'], "Pratiqué par Picasso et Braque dès 1912."],
       ["Que désigne le « hors-champ » ?", "ce qui existe mais n'est pas montré dans le cadre", ['le premier plan', 'le titre de l’œuvre', 'la signature'], "Le spectateur l'imagine : c'est un ressort du cinéma et de la photographie."],

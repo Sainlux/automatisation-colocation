@@ -5,7 +5,10 @@ import { $, $$, esc, render, api, applyTheme, toast, levelLabel, subjectOf, form
 let me = null;
 let leaveHandlers = [];
 const onLeave = (fn) => leaveHandlers.push(fn);
-const go = (hash) => { location.hash = hash; };
+const go = (hash) => {
+  if (location.hash === hash) route();
+  else location.hash = hash;
+};
 
 // ================================================================ Barre du haut
 function renderTopbar(active) {
@@ -27,7 +30,6 @@ function renderTopbar(active) {
     await api('/logout', { method: 'POST' }).catch(() => {});
     me = null;
     go('#/');
-    route();
   };
 }
 
@@ -55,8 +57,9 @@ async function loginScreen() {
   });
 }
 
-function pinPad({ title, subtitle, onSubmit, back }) {
+function pinPad({ title, subtitle, onSubmit, back, logout }) {
   let pin = '';
+  let busy = false;
   render(`
     <section class="sheet pinpad" style="margin:0 auto">
       <h1 style="font-size:1.6rem">${title}</h1>
@@ -69,7 +72,7 @@ function pinPad({ title, subtitle, onSubmit, back }) {
         <button data-k="del" aria-label="Effacer">⌫</button><button data-k="0">0</button><button data-k="ok" aria-label="Valider">✓</button>
       </div>
       <div id="pin-error" role="alert"></div>
-      ${back ? '<p style="margin-top:14px"><a href="#/" id="pin-back">Ce n’est pas moi</a></p>' : ''}
+      ${back || logout ? '<p style="margin-top:14px"><a href="#/" id="pin-back">Ce n’est pas moi</a></p>' : ''}
     </section>`);
   const dots = $$('.pin-dots span');
   const input = $('#pin-input');
@@ -78,16 +81,20 @@ function pinPad({ title, subtitle, onSubmit, back }) {
     input.value = pin;
   };
   const submit = async () => {
-    if (pin.length < 4) return;
+    if (pin.length < 4 || busy) return;
+    busy = true;
     try {
       await onSubmit(pin);
     } catch (e) {
       $('#pin-error').innerHTML = `<p class="alert error">${esc(e.message)}</p>`;
       pin = '';
       paint();
+    } finally {
+      busy = false;
     }
   };
   const press = (k) => {
+    if (busy) return;
     if (k === 'del') pin = pin.slice(0, -1);
     else if (k === 'ok') return submit();
     else if (pin.length < 4) pin += k;
@@ -95,14 +102,28 @@ function pinPad({ title, subtitle, onSubmit, back }) {
     if (pin.length === 4) submit();
   };
   $$('.keys button').forEach((b) => { b.onclick = () => press(b.dataset.k); });
-  input.focus();
+  // Clavier physique (ordinateur) : le champ caché reçoit la frappe. Sur téléphone, on n'y met
+  // pas le focus pour que le clavier système ne recouvre pas le pavé numérique.
+  const finePointer = matchMedia('(pointer: fine)').matches;
+  if (finePointer) input.focus();
   input.addEventListener('keydown', (e) => {
     if (/^\d$/.test(e.key)) { e.preventDefault(); press(e.key); }
     else if (e.key === 'Backspace') { e.preventDefault(); press('del'); }
     else if (e.key === 'Enter') { e.preventDefault(); submit(); }
   });
-  $('.pinpad').addEventListener('click', (e) => { if (e.target.tagName !== 'A') input.focus({ preventScroll: true }); });
+  input.addEventListener('input', () => { // claviers virtuels (key = « Unidentified »)
+    const digits = input.value.replace(/\D/g, '').slice(0, 4);
+    pin = '';
+    [...digits].forEach((d) => press(d));
+  });
+  if (finePointer) $('.pinpad').addEventListener('click', (e) => { if (e.target.tagName !== 'A') input.focus({ preventScroll: true }); });
   if (back) $('#pin-back').onclick = (e) => { e.preventDefault(); loginScreen(); };
+  if (logout) $('#pin-back').onclick = async (e) => {
+    e.preventDefault();
+    await api('/logout', { method: 'POST' }).catch(() => {});
+    me = null;
+    loginScreen();
+  };
 }
 
 function pinScreen(student) {
@@ -113,15 +134,15 @@ function pinScreen(student) {
     back: true,
     onSubmit: async (pin) => {
       me = await api('/login', { method: 'POST', body: { studentId: student.id, pin } });
-      if (me.mustChangePin) return changePinScreen(pin);
+      if (me.mustChangePin) return changePinScreen();
       go('#/');
-      route();
     }
   });
 }
 
-function changePinScreen(currentPin, first = null) {
+function changePinScreen(first = null) {
   pinPad({
+    logout: true,
     title: first ? 'Confirme ton code' : 'Choisis ton code secret',
     subtitle: first
       ? 'Tape-le une deuxième fois pour être sûr·e.'
@@ -129,16 +150,16 @@ function changePinScreen(currentPin, first = null) {
     onSubmit: async (pin) => {
       if (!first) {
         if (pin === '0000') throw new Error('Choisis un code différent de 0000.');
-        return changePinScreen(currentPin, pin);
+        return changePinScreen(pin);
       }
       if (pin !== first) {
         toast('Les deux codes ne correspondent pas. Recommence.');
-        return changePinScreen(currentPin);
+        return changePinScreen();
       }
-      me = await api('/me/pin', { method: 'PUT', body: { currentPin, newPin: pin } });
+      // Premier code : le serveur n'exige pas l'ancien code tant que must_change_pin est actif.
+      me = await api('/me/pin', { method: 'PUT', body: { newPin: pin } });
       toast('Code enregistré !');
       go('#/');
-      route();
     }
   });
 }
@@ -250,7 +271,7 @@ async function profile() {
     </section>`);
   $$('.avatars button').forEach((b) => {
     b.onclick = async () => {
-      me = await api('/me/avatar', { method: 'PUT', body: { avatar: b.dataset.a } });
+      try { me = await api('/me/avatar', { method: 'PUT', body: { avatar: b.dataset.a } }); } catch (err) { return toast(err.message); }
       $$('.avatars button').forEach((x) => x.setAttribute('aria-pressed', x === b));
       renderTopbar();
       toast('Personnage changé !');
@@ -370,25 +391,25 @@ async function route() {
       try { me = await api('/me'); } catch { me = null; }
     }
     if (!me) return loginScreen();
-    if (me.mustChangePin) return changePinScreen('0000');
+    if (me.mustChangePin) return changePinScreen();
 
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     const [page, a, b] = parts;
     const lvl = LEVELS.includes(a) ? a : me.level;
-    const active = page === 'progres' ? 'progress' : page === 'admin' ? 'admin' : 'home';
+    const active = { progres: 'progress', admin: 'admin', profil: 'profile' }[page] || 'home';
     renderTopbar(active);
     if (['niveau', 'entrainement', 'flashcards', 'sprint'].includes(page)) applyTheme(lvl);
 
     switch (page) {
       case undefined: return go(`#/niveau/${me.level}`);
-      case 'niveau': return b ? subjectHome(lvl, b) : levelHome(lvl);
-      case 'entrainement': return training({ level: lvl, subject: b });
-      case 'flashcards': return flashcards({ level: lvl, subject: b });
-      case 'sprint': return sprint({ level: lvl }, onLeave);
-      case 'brevet': applyTheme('3eme'); return dnbSimulator();
-      case 'progres': return progress();
-      case 'profil': return profile();
-      case 'admin': return a === 'eleve' ? adminStudent(Number(b)) : admin();
+      case 'niveau': return await (b ? subjectHome(lvl, b) : levelHome(lvl));
+      case 'entrainement': return await training({ level: lvl, subject: b });
+      case 'flashcards': return await flashcards({ level: lvl, subject: b });
+      case 'sprint': return await sprint({ level: lvl }, onLeave);
+      case 'brevet': applyTheme('3eme'); return await dnbSimulator(me.level);
+      case 'progres': return await progress();
+      case 'profil': return await profile();
+      case 'admin': return await (a === 'eleve' ? adminStudent(Number(b)) : admin());
       default: return go('#/');
     }
   } catch (err) {

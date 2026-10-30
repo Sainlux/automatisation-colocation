@@ -29,8 +29,10 @@ const send = (res, status, data) => {
   res.end(JSON.stringify(data));
 };
 
+const safeDecode = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
+
 function parseCookies(header = '') {
-  return Object.fromEntries(header.split(';').map((c) => c.trim().split('=')).filter(([k]) => k).map(([k, ...v]) => [k, decodeURIComponent(v.join('='))]));
+  return Object.fromEntries(header.split(';').map((c) => c.trim().split('=')).filter(([k]) => k).map(([k, ...v]) => [k, safeDecode(v.join('='))]));
 }
 
 async function readJson(req) {
@@ -49,7 +51,7 @@ const cleanName = (n) => String(n ?? '').trim().replace(/\s+/g, ' ').slice(0, 30
 const int = (v, min, max) => Math.min(max, Math.max(min, Math.round(Number(v) || 0)));
 
 function validateStudentInput(body) {
-  const name = cleanName(body.name);
+  const name = cleanName(body.name).normalize('NFC');
   if (!name) throw new HttpError(400, 'Le prénom est obligatoire');
   if (!LEVELS.includes(body.level)) throw new HttpError(400, 'Niveau invalide');
   const avatar = AVATARS.includes(body.avatar) ? body.avatar : AVATARS[0];
@@ -58,7 +60,7 @@ function validateStudentInput(body) {
 
 function validateAttempt(body) {
   if (!LEVELS.includes(body.level)) throw new HttpError(400, 'Niveau invalide');
-  if (!SUBJECTS[body.level].some((s) => s.id === body.subject) && body.subject !== 'dnb') throw new HttpError(400, 'Matière invalide');
+  if (!SUBJECTS[body.level].some((s) => s.id === body.subject)) throw new HttpError(400, 'Matière invalide');
   if (!MODULES.some((m) => m.id === body.module)) throw new HttpError(400, 'Module invalide');
   const total = int(body.total, 1, 500);
   return {
@@ -87,6 +89,13 @@ export function createApp(db) {
     const me = requireUser(req);
     if (!me.isAdmin) throw new HttpError(403, 'Réservé à l’administrateur');
     return me;
+  };
+  // « zoé » et « Zoé » sont le même prénom pour les élèves.
+  const assertNameFree = (name, exceptId) => {
+    const key = name.toLocaleLowerCase('fr');
+    if (repo.listStudents().some((s) => s.id !== exceptId && s.name.normalize('NFC').toLocaleLowerCase('fr') === key)) {
+      throw new HttpError(409, 'Ce prénom existe déjà');
+    }
   };
   const studentOr404 = (id) => {
     const s = repo.getStudent(Number(id));
@@ -143,10 +152,20 @@ export function createApp(db) {
     ['PUT', /^\/api\/me\/pin$/, async (req) => {
       const me = requireUser(req);
       const { currentPin, newPin } = await readJson(req);
-      if (!verifyPin(String(currentPin ?? ''), repo.getPinHash(me.id))) throw new HttpError(401, 'Code actuel incorrect');
+      // Premier code (après création ou remise à 0000) : l'ancien code n'est pas redemandé.
+      if (!me.mustChangePin) {
+        const wait = limiter.lockedFor(me.id);
+        if (wait) throw new HttpError(429, `Trop d’essais. Réessaie dans ${Math.ceil(wait / 60000)} min.`);
+        if (!verifyPin(String(currentPin ?? ''), repo.getPinHash(me.id))) {
+          limiter.fail(me.id);
+          throw new HttpError(401, 'Code actuel incorrect');
+        }
+        limiter.success(me.id);
+      }
       if (!PIN_RE.test(String(newPin ?? ''))) throw new HttpError(400, 'Le nouveau code doit contenir 4 chiffres');
       if (newPin === '0000' || newPin === currentPin) throw new HttpError(400, 'Choisis un code différent');
       repo.setPin(me.id, newPin, false);
+      repo.deleteOtherSessions(me.id, parseCookies(req.headers.cookie)[COOKIE]);
       return repo.getStudent(me.id);
     }],
 
@@ -175,12 +194,14 @@ export function createApp(db) {
     ['POST', /^\/api\/admin\/students$/, async (req) => {
       requireAdmin(req);
       const input = validateStudentInput(await readJson(req));
+      assertNameFree(input.name);
       try { return repo.getStudent(repo.createStudent(input)); } catch { throw new HttpError(409, 'Ce prénom existe déjà'); }
     }],
     ['PUT', /^\/api\/admin\/students\/(\d+)$/, async (req, res, [, id]) => {
       requireAdmin(req);
       studentOr404(id);
       const input = validateStudentInput(await readJson(req));
+      assertNameFree(input.name, Number(id));
       try { repo.updateStudent(Number(id), input); } catch { throw new HttpError(409, 'Ce prénom existe déjà'); }
       return repo.getStudent(Number(id));
     }],
@@ -205,7 +226,7 @@ export function createApp(db) {
   ];
 
   async function serveStatic(req, res, pathname) {
-    const rel = normalize(decodeURIComponent(pathname === '/' ? '/index.html' : pathname)).replace(/^([/\\])+/, '');
+    const rel = normalize(safeDecode(pathname === '/' ? '/index.html' : pathname)).replace(/^([/\\])+/, '');
     let file = join(PUBLIC_DIR, rel);
     if (!file.startsWith(PUBLIC_DIR) || rel.split(sep).some((p) => p.startsWith('.'))) throw new HttpError(404, 'Introuvable');
     try {

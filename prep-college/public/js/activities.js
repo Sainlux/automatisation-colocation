@@ -5,6 +5,10 @@ import { $, $$, esc, render, api, announce, toast, MASCOTS, subjectOf, levelLabe
 
 const saveAttempt = (attempt) => api('/attempts', { method: 'POST', body: attempt }).catch(() => toast('Résultat non enregistré (connexion ?)'));
 
+// Clavier mobile adapté : le pavé décimal d'iOS n'a ni « - » ni « / ».
+const inputModeFor = (ex) => (/^\d+([.,]\d+)?$/.test(String([].concat(ex.answer)[0]).trim()) ? 'decimal' : 'text');
+const NO_AUTOCORRECT = 'autocapitalize="off" autocorrect="off" spellcheck="false"';
+
 const backLink = (level, subject) =>
   `<a class="btn ghost small" href="#/niveau/${level}${subject ? `/${subject}` : ''}">Retour</a>`;
 
@@ -44,7 +48,7 @@ export function training({ level, subject }) {
           ? `<div class="choices">${ex.choices.map((c, i) => `<button class="choice" data-i="${i}">${esc(c)}</button>`).join('')}</div>`
           : `<form class="answer-row" id="answer-form" autocomplete="off">
                <label class="sr-only" for="answer">Ta réponse</label>
-               <input type="text" id="answer" inputmode="${/^[\d\s,./-]+$/.test(String([].concat(ex.answer)[0])) ? 'decimal' : 'text'}" placeholder="Ta réponse" required>
+               <input type="text" id="answer" inputmode="${inputModeFor(ex)}" ${NO_AUTOCORRECT} placeholder="Ta réponse" required>
                <button class="btn">Valider</button>
              </form>`}
         <div class="row" style="margin-top:14px">
@@ -117,7 +121,7 @@ export function sprint({ level }, onLeave) {
     <div class="ex-head">${backLink(level)}<span></span></div>
     <section class="sheet">
       <h1>Sprint Chrono ${esc(levelLabel(level))}</h1>
-      <p>60 secondes pour répondre au plus de questions possible. Tape ta réponse puis appuie sur Entrée. Une erreur ne bloque pas : on passe à la suivante.</p>
+      <p>60 secondes pour répondre au plus de questions possible. Tape ta réponse puis appuie sur Entrée. Une erreur ne bloque pas : on passe à la suivante. Pour passer une question, valide sans rien écrire.</p>
       <button class="btn" id="go">Lancer le chrono</button>
     </section>`);
   $('#go').focus();
@@ -134,7 +138,7 @@ export function sprint({ level }, onLeave) {
         <p class="sprint-q" id="sprint-q">${esc(current.prompt)}</p>
         <form id="sprint-form" class="answer-row" autocomplete="off" style="max-width:420px;margin:0 auto">
           <label class="sr-only" for="sprint-answer">Ta réponse</label>
-          <input type="text" id="sprint-answer" inputmode="decimal" required>
+          <input type="text" id="sprint-answer" inputmode="${inputModeFor(current)}" ${NO_AUTOCORRECT}>
           <button class="btn">OK</button>
         </form>
       </section>`);
@@ -161,6 +165,7 @@ export function sprint({ level }, onLeave) {
       $('#sprint-score').textContent = `${pts} point${pts > 1 ? 's' : ''}`;
       current = pick(gens)();
       $('#sprint-q').textContent = current.prompt;
+      input.inputMode = inputModeFor(current);
       input.value = '';
       input.focus();
     };
@@ -216,9 +221,9 @@ export function flashcards({ level, subject }) {
       <section>
         <span class="skill-tag">${esc(subj?.icon)} ${esc(subj?.name)} · ${esc(card.skill || '')}</span>
         <div class="card-scene">
-          <button class="card" id="card" aria-label="Retourner la carte">
+          <button class="card" id="card" aria-expanded="false">
             <span class="card-face front">${esc(card.front)}<span class="hint-flip">Touche la carte pour voir la réponse</span></span>
-            <span class="card-face back">${esc(card.back)}</span>
+            <span class="card-face back" aria-hidden="true">${esc(card.back)}</span>
           </button>
         </div>
         <div class="row" id="grade" hidden>
@@ -229,7 +234,10 @@ export function flashcards({ level, subject }) {
     const el = $('#card');
     el.focus();
     el.onclick = () => {
-      el.classList.toggle('flipped');
+      const flipped = el.classList.toggle('flipped');
+      el.setAttribute('aria-expanded', flipped);
+      $('.card-face.back', el).setAttribute('aria-hidden', !flipped);
+      $('.card-face.front', el).setAttribute('aria-hidden', flipped);
       $('#grade').hidden = false;
       announce(card.back);
     };
@@ -249,9 +257,13 @@ export function flashcards({ level, subject }) {
 }
 
 // ---------------------------------------------------------------- Simulateur DNB 2026
-export function dnbSimulator() {
+export function dnbSimulator(backLevel = '3eme') {
   const state = { avg: 12, exams: Object.fromEntries(DNB.exams.map((e) => [e.id, 60])) };
-  try { Object.assign(state, JSON.parse(localStorage.getItem('pc-dnb') || '{}')); } catch { /* ignoré */ }
+  try {
+    const saved = JSON.parse(localStorage.getItem('pc-dnb') || '{}');
+    if (typeof saved.avg === 'number') state.avg = saved.avg;
+    for (const e of DNB.exams) if (typeof saved.exams?.[e.id] === 'number') state.exams[e.id] = saved.exams[e.id];
+  } catch { /* ignoré */ }
 
   const ranges = (id, label, max, step, value) => `
     <div><label for="${id}">${esc(label)} <span class="muted small">/ ${max}</span></label>
@@ -261,7 +273,7 @@ export function dnbSimulator() {
       </div></div>`;
 
   render(`
-    <div class="ex-head">${backLink('3eme')}<span></span></div>
+    <div class="ex-head">${backLink(backLevel)}<span></span></div>
     <section class="sheet">
       <h1>Simulateur Brevet 2026</h1>
       <p class="muted">Contrôle continu : 40 % (320 points). Épreuves finales : 60 % (480 points). Total sur 800.</p>
@@ -277,6 +289,7 @@ export function dnbSimulator() {
     const num = $(`#${id}`), range = $(`#${id}-r`);
     range.oninput = () => { num.value = range.value; setter(clamp(range.value, max)); update(); };
     num.oninput = () => { range.value = clamp(num.value, max); setter(clamp(num.value, max)); update(); };
+    num.onchange = () => { num.value = clamp(num.value, max); };
   };
   bind('avg', 20, (v) => { state.avg = v; });
   DNB.exams.forEach((e) => bind(e.id, e.max, (v) => { state.exams[e.id] = v; }));
