@@ -58,7 +58,7 @@ En mode local, les données sont stockées dans `.data/` (fichier JSON privé + 
 - [SECURITY.md](SECURITY.md) — sécurité et protection des données (nLPD / RGPD)
 - [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) — ce qui est fait, testé, en attente
 - [ROADMAP.md](ROADMAP.md) — suite du développement
-- Guides : [Supabase](docs/SUPABASE.md) · [OpenAI](docs/OPENAI.md) · [Google Calendar](docs/GOOGLE_CALENDAR.md) · [Outlook et Zoom](docs/OUTLOOK_ZOOM.md) · [Déploiement](docs/DEPLOIEMENT.md)
+- Guides : [Supabase](docs/SUPABASE.md) · [OpenAI](docs/OPENAI.md) · [Google Calendar](docs/GOOGLE_CALENDAR.md) · [Outlook et Zoom](docs/OUTLOOK_ZOOM.md) · [E-mail et Telegram](docs/MESSAGERIES.md) · [Déploiement](docs/DEPLOIEMENT.md)
 
 ## Stack
 

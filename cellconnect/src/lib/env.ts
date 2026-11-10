@@ -137,6 +137,41 @@ export const env = {
       return Boolean(read("VAPID_PUBLIC_KEY") && read("VAPID_PRIVATE_KEY"));
     },
   },
+  /** Réception de messages à analyser (transfert d'e-mail, bot Telegram). */
+  inbound: {
+    email: {
+      /** Domaine qui reçoit les e-mails transférés (ex. in.cellconnect.ch), relié au fournisseur entrant. */
+      get domain() {
+        return read("INBOUND_EMAIL_DOMAIN")?.toLowerCase();
+      },
+      /** Clé qui signe l'adresse personnelle de chaque utilisateur. */
+      get secret() {
+        return read("INBOUND_EMAIL_SECRET");
+      },
+      /** Jeton attendu dans l'URL du webhook appelé par le fournisseur (Postmark, Mailgun, SendGrid…). */
+      get webhookToken() {
+        return read("INBOUND_EMAIL_WEBHOOK_TOKEN");
+      },
+      get configured() {
+        return Boolean(read("INBOUND_EMAIL_DOMAIN") && (read("INBOUND_EMAIL_SECRET") ?? "").length >= 16 && (read("INBOUND_EMAIL_WEBHOOK_TOKEN") ?? "").length >= 16);
+      },
+    },
+    telegram: {
+      get botToken() {
+        return read("TELEGRAM_BOT_TOKEN");
+      },
+      get botUsername() {
+        return read("TELEGRAM_BOT_USERNAME")?.replace(/^@/, "");
+      },
+      /** Valeur envoyée par Telegram dans l'en-tête X-Telegram-Bot-Api-Secret-Token. */
+      get webhookSecret() {
+        return read("TELEGRAM_WEBHOOK_SECRET");
+      },
+      get configured() {
+        return Boolean(read("TELEGRAM_BOT_TOKEN") && read("TELEGRAM_BOT_USERNAME") && /^[A-Za-z0-9_-]{16,256}$/.test(read("TELEGRAM_WEBHOOK_SECRET") ?? ""));
+      },
+    },
+  },
   get cronSecret() {
     return read("CRON_SECRET");
   },
@@ -166,5 +201,11 @@ export function integrationStatus() {
     outlook: env.microsoft.configured ? { available: true } : { available: false, reason: "Identifiants Microsoft non configurés (MS_CLIENT_ID, MS_CLIENT_SECRET)" },
     zoom: env.zoom.configured ? { available: true } : { available: false, reason: "Identifiants Zoom non configurés (ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET)" },
     push: env.push.configured ? { available: true } : { available: false, reason: "Clés VAPID non configurées (npm run vapid)" },
+    inboundEmail: env.inbound.email.configured
+      ? { available: true }
+      : { available: false, reason: "Réception d'e-mails non configurée (INBOUND_EMAIL_DOMAIN, INBOUND_EMAIL_SECRET, INBOUND_EMAIL_WEBHOOK_TOKEN)" },
+    telegram: env.inbound.telegram.configured
+      ? { available: true }
+      : { available: false, reason: "Bot Telegram non configuré (TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME, TELEGRAM_WEBHOOK_SECRET)" },
   };
 }

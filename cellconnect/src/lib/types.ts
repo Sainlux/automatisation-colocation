@@ -385,6 +385,22 @@ export interface PushSubscriptionRow {
   created_at: ISODateTime;
 }
 
+/** Messagerie liée à un compte pour recevoir des messages à analyser (bot Telegram). */
+export type MessagingChannel = "telegram";
+
+export interface MessagingLink {
+  id: UUID;
+  user_id: UUID;
+  channel: MessagingChannel;
+  /** Identifiant de la conversation privée chez le fournisseur (chat_id Telegram). */
+  external_id: string;
+  /** Nom affiché (@pseudo) pour que l'utilisateur reconnaisse le compte lié. */
+  label: string | null;
+  /** Dernière mise à jour traitée : les renvois du fournisseur sont ignorés. */
+  last_update_id: number | null;
+  created_at: ISODateTime;
+}
+
 /** Utilisateurs du mode local uniquement (en mode Supabase : auth.users). */
 export interface LocalUser {
   id: UUID;
@@ -418,6 +434,7 @@ export interface Tables {
   audit_logs: AuditLog;
   idempotency_keys: IdempotencyKey;
   push_subscriptions: PushSubscriptionRow;
+  messaging_links: MessagingLink;
   local_users: LocalUser;
 }
 

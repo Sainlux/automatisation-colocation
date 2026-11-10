@@ -13,7 +13,8 @@
     "worker": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/worker.ts",
     "check": "npm run typecheck && npm run lint && npm test",
     "test:supabase": "vitest run --config vitest.integration.config.mts",
-    "vapid": "node scripts/vapid.mjs"
+    "vapid": "node scripts/vapid.mjs",
+    "telegram:webhook": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/telegram-webhook.ts"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.22",

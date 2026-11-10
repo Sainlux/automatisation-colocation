@@ -55,7 +55,7 @@ export async function deleteAccountData(store: Store, userId: string) {
     }
   }
   // Données personnelles restantes dans les organisations partagées.
-  for (const t of ["event_participants", "group_members", "organization_members", "reminders", "calendar_conflicts", "notifications", "notification_deliveries", "calendar_connections", "uploads", "extraction_jobs", "extracted_events", "idempotency_keys"] as const) {
+  for (const t of ["event_participants", "group_members", "organization_members", "reminders", "calendar_conflicts", "notifications", "notification_deliveries", "calendar_connections", "uploads", "extraction_jobs", "extracted_events", "idempotency_keys", "push_subscriptions", "messaging_links"] as const) {
     await store.deleteWhere(t, [["user_id", "eq", userId]] as never);
   }
   await store.delete("profiles", userId);

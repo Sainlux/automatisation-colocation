@@ -12,6 +12,7 @@ import { ActionBar } from "@/components/ui/action-bar";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/states";
+import { InboundSection } from "@/components/app/inbound-section";
 import { fmtMinutes, fmtOffsets } from "@/components/app/format";
 import { t } from "@/i18n";
 import { cn } from "@/lib/utils";
@@ -242,6 +243,10 @@ export default function SettingsPage() {
             </li>
           </ul>
         </fieldset>
+      </Section>
+
+      <Section id="messages" title="Recevoir des messages">
+        <InboundSection admin={admin} />
       </Section>
 
       <Section title="Apparence">

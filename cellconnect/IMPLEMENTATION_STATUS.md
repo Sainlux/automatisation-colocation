@@ -1,6 +1,6 @@
 # État d'implémentation
 
-Dernière vérification complète : `npm run check` (types, lint, **88 tests Vitest dans 9 fichiers**), `npm run build`, `npm run test:e2e` (**8 tests Playwright**, mobile + ordinateur) en mode local **et** contre Supabase, `npm run test:supabase` (**8 tests d'intégration** contre un vrai Supabase + un vrai serveur SMTP) : tout passe.
+Dernière vérification complète : `npm run check` (types, lint, **97 tests Vitest dans 10 fichiers**), `npm run build`, `npm run test:e2e` (**8 tests Playwright**, mobile + ordinateur) en mode local **et** contre Supabase, `npm run test:supabase` (**8 tests d'intégration** contre un vrai Supabase + un vrai serveur SMTP) : tout passe.
 
 ## ✅ Implémenté et testé en conditions réelles
 
@@ -24,6 +24,7 @@ Dernière vérification complète : `npm run check` (types, lint, **88 tests Vit
 | **Limitation de débit partagée** (fonction PostgreSQL atomique ; 5 requêtes parallèles pour 3 autorisées → exactement 3) | `test:supabase`, `migrations.test.ts` |
 | **Purge automatique** selon la politique de conservation (quotidienne, configurable) | `retention.test.ts`, `test:supabase` |
 | Sécurité : type réel des fichiers, HEIC, tailles, scrypt, AES-GCM, état OAuth signé | `core.test.ts`, `integrations.test.ts` |
+| **Réception par e-mail** : adresse personnelle signée, webhook Postmark / Mailgun / SendGrid (jeton), texte + .ics + images/PDF, notification et e-mail au compte (jamais à l'expéditeur) | `inbound.test.ts`, appel réel du webhook sur l'application compilée (5 dates proposées à la vérification) |
 | Worker (`npm run worker`) : analyses en attente, rappels, e-mails, push, synchronisations, webhooks, purge | `integrations.test.ts` (tick → Outlook), exécution manuelle |
 
 ## 🟡 Implémenté, testé contre des API **simulées** (services réels inaccessibles depuis l'environnement de développement)
@@ -36,11 +37,15 @@ Les tests vérifient les requêtes exactes envoyées (URL, méthode, en-têtes, 
 | **Google Calendar** | OAuth (URL, état, échange, rafraîchissement, révocation), envoi, instances annulées/déplacées, import + conflits, Google Meet, canal webhook | Créer le client OAuth, tester la connexion |
 | **Outlook (Microsoft Graph)** | OAuth, conversion des récurrences, envoi, instances, calendarView, validation et clientState des webhooks, envoi via la file du worker | Enregistrer l'application Entra ID |
 | **Zoom** | OAuth (Basic), création, lien jamais inventé, annulation répercutée | Créer l'application Zoom |
+| **Bot Telegram** | Liaison par lien signé (15 min), messages texte/photo/PDF/.ics, plus grande photo téléchargée, renvois ignorés, groupes ignorés, /stop, secret du webhook | Créer le bot (@BotFather), puis `npm run telegram:webhook` |
+| **Fournisseur d'e-mails entrants** | Formats Postmark (JSON), Mailgun et SendGrid (multipart) | Relier un domaine (MX) au fournisseur choisi |
 
 ## 🟡 Implémenté, non couvert par un test automatisé
 - Pages : modification d'événement, rappels personnalisés, groupes et membres, historique, administration, export / suppression de compte, changement d'organisation (compilées ; parcours principaux vérifiés manuellement).
 - Affichage effectif d'une notification push par un navigateur réel (nécessite l'accès aux serveurs push de Google/Mozilla/Apple).
 
 ## Limites assumées
+- **WhatsApp** : aucune lecture automatique des conversations (interdit par WhatsApp). On copie/partage le message vers l'app ; une liaison officielle (WhatsApp Business Cloud API, numéro dédié) reste à faire.
+- **Messenger** : possible seulement pour une page Facebook (API Messenger Platform), pas pour un compte personnel ; non implémenté.
 - **Langues** : l'interface est entièrement en français, comme demandé. L'architecture prévoit d'autres langues (`src/i18n`), mais une partie des textes des pages est écrite directement en français : ajouter une langue demandera de les déplacer dans le dictionnaire.
 - Les rendez-vous « journée entière » des calendriers externes ne sont pas comptés comme conflits (choix volontaire : souvent non bloquants).
