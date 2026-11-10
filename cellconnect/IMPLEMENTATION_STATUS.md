@@ -1,50 +1,46 @@
 # État d'implémentation
 
-Dernière vérification : 10 novembre 2026 — `npm run check` (types, lint, **56 tests Vitest**), `npm run build`, `npm run test:e2e` (**4 tests Playwright**, mobile + ordinateur) : tout passe.
+Dernière vérification complète : `npm run check` (types, lint, **88 tests Vitest dans 9 fichiers**), `npm run build`, `npm run test:e2e` (**8 tests Playwright**, mobile + ordinateur) en mode local **et** contre Supabase, `npm run test:supabase` (**8 tests d'intégration** contre un vrai Supabase + un vrai serveur SMTP) : tout passe.
 
-## ✅ Implémenté et testé
+## ✅ Implémenté et testé en conditions réelles
 
 | Fonction | Preuve |
 |---|---|
-| Inscription, connexion, déconnexion (mode local), redirection des visiteurs non connectés, 401 sur l'API | E2E, `core.test.ts` (sessions signées) |
-| Import de texte collé + analyse locale française (listes numérotées, « 20h30 - 22h », jour de semaine, notes « ⚠️ vacances », liens) | `text-parser.test.ts`, E2E (capture WhatsApp à 5 formations) |
-| Proposition d'année justifiée par le jour de semaine, confirmation obligatoire | `core.test.ts`, E2E |
-| Correction des brouillons, blocage tant que les champs incertains ne sont pas confirmés | E2E |
-| Vérification de l'agenda **avant** création ; choix par conflit ; récapitulatif ; création idempotente en lot | `agents.test.ts`, E2E |
-| Calendrier interne (jour / semaine / mois / liste), fuseau Europe/Zurich, heure d'été/hiver | `core.test.ts`, E2E, captures d'écran vérifiées |
-| Détection : chevauchement partiel/complet, consécutifs exclus, temps de déplacement, récurrences après changement d'heure, isolation entre personnes | `agents.test.ts`, `core.test.ts` |
-| Résolution : maintenir A/B (désistement), garder les deux, reporter, proposer un créneau, demander un changement | `agents.test.ts`, E2E (maintenir A) |
-| **Désistement personnel ne supprime pas l'événement collectif** ; message à l'organisateur sans mention de l'autre événement | `agents.test.ts` |
-| Annulation collective : interdite à un participant, confirmation exigée, participants notifiés, rappels supprimés | `agents.test.ts` |
-| Déplacement : rappels reprogrammés, participants notifiés | `agents.test.ts` |
-| Groupes, rôles, invitations de groupe, réponses Oui/Non/Peut-être | `agents.test.ts` |
-| Notifications internes ; anti-doublon ; e-mail : envoi, échec, nouvelle tentative, échec définitif, état « non configuré » | `agents.test.ts` (canal e-mail simulé dans les tests) |
-| Rappels : un seul envoi, aucun pour un participant désisté, seul le plus récent si le worker a du retard | `agents.test.ts` |
-| Isolation entre organisations (service + RLS PostgreSQL) | `agents.test.ts`, `migrations.test.ts` |
-| Migrations SQL appliquées dans PostgreSQL, contraintes, RLS | `migrations.test.ts` (PGlite) |
-| VisionAgent : JSON valide/invalide/non conforme, image illisible, erreur 429, contenu encadré comme donnée, aucun outil | `core.test.ts` (client OpenAI simulé) |
-| Export / import iCalendar | `core.test.ts`, E2E |
-| Sécurité : type réel des fichiers, HEIC, taille, CSRF, limitation de débit, scrypt, AES-GCM | `core.test.ts`, test manuel (`curl` : 401 et origine refusée) |
-| Worker (`npm run worker -- --once`) | exécuté manuellement |
+| **Mode production Supabase** : Auth (inscription, connexion), PostgreSQL via PostgREST, Storage privé, migrations | E2E complets contre Supabase local (`supabase start`), `test:supabase` |
+| **RLS** avec de vrais jetons utilisateurs : isolation entre organisations, écriture refusée ailleurs, participant incapable d'annuler un événement collectif via l'API REST directe | `test:supabase`, `migrations.test.ts` |
+| **E-mails réels** (SMTP) : invitations, désistement, annulation, liens d'invitation | `test:supabase` (Mailpit : messages reçus et lus) |
+| Inscription, connexion, sessions, redirections, 401, CSRF | E2E, `core.test.ts` |
+| Texte collé → 5 formations (capture WhatsApp), année justifiée et confirmée, aucun lien inventé | E2E, `text-parser.test.ts`, `core.test.ts` |
+| Vérification d'agenda avant création, choix par conflit, récapitulatif, création idempotente | E2E, `agents.test.ts` |
+| Calendrier jour/semaine/mois/liste, fuseau Europe/Zurich, heure d'été/hiver | E2E, `core.test.ts` |
+| Conflits : partiel/complet, consécutifs exclus, temps de déplacement, récurrences, isolation entre personnes | `agents.test.ts`, `occurrences.test.ts` |
+| Désistement ≠ annulation ; confidentialité du message ; annulation réservée et confirmée ; déplacement | `agents.test.ts`, `test:supabase` |
+| **Exceptions de récurrence** : annuler / déplacer / rétablir une date ; conflits, rappels, .ics (EXDATE, RECURRENCE-ID) | `occurrences.test.ts` |
+| **Invitations par e-mail** à des personnes sans compte (lien unique 30 j, inscription, rejoint l'organisation et l'événement) ; invitations d'organisation avec rôle | `email-invitations.test.ts`, E2E (navigateur), `test:supabase` (lien lu dans le vrai e-mail) |
+| **Notifications push web** : chiffrement aes128gcm + VAPID réels, déchiffrés par un service push local ; abonnement expiré désactivé ; nouvelles tentatives | `push.test.ts` |
+| **Partage vers l'application** (Web Share Target POST + service worker) | E2E (Chromium) |
+| Notifications internes/e-mail : anti-doublon, échec, nouvelle tentative, échec définitif, « non configuré » | `agents.test.ts` |
+| Rappels (un seul envoi, pas pour un désisté, seul le plus récent si retard) | `agents.test.ts` |
+| **Limitation de débit partagée** (fonction PostgreSQL atomique ; 5 requêtes parallèles pour 3 autorisées → exactement 3) | `test:supabase`, `migrations.test.ts` |
+| **Purge automatique** selon la politique de conservation (quotidienne, configurable) | `retention.test.ts`, `test:supabase` |
+| Sécurité : type réel des fichiers, HEIC, tailles, scrypt, AES-GCM, état OAuth signé | `core.test.ts`, `integrations.test.ts` |
+| Worker (`npm run worker`) : analyses en attente, rappels, e-mails, push, synchronisations, webhooks, purge | `integrations.test.ts` (tick → Outlook), exécution manuelle |
 
-## 🟡 Implémenté mais non testé automatiquement
+## 🟡 Implémenté, testé contre des API **simulées** (services réels inaccessibles depuis l'environnement de développement)
 
-- Pages : fiche événement (modifier, inviter, rappels personnalisés, annulation, WhatsApp), groupes et membres, invitations, notifications, historique, paramètres, administration, connexions calendriers — compilées et vérifiées par le build ; seules certaines ont été ouvertes manuellement.
-- Import d'images/PDF dans l'interface (préparation côté navigateur, conversion HEIC Safari) : nécessite une clé OpenAI.
-- Export des données personnelles et suppression de compte.
-- Changement d'organisation, création d'organisation.
-- Partage de texte vers l'app (Web Share Target du manifeste PWA).
+Les tests vérifient les requêtes exactes envoyées (URL, méthode, en-têtes, contenu) et le traitement des réponses, y compris les erreurs.
 
-## ⏳ En attente de configuration externe (code prêt, jamais exécuté contre le service réel)
-
-| Service | Variables | Remarque |
+| Service | Ce qui est couvert | À faire avec de vrais identifiants |
 |---|---|---|
-| **Supabase** (PostgreSQL, Auth, Storage) | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Le schéma est testé dans PostgreSQL ; `SupabaseStore` et l'auth Supabase ne sont pas testés contre un projet réel. Voir docs/SUPABASE.md. |
-| **OpenAI** (captures, PDF) | `OPENAI_API_KEY` | Testé avec un client simulé uniquement. Qualité d'extraction réelle à évaluer sur vos captures. |
-| **SMTP** | `SMTP_*` | Logique testée avec un canal simulé. |
-| **Google Calendar** | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `TOKEN_ENCRYPTION_KEY` | OAuth, push, pull, chiffrement : non testés contre Google. |
-| **Vercel Cron** | `CRON_SECRET` | Toutes les 5 min dans `vercel.json` : nécessite un plan Vercel payant (sinon quotidien, ou worker séparé). |
+| **OpenAI** (captures, PDF) | JSON valide/invalide/non conforme, image illisible, 429, contenu encadré comme donnée | Évaluer la qualité d'extraction sur de vraies captures |
+| **Google Calendar** | OAuth (URL, état, échange, rafraîchissement, révocation), envoi, instances annulées/déplacées, import + conflits, Google Meet, canal webhook | Créer le client OAuth, tester la connexion |
+| **Outlook (Microsoft Graph)** | OAuth, conversion des récurrences, envoi, instances, calendarView, validation et clientState des webhooks, envoi via la file du worker | Enregistrer l'application Entra ID |
+| **Zoom** | OAuth (Basic), création, lien jamais inventé, annulation répercutée | Créer l'application Zoom |
 
-## 🔜 Prévu pour une version ultérieure
+## 🟡 Implémenté, non couvert par un test automatisé
+- Pages : modification d'événement, rappels personnalisés, groupes et membres, historique, administration, export / suppression de compte, changement d'organisation (compilées ; parcours principaux vérifiés manuellement).
+- Affichage effectif d'une notification push par un navigateur réel (nécessite l'accès aux serveurs push de Google/Mozilla/Apple).
 
-Outlook (Microsoft Graph), création de réunions Zoom / Google Meet, notifications push web, webhooks Google (notifications push de changements), exceptions de récurrence (`event_occurrences`), invitations par e-mail à des personnes sans compte, limitation de débit partagée, purge automatique selon la politique de conservation, traduction complète des libellés, application mobile native. Détails dans ROADMAP.md.
+## Limites assumées
+- **Langues** : l'interface est entièrement en français, comme demandé. L'architecture prévoit d'autres langues (`src/i18n`), mais une partie des textes des pages est écrite directement en français : ajouter une langue demandera de les déplacer dans le dictionnaire.
+- Les rendez-vous « journée entière » des calendriers externes ne sont pas comptés comme conflits (choix volontaire : souvent non bloquants).

@@ -13,6 +13,8 @@ create schema auth;
 create table auth.users (id uuid primary key, email text);
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 create role authenticated nologin;
+create role anon nologin;
+create role service_role nologin bypassrls;
 grant usage on schema public to authenticated;
 `;
 
@@ -82,6 +84,12 @@ describe("migrations SQL", () => {
   it("contraintes : fin après début, lien https uniquement", async () => {
     await expect(db.exec(`insert into events (organization_id, created_by, title, starts_at, ends_at) values ('${ORG_A}', '${A}', 'x', '2027-01-01T10:00Z', '2027-01-01T09:00Z')`)).rejects.toThrow();
     await expect(db.exec(`insert into events (organization_id, created_by, title, starts_at, ends_at, meeting_url) values ('${ORG_A}', '${A}', 'x', '2027-01-01T10:00Z', '2027-01-01T11:00Z', 'javascript:alert(1)')`)).rejects.toThrow();
+  });
+
+  it("limitation de débit atomique (fonction rate_limit_hit), interdite aux utilisateurs", async () => {
+    const hit = async () => (await db.query<{ ok: boolean }>("select public.rate_limit_hit('k', 2, 60) as ok")).rows[0].ok;
+    expect([await hit(), await hit(), await hit()]).toEqual([true, true, false]);
+    await expect(asUser(A, "select public.rate_limit_hit('k2', 2, 60)")).rejects.toThrow(/permission/);
   });
 
   it("anonyme (sans session) : aucune donnée visible", async () => {

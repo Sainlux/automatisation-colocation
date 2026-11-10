@@ -157,4 +157,21 @@ describe.skipIf(!RUN)("Supabase réel", () => {
     const [p] = await store.select("event_participants", { where: [["event_id", "eq", e.id], ["user_id", "eq", data.user!.id]] });
     expect(p.status).toBe("accepted");
   });
+
+  it("limitation de débit partagée : compteur atomique en base, interdit à la clé anonyme", async () => {
+    process.env.DATA_BACKEND = "supabase";
+    const { sharedRateLimit } = await import("@/lib/http/api");
+    const key = `it-${run}`;
+    const results = await Promise.all(Array.from({ length: 5 }, () => sharedRateLimit(key, 3)));
+    expect(results.filter(Boolean)).toHaveLength(3); // même en parallèle : exactement 3 autorisées
+    const anon = createClient(URL, ANON, { auth: { persistSession: false } });
+    const r = await anon.rpc("rate_limit_hit", { p_key: "x", p_max: 1, p_window_seconds: 60 });
+    expect(r.error).not.toBeNull();
+  });
+
+  it("purge de conservation exécutée sur PostgreSQL", async () => {
+    const { purgeExpiredData } = await import("@/lib/retention");
+    const r = await purgeExpiredData(store, new Date(Date.now() + 400 * 86400000));
+    expect(r.audit).toBeGreaterThan(0);
+  });
 });

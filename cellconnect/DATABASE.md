@@ -1,8 +1,8 @@
 # Base de données
 
-Schéma : `supabase/migrations/20261110000000_initial_schema.sql` (PostgreSQL ≥ 13, Supabase). Les types TypeScript correspondants sont dans `src/lib/types.ts`.
+Schéma : `supabase/migrations/*.sql`, à appliquer dans l'ordre (PostgreSQL ≥ 13, Supabase) — schéma initial, invitations par e-mail, abonnements push, intégrations (Outlook, Zoom, webhooks), limitation de débit. Les types TypeScript correspondants sont dans `src/lib/types.ts`.
 
-Les migrations sont **appliquées réellement** dans PostgreSQL (PGlite) par `tests/unit/migrations.test.ts`, qui vérifie aussi l'isolation RLS entre organisations.
+Les migrations sont **appliquées réellement** dans PostgreSQL (PGlite) par `tests/unit/migrations.test.ts`, et dans un Supabase complet par `npm run test:supabase` (RLS vérifiée avec de vrais jetons utilisateurs).
 
 ## Tables
 
@@ -11,11 +11,12 @@ Les migrations sont **appliquées réellement** dans PostgreSQL (PGlite) par `te
 | Identité, organisations | `profiles` (1-1 avec `auth.users`), `organizations`, `organization_members` (rôle : super_admin, org_admin, group_leader, member, guest) |
 | Groupes | `groups`, `group_members` (leader, member, guest) |
 | Import | `uploads` (fichier privé, supprimable ; `storage_path` nul après suppression), `extraction_jobs` (statut + étape), `extracted_events` (brut + brouillon) |
-| Événements | `events` (instants UTC + fuseau + RRULE), `event_occurrences` (réservé aux exceptions de récurrence), `event_participants`, `invitations`, `event_changes` |
-| Calendriers externes | `calendar_connections` (jetons **chiffrés**), `calendar_sync_records` (identifiants externes, anti-doublon) |
+| Événements | `events` (instants UTC + fuseau + RRULE), `event_occurrences` (dates annulées / déplacées d'une série), `event_participants`, `invitations` (internes, par e-mail avec jeton haché, ou d'organisation), `event_changes` |
+| Connexions externes | `calendar_connections` (Google, Outlook, Zoom ; jetons **chiffrés** ; canal webhook), `calendar_sync_records` (identifiants externes, anti-doublon) |
 | Conflits | `calendar_conflicts` (par utilisateur, paire ordonnée A<B, unicité par occurrence), `conflict_resolutions` |
 | Rappels, notifications | `reminders` (`dedupe_key` unique), `notifications` (`dedupe_key` unique), `notification_deliveries` (un statut par canal) |
-| Technique | `agent_tasks` (file persistante, `idempotency_key`), `idempotency_keys`, `audit_logs` |
+| Technique | `agent_tasks` (file persistante, `idempotency_key`), `idempotency_keys`, `audit_logs`, `rate_limits` (+ fonction atomique `rate_limit_hit`) |
+| Push | `push_subscriptions` (un abonnement par appareil) |
 
 Toutes les clés sont des UUID ; clés étrangères avec `on delete cascade` pour la suppression des données ; index sur les accès fréquents (agenda par organisation et date, participations par utilisateur, rappels et livraisons dus).
 

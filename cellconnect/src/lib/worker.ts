@@ -8,6 +8,7 @@ import { processPendingDeliveries } from "@/lib/agents/notification-agent";
 import { runExtractionJob } from "@/lib/agents/orchestrator";
 import { detectForUserEvent, withExceptions } from "@/lib/agents/conflict-agent";
 import type { CalendarConnection } from "@/lib/types";
+import { purgeDue, purgeExpiredData, retentionPolicy } from "@/lib/retention";
 
 /**
  * Tâches de fond persistantes (sans Redis) : un « tick » traite
@@ -19,7 +20,7 @@ import type { CalendarConnection } from "@/lib/types";
  * L'état de chaque tâche est en base : un redémarrage ne perd rien.
  */
 export async function tick(store: Store, mailer: ChannelSender, now = new Date()) {
-  const report = { extractions: 0, reminders: 0, deliveries: 0, syncs: 0, syncErrors: 0, watches: 0 };
+  const report = { extractions: 0, reminders: 0, deliveries: 0, syncs: 0, syncErrors: 0, watches: 0, purged: 0 };
 
   // 1. Analyses en attente depuis plus de 30 s (le traitement immédiat a échoué ou été interrompu).
   const stale = new Date(now.getTime() - 30000).toISOString();
@@ -66,6 +67,13 @@ export async function tick(store: Store, mailer: ChannelSender, now = new Date()
 
   // 5. Canaux de notification (webhooks) des calendriers : création / renouvellement.
   report.watches = await renewWatches(store, now);
+
+  // 6. Purge quotidienne selon la politique de conservation.
+  if (await purgeDue(store, now)) {
+    const { deleteObject } = await import("@/lib/storage");
+    const purged = await purgeExpiredData(store, now, retentionPolicy(), deleteObject);
+    report.purged = Object.values(purged).reduce((a, b) => a + b, 0);
+  }
 
   if (Object.values(report).some((v) => v > 0)) log("info", "worker_tick", report);
   return report;

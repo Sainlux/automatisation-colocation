@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ZodError, type ZodType } from "zod";
 import { AppError, badRequest } from "@/lib/errors";
 import { log } from "@/lib/audit";
+import { env } from "@/lib/env";
+import { supabaseAdmin } from "@/lib/db";
 import { requireCtx } from "@/lib/auth/session";
 import type { Ctx } from "@/lib/context";
 import { UniqueViolationError } from "@/lib/db/store";
@@ -36,6 +38,22 @@ export function checkRateLimit(key: string, perMinute: number, now = Date.now())
   buckets.set(key, hits);
   if (buckets.size > 10000) buckets.clear();
   return true;
+}
+
+/**
+ * Limitation de débit partagée : en mode Supabase, compteur atomique en base
+ * (fonction rate_limit_hit), valable pour toutes les instances serverless.
+ * En mode local (une seule instance), compteur en mémoire.
+ * En cas d'indisponibilité de la base, repli sur la mémoire (journalisé).
+ */
+export async function sharedRateLimit(key: string, perMinute: number): Promise<boolean> {
+  if (env.dataBackend !== "supabase") return checkRateLimit(key, perMinute);
+  const { data, error } = await supabaseAdmin().rpc("rate_limit_hit", { p_key: key.slice(0, 300), p_max: perMinute, p_window_seconds: 60 });
+  if (error) {
+    log("warn", "rate_limit_fallback", { error: error.message });
+    return checkRateLimit(key, perMinute);
+  }
+  return data === true;
 }
 
 export function isSameOrigin(req: Request): boolean {
@@ -74,7 +92,7 @@ export function api<A extends boolean = true>(fn: Handler<A>, opts: Options<A> =
       const ctx = auth ? await requireCtx() : null;
       if (opts.rateLimit) {
         const who = ctx?.userId ?? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anon";
-        if (!checkRateLimit(`${req.nextUrl.pathname}:${req.method}:${who}`, opts.rateLimit)) {
+        if (!(await sharedRateLimit(`${req.nextUrl.pathname}:${req.method}:${who}`, opts.rateLimit))) {
           throw new AppError(429, "rate_limited", "Trop de requêtes. Patientez une minute.");
         }
       }

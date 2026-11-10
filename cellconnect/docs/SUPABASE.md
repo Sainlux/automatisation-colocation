@@ -9,4 +9,15 @@
    - `SUPABASE_SERVICE_ROLE_KEY` (clé service_role / secret — **serveur uniquement**)
 5. Redémarrez l'application : `/api/health` doit indiquer `"backend":"supabase"`.
 
+## Développement local (sans compte Supabase)
+
+Avec Docker installé :
+
+```bash
+npx supabase start          # base, Auth, API, Storage, Mailpit (SMTP de test) ; applique les migrations
+npx supabase status         # affiche l'URL et les clés locales (clés de démonstration publiques)
+```
+
+Renseignez ces valeurs dans `.env.local` (`DATA_BACKEND=supabase`), et pour les e-mails `SMTP_HOST`/`SMTP_PORT` vers Mailpit (interface web : http://127.0.0.1:54324). Les tests d'intégration se lancent avec `SUPABASE_IT=1 npm run test:supabase`.
+
 Vérifications conseillées : créer deux comptes, vérifier qu'aucun ne voit les événements de l'autre ; dans le SQL Editor, `select * from events` avec le rôle `authenticated` ne doit rien renvoyer sans JWT.

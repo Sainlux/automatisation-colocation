@@ -14,7 +14,7 @@
 ## Protection des requêtes
 - **CSRF** : toute requête d'écriture dont l'en-tête `Origin` ne correspond pas à l'hôte est refusée ; cookies SameSite=Lax.
 - **Validation** Zod sur toutes les entrées ; requêtes paramétrées (supabase-js) ; aucune concaténation SQL.
-- **Limitation de débit** par utilisateur et par route (mémoire du processus : protection de base ; utiliser une solution partagée — p. ex. Upstash ou le pare-feu Vercel — en multi-instances).
+- **Limitation de débit** par utilisateur et par route, **partagée entre instances** en mode Supabase (fonction PostgreSQL atomique `rate_limit_hit`, exécutable uniquement par le serveur) ; en mémoire en mode local.
 - **Idempotence** (`Idempotency-Key`) sur la création en lot, la création d'événement et la résolution de conflits.
 - En-têtes : `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`.
 - Liens de réunion : `https://` uniquement (contrainte SQL + validation) ; domaines inhabituels signalés.
@@ -38,13 +38,16 @@ Les captures WhatsApp peuvent contenir noms, numéros et messages privés.
 - **Export** des données (`/api/account/export`) et **suppression du compte** (`DELETE /api/account`).
 - **Confidentialité inter-groupes** : un message de désistement ou de demande de changement ne mentionne jamais l'autre événement. Les e-mails des membres ne sont visibles que des administrateurs.
 - Sous-traitants à documenter dans votre politique de confidentialité : hébergeur (Vercel), base (Supabase — choisir la région UE/Suisse), OpenAI (images/PDF ; vérifiez vos réglages de rétention), fournisseur SMTP, Google (si connecté).
-- Conservation : à définir par l'organisation (recommandation : journaux d'audit 12 mois, analyses 30 jours). Une purge automatique est prévue dans la ROADMAP.
+- **Conservation** : purge automatique quotidienne (analyses et fichiers 30 j, notifications lues 180 j, conflits clos 180 j, rappels 90 j, journal d'audit 365 j…), durées configurables (`RETENTION_*`).
 
 ## Secrets
 - Uniquement par variables d'environnement ; `.env*` ignorés par git (sauf `.env.example`).
 - La clé `SUPABASE_SERVICE_ROLE_KEY` n'est utilisée que côté serveur (`import "server-only"`).
 - Jetons OAuth chiffrés **AES-256-GCM** (`TOKEN_ENCRYPTION_KEY`), jamais exportés ni renvoyés au navigateur ; état OAuth signé et lié à l'utilisateur (15 min).
 - `/api/cron/tick` protégé par `CRON_SECRET` (comparaison à temps constant).
+- Webhooks Google / Microsoft authentifiés par un jeton secret propre à chaque connexion (HMAC), vérifié à temps constant ; ils ne déclenchent qu'une resynchronisation, jamais une action fournie par l'appelant.
+- Invitations par e-mail : jeton aléatoire de 256 bits, seule son empreinte SHA-256 est stockée, usage unique, expiration 30 jours ; la page publique n'affiche que le strict nécessaire (adresse masquée).
+- Push : contenu chiffré de bout en bout (aes128gcm) ; abonnements expirés désactivés automatiquement.
 
 ## Signaler une vulnérabilité
 Contactez le responsable du dépôt en privé ; ne publiez pas de détails dans un ticket public.

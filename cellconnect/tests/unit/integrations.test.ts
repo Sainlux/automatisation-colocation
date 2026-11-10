@@ -120,13 +120,18 @@ describe("Google Calendar", () => {
     expect(created).toMatchObject({ summary: "Cellule", start: { dateTime: "2027-01-06T19:00:00.000Z", timeZone: tz }, extendedProperties: { private: { cellconnectId: e.id } } });
     expect(created.recurrence).toEqual(["RRULE:FREQ=WEEKLY;COUNT=4"]);
 
+    route("DELETE", /events\/g1_20270113T190000Z$/, () => ({ status: 204 }));
+    route("PATCH", /events\/g1_20270120T190000Z$/, () => ({ json: {} }));
     await modifyOccurrence(u, e.id, { occurrenceStart: "2027-01-13T19:00:00.000Z", action: "cancel" });
+    await modifyOccurrence(u, e.id, { occurrenceStart: "2027-01-20T19:00:00.000Z", action: "move", date: "2027-01-21", startTime: "20:00", endTime: "21:30" });
+    calls = [];
     await google.pushEvent(store, conn, (await withExceptions(store, [(await store.get("events", e.id))!]))[0], "upsert");
-    expect(calls[1].method).toBe("PATCH");
-    expect(JSON.parse(calls[1].body!).recurrence).toContain("EXDATE:20270113T190000Z");
+    expect(calls.map((c) => `${c.method} ${new URL(c.url).pathname.split("/").pop()}`)).toEqual(["PATCH g1", "DELETE g1_20270113T190000Z", "PATCH g1_20270120T190000Z"]);
+    expect(JSON.parse(calls[2].body!).start).toEqual({ dateTime: "2027-01-21T19:00:00.000Z", timeZone: tz });
 
+    calls = [];
     await google.pushEvent(store, conn, (await store.get("events", e.id))!, "delete");
-    expect(calls[2].method).toBe("DELETE");
+    expect(calls[0].method).toBe("DELETE");
     expect(await store.select("calendar_sync_records", { where: [["connection_id", "eq", conn.id]] })).toHaveLength(1);
   });
 

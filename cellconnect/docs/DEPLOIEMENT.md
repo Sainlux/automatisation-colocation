@@ -4,7 +4,7 @@
 
 1. Configurez Supabase (docs/SUPABASE.md).
 2. Sur Vercel : *New Project* → importez le dépôt → **Root Directory : `cellconnect`** (le dépôt contient une autre application à la racine).
-3. Variables d'environnement (Production) : celles de `.env.example`, au minimum `APP_URL`, `SESSION_SECRET`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` ; puis selon les besoins `OPENAI_API_KEY`, `SMTP_*`, `GOOGLE_*`, `TOKEN_ENCRYPTION_KEY`.
+3. Variables d'environnement (Production) : celles de `.env.example`, au minimum `APP_URL` (en https : active les webhooks), `SESSION_SECRET`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` ; puis selon les besoins `OPENAI_API_KEY`, `SMTP_*`, `VAPID_*`, `GOOGLE_*`, `MS_*`, `ZOOM_*`, `TOKEN_ENCRYPTION_KEY`.
 4. Déployez. Vérifiez `https://<domaine>/api/health`.
 
 ⚠️ Ne déployez pas en mode local (`DATA_BACKEND=local`) sur Vercel : le système de fichiers n'y est pas persistant.

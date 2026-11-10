@@ -33,7 +33,10 @@ En mode local, les données sont stockées dans `.data/` (fichier JSON privé + 
 | Texte collé, fichiers .ics | ✅ analyse locale, sans IA | — |
 | Captures d'écran, photos, PDF | ❌ message explicite | `OPENAI_API_KEY` |
 | E-mails | statut « Non envoyé » affiché | `SMTP_*` |
-| Google Calendar | bouton désactivé + explication | `GOOGLE_*`, `TOKEN_ENCRYPTION_KEY` |
+| Google Calendar + Google Meet | bouton désactivé + explication | `GOOGLE_*`, `TOKEN_ENCRYPTION_KEY` |
+| Outlook / Microsoft 365 | idem | `MS_*`, `TOKEN_ENCRYPTION_KEY` |
+| Réunions Zoom | idem | `ZOOM_*`, `TOKEN_ENCRYPTION_KEY` |
+| Notifications push | idem | `VAPID_*` (`npm run vapid`) |
 | Base PostgreSQL multi-instances | stockage local | `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY` |
 
 ## Scripts
@@ -43,7 +46,9 @@ En mode local, les données sont stockées dans `.data/` (fichier JSON privé + 
 | `npm run dev` / `build` / `start` | Développement / build / production |
 | `npm run worker` | Tâches de fond (rappels, e-mails, reprises, synchronisation) — `-- --once` pour un passage |
 | `npm test` | Tests unitaires et d'intégration (Vitest, dont migrations SQL dans PostgreSQL/PGlite) |
-| `npm run test:e2e` | Parcours complet dans Chromium (mobile + ordinateur) — nécessite `npm run build` |
+| `npm run test:e2e` | Parcours complets dans Chromium (mobile + ordinateur) — nécessite `npm run build` ; `E2E_BASE_URL=…` pour viser un serveur existant (ex. mode Supabase) |
+| `npm run test:supabase` | Intégration contre un vrai Supabase + SMTP (voir docs/SUPABASE.md, « Développement local ») |
+| `npm run vapid` | Génère les clés des notifications push |
 | `npm run check` | Types + lint + tests |
 
 ## Documentation
@@ -53,7 +58,7 @@ En mode local, les données sont stockées dans `.data/` (fichier JSON privé + 
 - [SECURITY.md](SECURITY.md) — sécurité et protection des données (nLPD / RGPD)
 - [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) — ce qui est fait, testé, en attente
 - [ROADMAP.md](ROADMAP.md) — suite du développement
-- Guides : [Supabase](docs/SUPABASE.md) · [OpenAI](docs/OPENAI.md) · [Google Calendar](docs/GOOGLE_CALENDAR.md) · [Déploiement](docs/DEPLOIEMENT.md)
+- Guides : [Supabase](docs/SUPABASE.md) · [OpenAI](docs/OPENAI.md) · [Google Calendar](docs/GOOGLE_CALENDAR.md) · [Outlook et Zoom](docs/OUTLOOK_ZOOM.md) · [Déploiement](docs/DEPLOIEMENT.md)
 
 ## Stack
 

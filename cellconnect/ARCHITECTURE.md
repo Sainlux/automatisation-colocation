@@ -33,7 +33,27 @@ Les agents sont des **modules spécialisés** coordonnés par un orchestrateur. 
 | NotificationAgent | `notification-agent.ts` | Interne + e-mail, anti-doublon, nouvelles tentatives | non |
 | ReminderAgent | `reminder-agent.ts` | Rappels 24 h / 2 h / 30 min / personnalisés | non |
 | GroupAgent | `group-agent.ts` | Groupes, membres, rôles d'organisation | non |
-| MeetingAgent | — | Liens Zoom/Meet conservés et affichés ; création via API prévue (ROADMAP) | — |
+| MeetingAgent | `meeting-agent.ts` | Création de réunions Zoom / Google Meet via les API officielles (lien jamais inventé) | non |
+
+## Intégrations externes (`src/lib/integrations`)
+
+| Module | Rôle |
+|---|---|
+| `oauth.ts` | OAuth 2.0 commun (Google, Microsoft, Zoom) : état signé, jetons chiffrés, rafraîchissement |
+| `google-calendar.ts` | Envoi (+ instances annulées/déplacées), import, Google Meet, webhooks `events.watch` |
+| `outlook-calendar.ts` | Microsoft Graph : envoi (récurrences, instances), `calendarView`, abonnements |
+| `zoom.ts` | Création / mise à jour / suppression de réunions |
+| `http.ts` | Accès HTTP unique (remplacé par des API simulées dans les tests) |
+
+Les envois passent par la file persistante `agent_tasks` (worker) ; les imports se font sur webhook (https) ou toutes les 15 minutes, et déclenchent la détection de conflits.
+
+## Canaux de notification
+
+| Canal | Module | Statuts |
+|---|---|---|
+| Interne | `notification-agent.ts` | toujours `sent` |
+| E-mail | `channels/email.ts` (SMTP) | `sent`, `pending` (nouvelle tentative), `failed`, `skipped` (non configuré / refusé) |
+| Push web | `channels/push.ts` (Web Push + VAPID) + `public/sw.js` | idem ; abonnements expirés désactivés |
 
 ### Choix du fournisseur d'extraction
 
@@ -72,8 +92,8 @@ L'interface `ExtractionProvider` permet d'ajouter d'autres fournisseurs (Anthrop
 
 ## Tâches persistantes
 
-Pas de Redis : l'état est en base (`extraction_jobs`, `reminders`, `notification_deliveries`, `agent_tasks`). `tick()` est idempotent et peut être lancé par le worker (boucle de 30 s) ou par le cron Vercel. BullMQ/Redis restent possibles si le volume l'exige (ROADMAP).
+Pas de Redis : l'état est en base (`extraction_jobs`, `reminders`, `notification_deliveries`, `agent_tasks`). `tick()` traite aussi le renouvellement des webhooks et la purge quotidienne ; il est idempotent et peut être lancé par le worker (boucle de 30 s) ou par le cron Vercel. BullMQ/Redis restent possibles si le volume l'exige (ROADMAP).
 
 ## Internationalisation
 
-Libellés dans `src/i18n/fr.ts` (type `Messages`). Ajouter une langue = un nouveau fichier de même structure + enregistrement dans `src/i18n/index.ts`. Certains textes de pages sont encore écrits directement en français (voir ROADMAP).
+Libellés communs dans `src/i18n/fr.ts` (type `Messages`). Ajouter une langue = un nouveau fichier de même structure + enregistrement dans `src/i18n/index.ts`, après avoir déplacé dans le dictionnaire les textes encore écrits directement dans les pages.

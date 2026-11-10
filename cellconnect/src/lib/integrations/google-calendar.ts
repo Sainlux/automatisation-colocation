@@ -18,17 +18,24 @@ const cal = (c: CalendarConnection) => `${API}/calendars/${encodeURIComponent(c.
 
 type Ev = EventRow & { exceptions?: Record<string, OccurrenceException> };
 
-const exdate = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+/** Identifiant d'instance Google d'une série : <idSérie>_<début d'origine UTC, AAAAMMJJTHHMMSSZ>. */
+export const instanceId = (seriesId: string, originalStart: string) => `${seriesId}_${new Date(originalStart).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")}`;
+
+/** Répercute les dates annulées (suppression d'instance) et déplacées (modification d'instance). */
+async function applyExceptions(store: Store, c: CalendarConnection, e: Ev, seriesId: string) {
+  for (const [orig, x] of Object.entries(e.exceptions ?? {})) {
+    const url = `${cal(c)}/events/${encodeURIComponent(instanceId(seriesId, orig))}`;
+    const res = x.cancelled
+      ? await authedFetch(store, c, url, { method: "DELETE" })
+      : x.start && x.end
+        ? await authedFetch(store, c, url, { method: "PATCH", body: JSON.stringify({ start: { dateTime: x.start, timeZone: e.timezone }, end: { dateTime: x.end, timeZone: e.timezone } }) })
+        : null;
+    if (res && !res.ok && res.status !== 404 && res.status !== 410) throw new Error(`Google INSTANCE ${res.status}`);
+  }
+}
 
 export function toGoogle(e: Ev) {
-  const recurrence = e.recurrence_rule
-    ? [
-        `RRULE:${e.recurrence_rule.replace(/^RRULE:/i, "")}`,
-        // Dates annulées individuellement (les dates déplacées sont aussi exclues de la série ;
-        // voir ROADMAP pour leur report en tant qu'instances modifiées).
-        ...Object.entries(e.exceptions ?? {}).map(([orig]) => `EXDATE:${exdate(new Date(orig).toISOString())}`),
-      ]
-    : undefined;
+  const recurrence = e.recurrence_rule ? [`RRULE:${e.recurrence_rule.replace(/^RRULE:/i, "")}`] : undefined;
   return {
     summary: e.title,
     description: [e.description, e.meeting_url ? `Lien : ${e.meeting_url}` : null, "— Créé via CellConnect AI"].filter(Boolean).join("\n"),
@@ -60,6 +67,7 @@ export async function pushEvent(store: Store, c: CalendarConnection, event: Ev, 
   if (!res.ok) throw new Error(`Google ${rec ? "PATCH" : "POST"} ${res.status}`);
   const g = (await res.json()) as { id: string; updated: string; hangoutLink?: string; conferenceData?: { entryPoints?: { entryPointType: string; uri: string }[] } };
   await recordPush(store, c, event.id, g.id, g.updated, rec);
+  if (event.recurrence_rule) await applyExceptions(store, c, event, g.id);
   const meet = g.hangoutLink ?? g.conferenceData?.entryPoints?.find((p) => p.entryPointType === "video")?.uri ?? null;
   return { externalId: g.id, meetingUrl: meet };
 }
