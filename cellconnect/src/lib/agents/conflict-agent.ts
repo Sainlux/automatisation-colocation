@@ -5,7 +5,7 @@ import type { ChannelSender } from "@/lib/channels/email";
 import type { CalendarConflict, EventRow, ParticipantStatus } from "@/lib/types";
 import type { ReadyDraft } from "@/lib/schemas/draft";
 import { zonedToUtc, formatRangeFr } from "@/lib/time";
-import { expandOccurrences, findInternalOverlaps, findOverlaps, type Occurrence, type Overlap } from "./conflict-engine";
+import { expandOccurrences, findInternalOverlaps, findOverlaps, type Occurrence, type OccurrenceException, type Overlap } from "./conflict-engine";
 import { notify } from "./notification-agent";
 
 /**
@@ -21,7 +21,10 @@ export const ACTIVE_STATUSES: ParticipantStatus[] = ["invited", "accepted", "ten
 const WINDOW_PAST_MS = 1 * 86400000;
 const WINDOW_FUTURE_MS = 400 * 86400000;
 
-export function eventToSlot(e: EventRow) {
+/** Événement accompagné de ses exceptions d'occurrences (récurrences). */
+export type EventWithExceptions = EventRow & { exceptions?: Record<string, OccurrenceException> };
+
+export function eventToSlot(e: EventWithExceptions) {
   return {
     eventId: e.id,
     title: e.title,
@@ -29,11 +32,26 @@ export function eventToSlot(e: EventRow) {
     endsAt: e.ends_at,
     timezone: e.timezone,
     recurrenceRule: e.recurrence_rule,
+    exceptions: e.exceptions,
   };
 }
 
+/** Charge les exceptions (event_occurrences) des événements récurrents. */
+export async function withExceptions<T extends EventRow>(store: Store, events: T[]): Promise<(T & { exceptions?: Record<string, OccurrenceException> })[]> {
+  const ids = events.filter((e) => e.recurrence_rule).map((e) => e.id);
+  if (ids.length === 0) return events;
+  const rows = await store.select("event_occurrences", { where: [["event_id", "in", ids]] });
+  const map = new Map<string, Record<string, OccurrenceException>>();
+  for (const r of rows) {
+    const m = map.get(r.event_id) ?? {};
+    m[new Date(r.starts_at).toISOString()] = r.status === "cancelled" ? { cancelled: true } : { start: r.overrides.starts_at, end: r.overrides.ends_at };
+    map.set(r.event_id, m);
+  }
+  return events.map((e) => (map.has(e.id) ? { ...e, exceptions: map.get(e.id) } : e));
+}
+
 /** Événements actifs d'un utilisateur (participation active, événement non annulé). */
-export async function activeEventsForUser(store: Store, userId: string, orgId?: string): Promise<EventRow[]> {
+export async function activeEventsForUser(store: Store, userId: string, orgId?: string): Promise<EventWithExceptions[]> {
   const parts = await store.select("event_participants", {
     where: [
       ["user_id", "eq", userId],
@@ -47,10 +65,10 @@ export async function activeEventsForUser(store: Store, userId: string, orgId?: 
       ["status", "neq", "cancelled"],
     ],
   });
-  return orgId ? events.filter((e) => e.organization_id === orgId) : events;
+  return withExceptions(store, orgId ? events.filter((e) => e.organization_id === orgId) : events);
 }
 
-export function occurrencesOf(events: EventRow[], from: number, to: number): Occurrence[] {
+export function occurrencesOf(events: EventWithExceptions[], from: number, to: number): Occurrence[] {
   return events.flatMap((e) => expandOccurrences(eventToSlot(e), from, to));
 }
 
@@ -127,8 +145,9 @@ export async function detectForUserEvent(
   now: Date,
   opts: { notify?: boolean } = {},
 ): Promise<CalendarConflict[]> {
-  const event = await store.get("events", eventId);
-  if (!event) return [];
+  const raw = await store.get("events", eventId);
+  if (!raw) return [];
+  const [event] = await withExceptions(store, [raw]);
   const profile = await store.get("profiles", userId);
   const buffer = profile?.travel_buffer_minutes ?? 0;
   const from = now.getTime() - WINDOW_PAST_MS;

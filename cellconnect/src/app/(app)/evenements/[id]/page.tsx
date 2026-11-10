@@ -40,8 +40,9 @@ const CHANGE_LABEL: Record<string, string> = {
   participants_invited: "Invitations envoyées",
 };
 
-export default function EventPage({ params }: { params: Promise<{ id: string }> }) {
+export default function EventPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ occurrence?: string }> }) {
   const { id } = use(params);
+  const { occurrence } = use(searchParams);
   const { me, refreshCounters } = useMe();
   const { data, error, reload } = useApi<Details>(`/api/events/${id}`);
   const [editing, setEditing] = useState(false);
@@ -165,6 +166,20 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
           </div>
         </CardContent>
       </Card>
+
+      {e.recurrence_rule && occurrence && !cancelled && data.canEdit && (
+        <OccurrencePanel
+          eventId={id}
+          occurrenceStart={occurrence}
+          timezone={e.timezone}
+          durationMin={(Date.parse(e.ends_at) - Date.parse(e.starts_at)) / 60000}
+          onDone={(r) => {
+            setResult(r);
+            refreshCounters();
+            reload();
+          }}
+        />
+      )}
 
       {editing && (
         <Card>
@@ -468,5 +483,78 @@ function RemindersDialog({ open, onClose, eventId, current, onDone }: { open: bo
         {err && <Alert tone="danger">{err}</Alert>}
       </div>
     </Dialog>
+  );
+}
+
+function OccurrencePanel({ eventId, occurrenceStart, timezone, durationMin, onDone }: { eventId: string; occurrenceStart: string; timezone: string; durationMin: number; onDone: Done }) {
+  const start = DateTime.fromISO(occurrenceStart, { zone: "utc" }).setZone(timezone);
+  const [mode, setMode] = useState<null | "move" | "cancel">(null);
+  const [date, setDate] = useState(start.toISODate()!);
+  const [startTime, setStartTime] = useState(start.toFormat("HH:mm"));
+  const [endTime, setEndTime] = useState(start.plus({ minutes: durationMin }).toFormat("HH:mm"));
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function send(action: "cancel" | "move" | "restore") {
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await apiFetch<{ notified: number }>(`/api/events/${eventId}/occurrences`, {
+        method: "POST",
+        json: { occurrenceStart, action, ...(action === "move" ? { date, startTime, endTime } : {}), message: message || null },
+      });
+      onDone({ tone: "success", text: `${action === "cancel" ? "Date annulée" : action === "move" ? "Date déplacée" : "Date rétablie"}. Les autres dates sont inchangées. ${r.notified} participant(s) informé(s).` });
+      setMode(null);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Action impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Cette date uniquement : {start.setLocale("fr-CH").toFormat("cccc d LLLL yyyy, HH'h'mm")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant={mode === "move" ? "primary" : "outline"} onClick={() => setMode("move")}>
+            Déplacer cette date
+          </Button>
+          <Button size="sm" variant={mode === "cancel" ? "danger" : "outline"} onClick={() => setMode("cancel")}>
+            Annuler cette date
+          </Button>
+          <Button size="sm" variant="ghost" loading={busy && mode === null} onClick={() => send("restore")}>
+            Rétablir l&apos;horaire d&apos;origine
+          </Button>
+        </div>
+        {mode === "move" && (
+          <div className="grid grid-cols-3 gap-2">
+            <Field label="Date" htmlFor="occ-d">
+              <Input id="occ-d" type="date" value={date} onChange={(ev) => setDate(ev.target.value)} />
+            </Field>
+            <Field label="Début" htmlFor="occ-s">
+              <Input id="occ-s" type="time" value={startTime} onChange={(ev) => setStartTime(ev.target.value)} />
+            </Field>
+            <Field label="Fin" htmlFor="occ-e">
+              <Input id="occ-e" type="time" value={endTime} onChange={(ev) => setEndTime(ev.target.value)} />
+            </Field>
+          </div>
+        )}
+        {mode && (
+          <>
+            <Field label="Message aux participants (facultatif)" htmlFor="occ-m">
+              <Textarea id="occ-m" rows={2} value={message} onChange={(ev) => setMessage(ev.target.value)} />
+            </Field>
+            <Button variant={mode === "cancel" ? "danger" : "primary"} loading={busy} onClick={() => send(mode)}>
+              {mode === "cancel" ? "Confirmer l'annulation de cette date" : "Confirmer le déplacement"}
+            </Button>
+          </>
+        )}
+        {err && <Alert tone="danger">{err}</Alert>}
+      </CardContent>
+    </Card>
   );
 }

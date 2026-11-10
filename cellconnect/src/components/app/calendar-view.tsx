@@ -39,7 +39,7 @@ export function CalendarView({ scope, timezone, onError }: { scope: string; time
         borderColor: e.hasConflict ? "var(--danger)" : (e.color ?? undefined),
         textColor: e.status === "cancelled" ? "var(--muted)" : undefined,
         classNames: [e.hasConflict ? "ev-conflict" : "", e.status === "cancelled" ? "line-through" : "", e.myStatus === "invited" ? "opacity-70" : ""],
-        extendedProps: { eventId: e.eventId },
+        extendedProps: { eventId: e.eventId, occurrenceStart: e.recurring ? e.occurrenceStart : null },
       }));
     } catch (err) {
       onError((err as Error).message);
@@ -64,7 +64,8 @@ export function CalendarView({ scope, timezone, onError }: { scope: string; time
       events={load}
       eventClick={(info) => {
         info.jsEvent.preventDefault();
-        router.push(`/evenements/${info.event.extendedProps.eventId}`);
+        const occ = info.event.extendedProps.occurrenceStart as string | null;
+        router.push(`/evenements/${info.event.extendedProps.eventId}${occ ? `?occurrence=${encodeURIComponent(occ)}` : ""}`);
       }}
       dateClick={(info) => router.push(`/evenements/nouveau?date=${info.dateStr.slice(0, 10)}${info.dateStr.length > 10 ? `&heure=${info.dateStr.slice(11, 16)}` : ""}`)}
       noEventsText="Aucun événement sur cette période"

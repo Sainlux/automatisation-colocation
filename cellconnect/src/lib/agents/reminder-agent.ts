@@ -2,6 +2,7 @@ import type { Store } from "@/lib/db/store";
 import type { ChannelSender } from "@/lib/channels/email";
 import type { EventRow } from "@/lib/types";
 import { expandOccurrences } from "./conflict-engine";
+import { eventToSlot, withExceptions } from "./conflict-agent";
 import { notify } from "./notification-agent";
 import { formatRangeFr } from "@/lib/time";
 
@@ -23,11 +24,12 @@ export function offsetLabel(minutes: number): string {
   return `${minutes} min`;
 }
 
-export async function scheduleForParticipant(store: Store, event: EventRow, userId: string, offsets: number[], now: Date) {
-  if (event.status === "cancelled") return [];
+export async function scheduleForParticipant(store: Store, raw: EventRow, userId: string, offsets: number[], now: Date) {
+  if (raw.status === "cancelled") return [];
+  const [event] = await withExceptions(store, [raw]);
   const from = now.getTime();
   const occurrences = expandOccurrences(
-    { eventId: event.id, title: event.title, startsAt: event.starts_at, endsAt: event.ends_at, timezone: event.timezone, recurrenceRule: event.recurrence_rule },
+    eventToSlot(event),
     from,
     from + HORIZON_DAYS * 86400000,
   );

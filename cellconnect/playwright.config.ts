@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 
 const dataDir = path.join(os.tmpdir(), `cellconnect-e2e-${process.pid}`);
+// E2E_BASE_URL : viser un serveur déjà démarré (ex. mode Supabase) au lieu d'en lancer un en mode local.
+const external = process.env.E2E_BASE_URL;
 
 /** Tests de bout en bout : build de production en mode local (données temporaires). */
 export default defineConfig({
@@ -11,12 +13,14 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: "list",
-  use: { baseURL: "http://localhost:3200", trace: "off", locale: "fr-CH", timezoneId: "Europe/Zurich" },
+  use: { baseURL: external ?? "http://localhost:3200", trace: "off", locale: "fr-CH", timezoneId: "Europe/Zurich" },
   projects: [
     { name: "mobile", use: { ...devices["Pixel 7"] } },
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
   ],
-  webServer: {
+  webServer: external
+    ? undefined
+    : {
     command: "npx next start -p 3200",
     url: "http://localhost:3200/api/health",
     reuseExistingServer: false,

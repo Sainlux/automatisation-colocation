@@ -13,7 +13,7 @@ import type { EventInput, EventPatch } from "@/lib/schemas/event";
 import type { EventChange, EventRow, EventSource, ParticipantStatus } from "@/lib/types";
 import { formatDateFr, formatRangeFr, formatTimeFr, utcToZoned, zonedToUtc } from "@/lib/time";
 import { expandOccurrences } from "./conflict-engine";
-import { ACTIVE_STATUSES, closeConflictsForEvent, detectForEventParticipants, detectForUserEvent, eventToSlot } from "./conflict-agent";
+import { ACTIVE_STATUSES, closeConflictsForEvent, detectForEventParticipants, detectForUserEvent, eventToSlot, withExceptions } from "./conflict-agent";
 import { notify } from "./notification-agent";
 import { cancelReminders, DEFAULT_REMINDER_OFFSETS, rescheduleEvent, scheduleForParticipant } from "./reminder-agent";
 import { enqueueSyncForEvent } from "./sync-queue";
@@ -206,6 +206,63 @@ export async function cancelEvent(ctx: Ctx, eventId: string, opts: { confirm: bo
   return { event: updated, notified: results.length, deliveries: results.flatMap((r) => r.deliveries) };
 }
 
+/**
+ * Exception sur UNE occurrence d'un événement récurrent : annulation ou
+ * déplacement de cette seule date (réservé aux personnes autorisées).
+ * Les autres occurrences ne changent pas.
+ */
+export async function modifyOccurrence(
+  ctx: Ctx,
+  eventId: string,
+  input: { occurrenceStart: string; action: "cancel" | "move" | "restore"; date?: string; startTime?: string; endTime?: string; message?: string | null },
+) {
+  const event = await loadEditableEvent(ctx, eventId);
+  if (!event.recurrence_rule) throw badRequest("Cet événement n'est pas récurrent : modifiez-le directement.");
+  if (event.status === "cancelled") throw badRequest("Cet événement est annulé.");
+  const orig = Date.parse(input.occurrenceStart);
+  if (!Number.isFinite(orig)) throw badRequest("Occurrence invalide.");
+  const origIso = new Date(orig).toISOString();
+  // L'occurrence doit exister selon la règle.
+  const occ = expandOccurrences({ ...eventToSlot(event), exceptions: undefined }, orig - 1000, orig + 1000).find((o) => o.originalStart === orig);
+  if (!occ) throw badRequest("Cette date ne fait pas partie de la récurrence.");
+
+  const [existing] = await ctx.store.select("event_occurrences", { where: [["event_id", "eq", event.id], ["starts_at", "eq", origIso]] });
+  let before: { start: string; end: string } = { start: origIso, end: new Date(occ.end).toISOString() };
+  if (existing?.overrides.starts_at && existing.overrides.ends_at) before = { start: existing.overrides.starts_at, end: existing.overrides.ends_at };
+
+  let after: { start: string; end: string } | null = null;
+  if (input.action === "restore") {
+    if (existing) await ctx.store.delete("event_occurrences", existing.id);
+    after = { start: origIso, end: new Date(occ.end).toISOString() };
+  } else if (input.action === "cancel") {
+    const row = { status: "cancelled" as const, overrides: {}, ends_at: new Date(occ.end).toISOString() };
+    if (existing) await ctx.store.update("event_occurrences", existing.id, row);
+    else await ctx.store.insert("event_occurrences", { event_id: event.id, organization_id: event.organization_id, starts_at: origIso, ...row });
+  } else {
+    if (!input.date || !input.startTime || !input.endTime) throw badRequest("Indiquez la nouvelle date et les horaires.");
+    after = toInstants(input.date, input.startTime, input.endTime, event.timezone);
+    const row = { status: "confirmed" as const, overrides: { starts_at: after.start, ends_at: after.end }, ends_at: new Date(occ.end).toISOString() };
+    if (existing) await ctx.store.update("event_occurrences", existing.id, row);
+    else await ctx.store.insert("event_occurrences", { event_id: event.id, organization_id: event.organization_id, starts_at: origIso, ...row });
+  }
+  const updated = await ctx.store.update("events", event.id, { version: event.version + 1 });
+  await logChange(ctx, updated, input.action === "cancel" ? "cancelled" : "rescheduled", { occurrence: origIso, ...before }, after ? { occurrence: origIso, ...after } : { occurrence: origIso, status: "cancelled" });
+  await audit(ctx.store, { orgId: ctx.orgId, actorId: ctx.userId, action: `occurrence.${input.action}`, entityType: "event", entityId: event.id, metadata: { occurrence: origIso } });
+  await rescheduleEvent(ctx.store, updated, ctx.now());
+  await detectForEventParticipants(ctx.store, ctx.mailer, updated.id, ctx.now());
+  const results = await notifyParticipants(ctx, updated, {
+    type: input.action === "cancel" ? "event_cancelled" : "event_rescheduled",
+    title: input.action === "cancel" ? `Date annulée : ${event.title}` : `Changement de date : ${event.title}`,
+    body:
+      input.action === "cancel"
+        ? `La séance du ${formatRangeFr(before.start, before.end, event.timezone)} de « ${event.title} » est annulée. Les autres dates sont maintenues.${input.message ? `\nMessage : ${input.message}` : ""}`
+        : `La séance du ${formatRangeFr(before.start, before.end, event.timezone)} de « ${event.title} » a lieu le ${formatRangeFr(after!.start, after!.end, event.timezone)}.${input.message ? `\nMessage : ${input.message}` : ""}`,
+    key: `occurrence:${event.id}:${origIso}:v${updated.version}`,
+  });
+  await enqueueSyncForEvent(ctx.store, ctx.userId, updated, "upsert");
+  return { event: updated, notified: results.length };
+}
+
 export function defaultWithdrawMessage(event: EventRow) {
   return `Bonjour, je vous informe que je ne pourrai pas participer à « ${event.title} » du ${formatDateFr(event.starts_at, event.timezone)} à ${formatTimeFr(event.starts_at, event.timezone)} en raison d'un conflit d'agenda. Merci de votre compréhension.`;
 }
@@ -313,6 +370,9 @@ export interface CalendarItem {
   location: string | null;
   meetingUrl: string | null;
   recurring: boolean;
+  /** Début d'origine de l'occurrence (pour annuler/déplacer cette seule date). */
+  occurrenceStart: string;
+  moved: boolean;
   hasConflict: boolean;
 }
 
@@ -343,15 +403,19 @@ export async function listCalendar(ctx: Ctx, from: string, to: string, scope: st
     throw badRequest("Portée inconnue.");
   }
   if (!includeCancelled) events = events.filter((e) => e.status !== "cancelled");
+  const withEx = await withExceptions(ctx.store, events);
 
   const groups = await ctx.store.select("groups", { where: [["organization_id", "eq", ctx.orgId]] });
   const groupById = new Map(groups.map((g) => [g.id, g]));
   const conflicts = await ctx.store.select("calendar_conflicts", { where: [["user_id", "eq", ctx.userId], ["status", "eq", "open"]] });
   const conflictKeys = new Set(conflicts.flatMap((c) => [`${c.event_a_id}:${c.occurrence_a_start}`, `${c.event_b_id}:${c.occurrence_b_start}`]));
 
-  return events
+  return withEx
     .flatMap((e) =>
-      (e.status === "cancelled" ? [{ eventId: e.id, title: e.title, start: Date.parse(e.starts_at), end: Date.parse(e.ends_at) }] : expandOccurrences(eventToSlot(e), fromMs, toMs)).map(
+      (e.status === "cancelled"
+        ? [{ eventId: e.id, title: e.title, start: Date.parse(e.starts_at), end: Date.parse(e.ends_at), originalStart: Date.parse(e.starts_at) }]
+        : expandOccurrences(eventToSlot(e), fromMs, toMs)
+      ).map(
         (o) => {
           const start = new Date(o.start).toISOString();
           const g = e.group_id ? groupById.get(e.group_id) : undefined;
@@ -369,6 +433,8 @@ export async function listCalendar(ctx: Ctx, from: string, to: string, scope: st
             location: e.location,
             meetingUrl: e.meeting_url,
             recurring: Boolean(e.recurrence_rule),
+            occurrenceStart: new Date(o.originalStart ?? o.start).toISOString(),
+            moved: o.originalStart !== undefined && o.originalStart !== o.start,
             hasConflict: conflictKeys.has(`${e.id}:${start}`),
           };
         },

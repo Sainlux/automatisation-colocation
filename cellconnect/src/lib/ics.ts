@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import type { EventRow } from "@/lib/types";
+import type { OccurrenceException } from "@/lib/agents/conflict-engine";
 import type { ExtractionResult } from "@/lib/schemas/extraction";
 
 /** Export / import iCalendar (RFC 5545), sans dépendance externe. */
@@ -23,7 +24,7 @@ function fold(line: string) {
 
 const utcStamp = (iso: string) => DateTime.fromISO(iso, { zone: "utc" }).toFormat("yyyyMMdd'T'HHmmss'Z'");
 
-export function eventsToIcs(events: EventRow[], appUrl: string, calName = "CellConnect AI"): string {
+export function eventsToIcs(events: (EventRow & { exceptions?: Record<string, OccurrenceException> })[], appUrl: string, calName = "CellConnect AI"): string {
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//CellConnect AI//FR", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", `X-WR-CALNAME:${esc(calName)}`];
   for (const e of events) {
     const startLocal = DateTime.fromISO(e.starts_at, { zone: "utc" }).setZone(e.timezone).toFormat("yyyyMMdd'T'HHmmss");
@@ -38,13 +39,35 @@ export function eventsToIcs(events: EventRow[], appUrl: string, calName = "CellC
       `SEQUENCE:${e.version}`,
       `STATUS:${e.status === "cancelled" ? "CANCELLED" : e.status === "tentative" ? "TENTATIVE" : "CONFIRMED"}`,
     );
-    if (e.recurrence_rule) lines.push(`RRULE:${e.recurrence_rule.replace(/^RRULE:/i, "")}`);
+    const loc = (iso: string) => DateTime.fromISO(iso, { zone: "utc" }).setZone(e.timezone).toFormat("yyyyMMdd'T'HHmmss");
+    const moved: [string, OccurrenceException][] = [];
+    if (e.recurrence_rule) {
+      lines.push(`RRULE:${e.recurrence_rule.replace(/^RRULE:/i, "")}`);
+      for (const [orig, ex] of Object.entries(e.exceptions ?? {})) {
+        if (ex.cancelled) lines.push(`EXDATE;TZID=${e.timezone}:${loc(orig)}`);
+        else if (ex.start && ex.end) moved.push([orig, ex]);
+      }
+    }
     if (e.location) lines.push(`LOCATION:${esc(e.location)}`);
     const desc = [e.description, e.meeting_url ? `Lien : ${e.meeting_url}` : null].filter(Boolean).join("\n");
     if (desc) lines.push(`DESCRIPTION:${esc(desc)}`);
     if (e.meeting_url) lines.push(`URL:${e.meeting_url}`);
     lines.push(`X-CELLCONNECT-URL:${appUrl}/evenements/${e.id}`);
     lines.push("END:VEVENT");
+    // Occurrences déplacées : VEVENT de remplacement (même UID + RECURRENCE-ID).
+    for (const [orig, ex] of moved) {
+      lines.push(
+        "BEGIN:VEVENT",
+        `UID:${e.id}@cellconnect`,
+        `DTSTAMP:${utcStamp(e.updated_at)}`,
+        `RECURRENCE-ID;TZID=${e.timezone}:${loc(orig)}`,
+        `DTSTART;TZID=${e.timezone}:${loc(ex.start!)}`,
+        `DTEND;TZID=${e.timezone}:${loc(ex.end!)}`,
+        `SUMMARY:${esc(e.title)}`,
+        `SEQUENCE:${e.version}`,
+        "END:VEVENT",
+      );
+    }
   }
   lines.push("END:VCALENDAR");
   return lines.map(fold).join("\r\n") + "\r\n";

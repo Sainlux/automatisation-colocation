@@ -138,6 +138,20 @@ export interface EventRow {
   updated_at: ISODateTime;
 }
 
+/** Exception d'une occurrence d'événement récurrent (annulée ou déplacée). */
+export interface EventOccurrence {
+  id: UUID;
+  event_id: UUID;
+  organization_id: UUID;
+  /** Début d'origine selon la règle de récurrence (clé de l'occurrence). */
+  starts_at: ISODateTime;
+  ends_at: ISODateTime;
+  status: EventStatus;
+  /** { starts_at, ends_at } si l'occurrence a été déplacée. */
+  overrides: { starts_at?: ISODateTime; ends_at?: ISODateTime };
+  created_at: ISODateTime;
+}
+
 export type ParticipantStatus = "invited" | "accepted" | "tentative" | "declined" | "withdrawn";
 
 export interface EventParticipant {
@@ -367,6 +381,7 @@ export interface Tables {
   extraction_jobs: ExtractionJob;
   extracted_events: ExtractedEventRow;
   events: EventRow;
+  event_occurrences: EventOccurrence;
   event_participants: EventParticipant;
   invitations: Invitation;
   calendar_connections: CalendarConnection;

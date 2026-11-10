@@ -17,6 +17,8 @@ export interface CalItem {
   location: string | null;
   meetingUrl: string | null;
   recurring: boolean;
+  occurrenceStart: string;
+  moved: boolean;
   hasConflict: boolean;
 }
 
@@ -25,7 +27,7 @@ export function EventList({ items, tz }: { items: CalItem[]; tz: string }) {
     <ul className="divide-y divide-border">
       {items.map((e) => (
         <li key={e.id}>
-          <Link href={`/evenements/${e.eventId}`} className="flex gap-3 py-3 hover:bg-subtle/50 sm:rounded-xl sm:px-2">
+          <Link href={`/evenements/${e.eventId}${e.recurring ? `?occurrence=${encodeURIComponent(e.occurrenceStart)}` : ""}`} className="flex gap-3 py-3 hover:bg-subtle/50 sm:rounded-xl sm:px-2">
             <div className="w-14 shrink-0 text-center">
               <p className="text-xs uppercase text-muted">{fmtDayShort(e.start, tz).split(" ")[0]}</p>
               <p className="text-lg font-semibold leading-tight">{fmtDayShort(e.start, tz).split(" ")[1]}</p>
@@ -57,7 +59,7 @@ export function EventList({ items, tz }: { items: CalItem[]; tz: string }) {
                 )}
                 {e.recurring && (
                   <Badge>
-                    <Repeat className="h-3 w-3" aria-hidden /> Récurrent
+                    <Repeat className="h-3 w-3" aria-hidden /> {e.moved ? "Date déplacée" : "Récurrent"}
                   </Badge>
                 )}
               </div>

@@ -50,6 +50,7 @@ export const UNIQUE_CONSTRAINTS: Partial<Record<TableName, string[][]>> = {
   organization_members: [["organization_id", "user_id"]],
   group_members: [["group_id", "user_id"]],
   event_participants: [["event_id", "user_id"]],
+  event_occurrences: [["event_id", "starts_at"]],
   calendar_conflicts: [["user_id", "event_a_id", "event_b_id", "occurrence_a_start", "occurrence_b_start"]],
   reminders: [["dedupe_key"]],
   notifications: [["dedupe_key"]],
