@@ -8,8 +8,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Transformez une capture en événements organisés.",
     start_url: "/",
     display: "standalone",
-    background_color: "#f5f7fb",
-    theme_color: "#1d3a8a",
+    background_color: "#f6f4ef",
+    theme_color: "#f6f4ef",
     lang: "fr",
     icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml" }],
     // Partage depuis une autre application (images, PDF, texte) — traité par le service worker (public/sw.js).

@@ -38,20 +38,20 @@ test("parcours complet : inscription → capture → validation → conflit → 
   await page.fill("#paste", CAPTURE);
   await page.getByRole("button", { name: "Analyser" }).click();
   await expect(page).toHaveURL(/\/capture\/.+/);
-  await expect(page.getByText("5 événement(s) détecté(s)")).toBeVisible({ timeout: 20000 });
+  await expect(page.getByText("5 dates trouvées dans le message")).toBeVisible({ timeout: 20000 });
   await expect(page.getByText(/tombe un mercredi en 2027/).first()).toBeVisible();
 
-  // Sans confirmation, impossible de continuer.
-  await expect(page.getByRole("button", { name: "Vérifier mon agenda" })).toBeDisabled();
-  await page.getByRole("button", { name: "Tout confirmer" }).click();
+  // Sans confirmation, le bouton principal mène à la prochaine date à relire (jamais de bouton grisé muet).
+  await expect(page.getByRole("button", { name: "Voir la suivante (5)" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Vérifier mon agenda" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Ces 5 dates sont justes" }).click();
   await page.getByRole("button", { name: "Vérifier mon agenda" }).click();
 
   await expect(page.getByText("Chevauchement de 60 minutes")).toBeVisible();
   await page.getByText("Garder les deux pour l'instant").click();
   await page.getByRole("button", { name: "Voir le récapitulatif" }).click();
-  await page.getByRole("button", { name: "Confirmer et enregistrer" }).click();
-  await expect(page.getByText("5 événement(s) enregistré(s)")).toBeVisible();
-  await expect(page.getByText("1 conflit(s) restent à résoudre.")).toBeVisible();
+  await page.getByRole("button", { name: /Ajouter les 5 dates/ }).click();
+  await expect(page.getByRole("heading", { name: "5 dates ajoutées à votre agenda" })).toBeVisible();
 
   // Résolution : maintenir la formation, se désister de la réunion.
   await page.goto("/conflits");
@@ -59,7 +59,7 @@ test("parcours complet : inscription → capture → validation → conflit → 
   const formation = page.getByRole("button", { name: /Formation Cellules/ });
   await formation.click();
   await expect(page.getByText(/Conséquence/)).toBeVisible();
-  await page.getByRole("button", { name: "Valider ma décision" }).click();
+  await page.getByRole("button", { name: /Valider ma décision/ }).click();
   await expect(page.getByText("Aucun conflit")).toBeVisible();
 
   // Calendrier en liste : les 5 formations sont présentes.

@@ -11,9 +11,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Contenu jusque sous l'encoche / la barre d'accueil (les marges utilisent env(safe-area-inset-*)).
+  viewportFit: "cover",
+  // Le clavier virtuel redimensionne la page : les barres collantes restent au-dessus du clavier.
+  interactiveWidget: "resizes-content",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f7fb" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b1120" },
+    { media: "(prefers-color-scheme: light)", color: "#f6f4ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#12110f" },
   ],
 };
 
