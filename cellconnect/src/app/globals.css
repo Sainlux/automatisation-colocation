@@ -1,26 +1,126 @@
 @import "tailwindcss";
 
+/* Mode sombre piloté par la classe .dark sur <html> (préférence utilisateur ou système). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f5f7fb;
+  --card: #ffffff;
+  --fg: #0f172a;
+  --muted: #5b6577;
+  --border: #e3e7ef;
+  --subtle: #eef2f9;
+  --primary: #1d3a8a;
+  --primary-hover: #172f72;
+  --primary-fg: #ffffff;
+  --accent: #2563eb;
+  --success: #15803d;
+  --success-bg: #ecfdf3;
+  --warning: #c2410c;
+  --warning-bg: #fff4ec;
+  --danger: #b91c1c;
+  --danger-bg: #fef1f1;
+  --info-bg: #eef4ff;
+  --ring: #3b82f6;
+}
+
+.dark {
+  --bg: #0b1120;
+  --card: #111a2e;
+  --fg: #e6eaf2;
+  --muted: #98a3b8;
+  --border: #22304a;
+  --subtle: #17223a;
+  --primary: #4f7cf0;
+  --primary-hover: #6a91f5;
+  --primary-fg: #0b1120;
+  --accent: #6a91f5;
+  --success: #4ade80;
+  --success-bg: #0f2a1c;
+  --warning: #fb923c;
+  --warning-bg: #2c1a0e;
+  --danger: #f87171;
+  --danger-bg: #2c1214;
+  --info-bg: #13213f;
+  --ring: #6a91f5;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-subtle: var(--subtle);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-info-bg: var(--info-bg);
+  --color-ring: var(--ring);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* FullCalendar — harmonisation avec le thème */
+.fc {
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: var(--card);
+  --fc-neutral-bg-color: var(--subtle);
+  --fc-list-event-hover-bg-color: var(--subtle);
+  --fc-today-bg-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  --fc-button-bg-color: var(--card);
+  --fc-button-border-color: var(--border);
+  --fc-button-text-color: var(--fg);
+  --fc-button-hover-bg-color: var(--subtle);
+  --fc-button-hover-border-color: var(--border);
+  --fc-button-active-bg-color: var(--primary);
+  --fc-button-active-border-color: var(--primary);
+  --fc-event-bg-color: var(--primary);
+  --fc-event-border-color: var(--primary);
+  font-size: 0.875rem;
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+  color: var(--primary-fg);
+}
+.fc .fc-toolbar-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.fc .fc-col-header-cell-cushion,
+.fc .fc-daygrid-day-number,
+.fc .fc-list-day-text,
+.fc .fc-list-day-side-text {
+  color: var(--fg);
+  text-decoration: none;
+}
+.fc .ev-conflict {
+  box-shadow: inset 4px 0 0 var(--danger);
+}
+@media (max-width: 640px) {
+  .fc .fc-toolbar {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
 }

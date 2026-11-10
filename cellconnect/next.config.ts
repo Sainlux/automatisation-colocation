@@ -9,8 +9,11 @@ import type { NextConfig } from "next";
  */
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Le dépôt contient une autre application à la racine : on fixe la racine du projet.
+  outputFileTracingRoot: process.cwd(),
   serverExternalPackages: ["nodemailer", "@electric-sql/pglite"],
   turbopack: {
+    root: process.cwd(),
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],
