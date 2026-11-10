@@ -169,7 +169,8 @@ export type InvitationStatus = "pending" | "accepted" | "declined" | "tentative"
 
 export interface Invitation {
   id: UUID;
-  event_id: UUID;
+  /** null pour une invitation à rejoindre l'organisation. */
+  event_id: UUID | null;
   organization_id: UUID;
   invited_by: UUID;
   invitee_user_id: UUID | null;
@@ -178,6 +179,11 @@ export interface Invitation {
   status: InvitationStatus;
   token_hash: string;
   responded_at: ISODateTime | null;
+  /** Rôle attribué en rejoignant l'organisation (invitation d'organisation, ou invité externe). */
+  org_role?: OrgRole | null;
+  email_status?: "sent" | "failed" | "skipped" | null;
+  email_error?: string | null;
+  expires_at?: ISODateTime | null;
   created_at: ISODateTime;
 }
 

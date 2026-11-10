@@ -386,6 +386,7 @@ function InviteDialog({ open, onClose, eventId, groupId, exclude, onDone }: { op
   const members = useApi<{ members: { userId: string; name: string }[] }>(open ? "/api/orgs/members" : null);
   const groups = useApi<{ groups: { id: string; name: string; canManage: boolean }[] }>(open ? "/api/groups" : null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [emails, setEmails] = useState("");
   const [group, setGroup] = useState(groupId ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -398,13 +399,25 @@ function InviteDialog({ open, onClose, eventId, groupId, exclude, onDone }: { op
       footer={
         <Button
           loading={busy}
-          disabled={!selected.length && !group}
+          disabled={!selected.length && !group && !emails.trim()}
           onClick={async () => {
             setBusy(true);
             setErr(null);
             try {
-              const r = await apiFetch<{ results: { status: string }[] }>(`/api/events/${eventId}/invite`, { method: "POST", json: { userIds: selected, groupId: group || null } });
-              onDone({ tone: "success", text: `${r.results.filter((x) => x.status === "invited").length} invitation(s) envoyée(s).` });
+              let text = "";
+              if (selected.length || group) {
+                const r = await apiFetch<{ results: { status: string }[] }>(`/api/events/${eventId}/invite`, { method: "POST", json: { userIds: selected, groupId: group || null } });
+                text += `${r.results.filter((x) => x.status === "invited").length} invitation(s) envoyée(s). `;
+              }
+              const list = emails.split(/[\s,;]+/).filter(Boolean);
+              if (list.length) {
+                const r = await apiFetch<{ results: { email: string; status: string; error?: string; link?: string }[] }>("/api/invitations/email", { method: "POST", json: { emails: list, eventId } });
+                const sent = r.results.filter((x) => x.status === "email_sent" || x.status === "invited_member").length;
+                const notSent = r.results.filter((x) => x.link);
+                text += `${sent} invitation(s) par e-mail.`;
+                if (notSent.length) text += ` Non envoyées (${notSent[0].error}) — liens à transmettre vous-même : ${notSent.map((x) => `${x.email} → ${x.link}`).join(" ; ")}`;
+              }
+              onDone({ tone: "success", text });
             } catch (e) {
               setErr(e instanceof ApiError ? e.message : "Invitation impossible.");
             } finally {
@@ -441,6 +454,9 @@ function InviteDialog({ open, onClose, eventId, groupId, exclude, onDone }: { op
             ))}
           </ul>
         )}
+        <Field label="Inviter par e-mail (personnes sans compte)" htmlFor="inv-emails" hint="Séparez les adresses par des virgules. Elles reçoivent un lien valable 30 jours.">
+          <Textarea id="inv-emails" rows={2} value={emails} onChange={(e) => setEmails(e.target.value)} placeholder="prenom@exemple.ch, autre@exemple.ch" />
+        </Field>
         {err && <Alert tone="danger">{err}</Alert>}
       </div>
     </Dialog>

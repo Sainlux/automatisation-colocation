@@ -14,9 +14,9 @@ import { SupabaseStore } from "@/lib/db/supabase-store";
 import { bootstrapAccount } from "@/lib/auth/account";
 import { smtpSender } from "@/lib/channels/email";
 import type { Ctx } from "@/lib/context";
-import { createEvent, cancelEvent, withdrawFromEvent, listCalendar } from "@/lib/agents/calendar-agent";
+import { createEvent, cancelEvent, listCalendar } from "@/lib/agents/calendar-agent";
 import { createGroup, addGroupMember } from "@/lib/agents/group-agent";
-import { listInvitations, respondToInvitation } from "@/lib/agents/invitation-agent";
+import { acceptInvitationToken, inviteByEmail, listInvitations, respondToInvitation } from "@/lib/agents/invitation-agent";
 import { listConflicts, resolveConflict } from "@/lib/agents/conflict-resolution";
 import { putObject, getObject, deleteObject } from "@/lib/storage";
 import { processPendingDeliveries } from "@/lib/agents/notification-agent";
@@ -140,5 +140,21 @@ describe.skipIf(!RUN)("Supabase réel", () => {
     const items = await listCalendar(member, "2027-01-19T00:00:00Z", "2027-01-22T00:00:00Z");
     const formation = items.find((i) => i.title === "Formation (privé)")!;
     expect(formation.start).toBe("2027-01-20T19:30:00.000Z");
+  });
+
+  it("invitation par e-mail réelle : lien reçu dans la boîte, inscription, acceptation", async () => {
+    const e = await createEvent(leader, { title: `Baptêmes ${run}`, date: "2027-04-04", startTime: "10:00", endTime: "12:00", timezone: tz });
+    const email = `nouveau-${run}@exemple.ch`;
+    const [r] = await inviteByEmail(leader, { emails: [email], eventId: e.id }, "http://localhost:3300");
+    expect(r.status).toBe("email_sent");
+    const [msg] = await mails(email);
+    const full = (await (await fetch(`${MAILPIT}/api/v1/message/${msg.ID}`)).json()) as { Text: string };
+    const token = /\/invitation\/([A-Za-z0-9_-]+)/.exec(full.Text)![1];
+    const { data } = await admin.auth.admin.createUser({ email, password: "motdepasse-solide", email_confirm: true });
+    await bootstrapAccount(store, { id: data.user!.id, email, name: "Nouveau" });
+    const res = await acceptInvitationToken({ store, userId: data.user!.id, email, mailer: smtpSender, now: () => new Date(), timezone: tz }, token, "accepted");
+    expect(res.eventId).toBe(e.id);
+    const [p] = await store.select("event_participants", { where: [["event_id", "eq", e.id], ["user_id", "eq", data.user!.id]] });
+    expect(p.status).toBe("accepted");
   });
 });

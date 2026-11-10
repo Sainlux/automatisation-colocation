@@ -46,9 +46,27 @@ export default function AdminPage() {
         <CardContent>
           <form
             className="flex flex-col gap-2 sm:flex-row sm:items-end"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              void run(() => apiFetch("/api/orgs/members", { method: "POST", json: { email, role } }).then(() => setEmail("")), "Membre ajouté.");
+              setMsg(null);
+              try {
+                await apiFetch("/api/orgs/members", { method: "POST", json: { email, role } });
+                setMsg({ tone: "success", text: "Membre ajouté." });
+                setEmail("");
+                reload();
+              } catch (err) {
+                if (err instanceof ApiError && /Aucun compte/.test(err.message)) {
+                  // Pas encore de compte : invitation par e-mail avec lien d'inscription.
+                  const r = await apiFetch<{ results: { status: string; error?: string; link?: string }[] }>("/api/invitations/email", { method: "POST", json: { emails: [email], orgRole: role } });
+                  const x = r.results[0];
+                  setMsg(
+                    x.status === "email_sent"
+                      ? { tone: "success", text: `Aucun compte pour ${email} : une invitation à rejoindre l'organisation lui a été envoyée par e-mail.` }
+                      : { tone: "danger", text: `Invitation créée mais e-mail non envoyé (${x.error}). Transmettez ce lien : ${x.link}` },
+                  );
+                  setEmail("");
+                } else setMsg({ tone: "danger", text: err instanceof ApiError ? err.message : "Erreur" });
+              }
             }}
           >
             <Field label="E-mail du compte CellConnect" htmlFor="m-email" className="flex-1">
@@ -64,7 +82,7 @@ export default function AdminPage() {
             </Field>
             <Button type="submit">Ajouter</Button>
           </form>
-          <p className="mt-2 text-xs text-muted">La personne doit d&apos;abord avoir créé son compte.</p>
+          <p className="mt-2 text-xs text-muted">Si la personne n&apos;a pas encore de compte, elle reçoit une invitation par e-mail (lien valable 30 jours).</p>
         </CardContent>
       </Card>
       <Card>

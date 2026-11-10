@@ -79,3 +79,35 @@ test("parcours complet : inscription → capture → validation → conflit → 
   expect(ics).toContain("BEGIN:VCALENDAR");
   expect(ics.match(/BEGIN:VEVENT/g)?.length).toBe(5);
 });
+
+test("invitation par e-mail : une personne sans compte s'inscrit via le lien et rejoint l'événement", async ({ page, browser }, info) => {
+  const stamp = `${info.project.name}-${Date.now()}`;
+  await page.goto("/inscription");
+  await page.fill("#name", "Organisateur");
+  await page.fill("#email", `orga-${stamp}@exemple.ch`);
+  await page.fill("#password", "motdepasse-solide");
+  await page.click("button[type=submit]");
+  await expect(page.getByText("Analyser une capture")).toBeVisible();
+  const link: string = await page.evaluate(async () => {
+    const e = await (await fetch("/api/events", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "Soirée de prière", date: "2027-02-10", startTime: "20:00", endTime: "21:30", timezone: "Europe/Zurich" }) })).json();
+    const r = await (await fetch("/api/invitations/email", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ emails: [`invite-${Date.now()}@exemple.ch`], eventId: e.event.id }) })).json();
+    // Avec SMTP, le lien part par e-mail ; sans SMTP il est renvoyé à l'organisateur pour transmission.
+    return r.results[0].link ?? "";
+  });
+  test.skip(!link, "SMTP configuré : le lien a été envoyé par e-mail (vérifié par npm run test:supabase).");
+
+  const guest = await browser.newPage();
+  await guest.goto(new URL(link).pathname);
+  await expect(guest.getByText("Soirée de prière")).toBeVisible();
+  await guest.getByRole("link", { name: "Créer mon compte pour répondre" }).click();
+  await guest.fill("#name", "Invitée");
+  await guest.fill("#email", `invitee-${stamp}@exemple.ch`);
+  await guest.fill("#password", "motdepasse-solide");
+  await guest.click("button[type=submit]");
+  await expect(guest).toHaveURL(/\/invitation\//);
+  await guest.getByRole("button", { name: "Je participe" }).click();
+  await expect(guest).toHaveURL(/\/evenements\//);
+  await expect(guest.getByRole("heading", { name: "Soirée de prière" })).toBeVisible();
+  await expect(guest.getByText("Vous : Participe")).toBeVisible();
+  await guest.close();
+});

@@ -14,7 +14,7 @@ export class ApiError extends Error {
 }
 
 /** Appel JSON vers les Route Handlers ; redirige vers la connexion si la session a expiré. */
-export async function apiFetch<T = unknown>(url: string, init: RequestInit & { json?: unknown; idempotencyKey?: string } = {}): Promise<T> {
+export async function apiFetch<T = unknown>(url: string, init: RequestInit & { json?: unknown; idempotencyKey?: string; noAuthRedirect?: boolean } = {}): Promise<T> {
   const headers = new Headers(init.headers);
   let bodyInit = init.body;
   if (init.json !== undefined) {
@@ -23,7 +23,7 @@ export async function apiFetch<T = unknown>(url: string, init: RequestInit & { j
   }
   if (init.idempotencyKey) headers.set("idempotency-key", init.idempotencyKey);
   const res = await fetch(url, { ...init, headers, body: bodyInit, credentials: "same-origin" });
-  if (res.status === 401 && typeof window !== "undefined" && !url.startsWith("/api/auth/")) {
+  if (res.status === 401 && !init.noAuthRedirect && typeof window !== "undefined" && !url.startsWith("/api/auth/")) {
     window.location.href = `/connexion?suite=${encodeURIComponent(window.location.pathname)}`;
   }
   const ct = res.headers.get("content-type") ?? "";

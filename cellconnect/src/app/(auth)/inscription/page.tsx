@@ -28,7 +28,10 @@ export default function SignupPage() {
       if (r.needsEmailConfirmation) {
         setConfirm(true);
         setLoading(false);
-      } else window.location.href = "/";
+      } else {
+        const next = new URLSearchParams(window.location.search).get("suite");
+        window.location.href = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Inscription impossible.");
       if (err instanceof ApiError && Array.isArray(err.details)) setDetails((err.details as { message: string }[]).map((d) => d.message));

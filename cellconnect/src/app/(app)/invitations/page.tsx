@@ -18,6 +18,9 @@ interface Inv {
   event: { id: string; title: string; start: string; end: string; timezone: string; status: string } | null;
   invitedBy: string;
   invitee: string | null;
+  kind: "event" | "organization";
+  emailStatus: "sent" | "failed" | "skipped" | null;
+  emailError: string | null;
 }
 const LABEL = { pending: "En attente", accepted: "Oui", declined: "Non", tentative: "Peut-être", cancelled: "Annulée" } as const;
 const TONE = { pending: "warning", accepted: "success", declined: "danger", tentative: "neutral", cancelled: "neutral" } as const;
@@ -42,6 +45,7 @@ export default function InvitationsPage() {
   if (loading && !data) return <Loading />;
   if (error) return <ErrorState message={error.message} onRetry={reload} />;
   const bySentEvent = new Map<string, Inv[]>();
+  const orgInvites = (data?.sent ?? []).filter((i) => i.kind === "organization");
   for (const i of data?.sent ?? []) if (i.event) bySentEvent.set(i.event.id, [...(bySentEvent.get(i.event.id) ?? []), i]);
 
   return (
@@ -53,11 +57,11 @@ export default function InvitationsPage() {
           <CardTitle>Reçues</CardTitle>
         </CardHeader>
         <CardContent>
-          {!data?.received.length ? (
+          {!data?.received.filter((i) => i.kind === "event").length ? (
             <EmptyState icon={Mail} title="Aucune invitation reçue" />
           ) : (
             <ul className="divide-y divide-border">
-              {data.received.map((i) => (
+              {data.received.filter((i) => i.kind === "event").map((i) => (
                 <li key={i.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center">
                   <div className="min-w-0 flex-1">
                     {i.event ? (
@@ -97,7 +101,22 @@ export default function InvitationsPage() {
           <CardTitle>Envoyées</CardTitle>
         </CardHeader>
         <CardContent>
-          {bySentEvent.size === 0 ? (
+          {orgInvites.length > 0 && (
+            <div className="mb-4">
+              <p className="mb-1 font-medium">Invitations à rejoindre l&apos;organisation</p>
+              <ul className="flex flex-wrap gap-1.5">
+                {orgInvites.map((i) => (
+                  <li key={i.id}>
+                    <Badge tone={TONE[i.status]} title={i.emailError ?? undefined}>
+                      {i.invitee} : {LABEL[i.status]}
+                      {i.emailStatus && i.emailStatus !== "sent" ? " · e-mail non envoyé" : ""}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {bySentEvent.size === 0 && orgInvites.length === 0 ? (
             <p className="text-sm text-muted">Vous n&apos;avez envoyé aucune invitation. Ouvrez un événement puis « Inviter ».</p>
           ) : (
             <ul className="space-y-4">
@@ -109,9 +128,21 @@ export default function InvitationsPage() {
                   <ul className="mt-1 flex flex-wrap gap-1.5">
                     {list.map((i) => (
                       <li key={i.id}>
-                        <Badge tone={TONE[i.status]}>
+                        <Badge tone={TONE[i.status]} title={i.emailError ?? undefined}>
                           {i.invitee} : {LABEL[i.status]}
+                          {i.emailStatus && i.emailStatus !== "sent" ? " · e-mail non envoyé" : ""}
                         </Badge>
+                        {i.status === "pending" && (
+                          <button
+                            className="ml-1 text-xs text-muted underline"
+                            onClick={async () => {
+                              await apiFetch(`/api/invitations/${i.id}`, { method: "DELETE" });
+                              reload();
+                            }}
+                          >
+                            annuler
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>

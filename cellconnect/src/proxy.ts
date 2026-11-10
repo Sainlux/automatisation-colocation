@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * Il s'agit d'un filtre d'ergonomie : la vérification réelle de la session
  * (signature / Supabase) est faite côté serveur par chaque route API.
  */
-const PUBLIC = ["/connexion", "/inscription"];
+const PUBLIC = ["/connexion", "/inscription", "/invitation/"];
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
