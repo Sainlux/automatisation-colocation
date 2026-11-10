@@ -12,6 +12,12 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#1d3a8a",
     lang: "fr",
     icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml" }],
-    share_target: { action: "/capture", method: "GET", params: { title: "title", text: "text", url: "url" } },
+    // Partage depuis une autre application (images, PDF, texte) — traité par le service worker (public/sw.js).
+    share_target: {
+      action: "/capture/partage",
+      method: "POST",
+      enctype: "multipart/form-data",
+      params: { title: "title", text: "text", url: "url", files: [{ name: "files", accept: ["image/*", "application/pdf"] }] },
+    },
   };
 }

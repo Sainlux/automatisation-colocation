@@ -47,6 +47,34 @@ function Capture() {
 
   useEffect(() => () => files.forEach((f) => f.preview && URL.revokeObjectURL(f.preview)), [files]);
 
+  // Fichiers partagés depuis une autre application (déposés par le service worker).
+  const sharedFiles = sp.get("partage") === "1";
+  useEffect(() => {
+    if (!sharedFiles || !("caches" in window)) return;
+    let cancelled = false;
+    (async () => {
+      const cache = await caches.open("cc-share-target");
+      const keys = await cache.keys();
+      const list: File[] = [];
+      for (const k of keys) {
+        const r = await cache.match(k);
+        if (!r) continue;
+        const blob = await r.blob();
+        list.push(new File([blob], decodeURIComponent(r.headers.get("x-filename") ?? "capture"), { type: blob.type }));
+        await cache.delete(k);
+      }
+      if (!cancelled && list.length) {
+        const dt = new DataTransfer();
+        list.forEach((f) => dt.items.add(f));
+        await addFiles(dt.files);
+      }
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedFiles]);
+
   async function addFiles(list: FileList | null) {
     if (!list) return;
     setError(null);
@@ -138,6 +166,9 @@ function Capture() {
         <CardContent className="space-y-4 pt-4 sm:pt-5">
           {mode === "image" && (
             <>
+              {sp.get("fichiers") === "1" && (
+                <Alert tone="info">Le partage de fichiers n&apos;a pas pu être transmis directement : ajoutez la capture ci-dessous.</Alert>
+              )}
               {!aiOn && (
                 <Alert tone="warning" title="Analyse d'images indisponible">
                   Aucune clé OpenAI n&apos;est configurée sur ce serveur : les images et PDF ne peuvent pas être analysés. Utilisez l&apos;onglet « Texte collé » (copiez le message depuis WhatsApp).

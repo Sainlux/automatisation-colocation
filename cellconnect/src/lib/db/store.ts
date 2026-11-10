@@ -52,6 +52,7 @@ export const UNIQUE_CONSTRAINTS: Partial<Record<TableName, string[][]>> = {
   event_participants: [["event_id", "user_id"]],
   event_occurrences: [["event_id", "starts_at"]],
   invitations: [["token_hash"]],
+  push_subscriptions: [["endpoint"]],
   calendar_conflicts: [["user_id", "event_a_id", "event_b_id", "occurrence_a_start", "occurrence_b_start"]],
   reminders: [["dedupe_key"]],
   notifications: [["dedupe_key"]],

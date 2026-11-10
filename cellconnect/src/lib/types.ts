@@ -369,6 +369,18 @@ export interface IdempotencyKey {
   created_at: ISODateTime;
 }
 
+export interface PushSubscriptionRow {
+  id: UUID;
+  user_id: UUID;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  disabled_at: ISODateTime | null;
+  last_error: string | null;
+  created_at: ISODateTime;
+}
+
 /** Utilisateurs du mode local uniquement (en mode Supabase : auth.users). */
 export interface LocalUser {
   id: UUID;
@@ -401,6 +413,7 @@ export interface Tables {
   agent_tasks: AgentTask;
   audit_logs: AuditLog;
   idempotency_keys: IdempotencyKey;
+  push_subscriptions: PushSubscriptionRow;
   local_users: LocalUser;
 }
 

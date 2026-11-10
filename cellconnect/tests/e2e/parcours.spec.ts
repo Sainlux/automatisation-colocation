@@ -111,3 +111,36 @@ test("invitation par e-mail : une personne sans compte s'inscrit via le lien et 
   await expect(guest.getByText("Vous : Participe")).toBeVisible();
   await guest.close();
 });
+
+test("partage d'une capture depuis une autre application (Web Share Target via service worker)", async ({ page }, info) => {
+  await page.goto("/inscription");
+  await page.fill("#name", "Partage");
+  await page.fill("#email", `share-${info.project.name}-${Date.now()}@exemple.ch`);
+  await page.fill("#password", "motdepasse-solide");
+  await page.click("button[type=submit]");
+  await expect(page.getByText("Analyser une capture")).toBeVisible();
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await page.reload(); // la page est désormais contrôlée par le service worker
+  expect(await page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+
+  // Simule le formulaire POST multipart qu'envoie le système d'exploitation lors d'un partage.
+  await page.evaluate(() => {
+    const f = document.createElement("form");
+    f.method = "POST";
+    f.action = "/capture/partage";
+    f.enctype = "multipart/form-data";
+    const input = document.createElement("input");
+    input.type = "file";
+    input.name = "files";
+    input.id = "share-input";
+    f.appendChild(input);
+    document.body.appendChild(f);
+  });
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  await page.setInputFiles("#share-input", { name: "capture-whatsapp.png", mimeType: "image/png", buffer: png });
+  await page.evaluate(() => (document.querySelector("#share-input")!.closest("form") as HTMLFormElement).submit());
+  await expect(page).toHaveURL(/\/capture\?partage=1/);
+  await expect(page.getByRole("list", { name: "Fichiers sélectionnés" }).getByRole("listitem")).toHaveCount(1);
+});

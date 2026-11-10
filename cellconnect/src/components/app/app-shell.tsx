@@ -63,6 +63,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [counters, setCounters] = useState({ notifications: 0, conflicts: 0, invitations: 0 });
   const [moreOpen, setMoreOpen] = useState(false);
 
+  // Service worker : notifications push et partage vers l'application (PWA).
+  useEffect(() => {
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  }, []);
+
   const [tick, setTick] = useState(0);
   const refreshCounters = useCallback(() => setTick((n) => n + 1), []);
 

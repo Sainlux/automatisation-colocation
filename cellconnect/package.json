@@ -12,7 +12,8 @@
     "test:e2e": "playwright test --trace off",
     "worker": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/worker.ts",
     "check": "npm run typecheck && npm run lint && npm test",
-    "test:supabase": "vitest run --config vitest.integration.config.mts"
+    "test:supabase": "vitest run --config vitest.integration.config.mts",
+    "vapid": "node scripts/vapid.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.22",
@@ -36,6 +37,7 @@
     "rrule": "^2.8.1",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.7.0",
+    "web-push": "^4.0.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -47,6 +49,7 @@
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "supabase": "^3.1.0",

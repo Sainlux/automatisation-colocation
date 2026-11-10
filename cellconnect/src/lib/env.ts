@@ -94,6 +94,20 @@ export const env = {
       return Boolean(read("GOOGLE_CLIENT_ID") && read("GOOGLE_CLIENT_SECRET") && read("TOKEN_ENCRYPTION_KEY"));
     },
   },
+  push: {
+    get publicKey() {
+      return read("VAPID_PUBLIC_KEY");
+    },
+    get privateKey() {
+      return read("VAPID_PRIVATE_KEY");
+    },
+    get subject() {
+      return read("VAPID_SUBJECT") ?? "mailto:admin@cellconnect.local";
+    },
+    get configured() {
+      return Boolean(read("VAPID_PUBLIC_KEY") && read("VAPID_PRIVATE_KEY"));
+    },
+  },
   get cronSecret() {
     return read("CRON_SECRET");
   },
@@ -122,6 +136,6 @@ export function integrationStatus() {
     google: { available: env.google.configured },
     outlook: { available: false, reason: "Prévu pour une version ultérieure" },
     zoom: { available: false, reason: "Prévu pour une version ultérieure" },
-    push: { available: false, reason: "Prévu pour une version ultérieure" },
+    push: env.push.configured ? { available: true } : { available: false, reason: "Clés VAPID non configurées (npm run vapid)" },
   };
 }

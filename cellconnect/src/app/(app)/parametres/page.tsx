@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { CalendarSync, ChevronRight, Download } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/client/api";
 import { useMe } from "@/components/app/session";
@@ -116,6 +116,8 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <PushCard available={integ.push.available} />
+
       <Link href="/parametres/calendriers" className="block">
         <Card className="hover:bg-subtle">
           <CardContent className="flex items-center gap-3 pt-4">
@@ -172,7 +174,7 @@ export default function SettingsPage() {
             <Service name="Google Calendar" ok={integ.google.available} detail={integ.google.available ? "Disponible" : "Identifiants non configurés"} />
             <Service name="Outlook" ok={false} detail={integ.outlook.reason ?? ""} />
             <Service name="Zoom (création de réunions)" ok={false} detail={integ.zoom.reason ?? ""} />
-            <Service name="Notifications push" ok={false} detail={integ.push.reason ?? ""} />
+            <Service name="Notifications push" ok={integ.push.available} detail={integ.push.available ? "Clés VAPID configurées" : (integ.push.reason ?? "")} />
           </ul>
         </CardContent>
       </Card>
@@ -215,5 +217,77 @@ function Service({ name, ok, detail }: { name: string; ok: boolean; detail: stri
       <span>{name}</span>
       <Badge tone={ok ? "success" : "neutral"}>{detail}</Badge>
     </li>
+  );
+}
+
+function urlBase64ToUint8Array(base64: string) {
+  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  const raw = atob((base64 + padding).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+function PushCard({ available }: { available: boolean }) {
+  const [state, setState] = useState<"idle" | "busy" | "on" | "off">("idle");
+  const [msg, setMsg] = useState<string | null>(null);
+  const supported = useSyncExternalStore(
+    () => () => undefined,
+    () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window,
+    () => true,
+  );
+
+  async function enable() {
+    setState("busy");
+    setMsg(null);
+    try {
+      const { publicKey } = await apiFetch<{ publicKey: string | null }>("/api/push");
+      if (!publicKey) throw new Error("Notifications push non configurées sur ce serveur.");
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") throw new Error("Autorisation refusée dans le navigateur.");
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+      await apiFetch("/api/push", { method: "POST", json: sub.toJSON() });
+      setState("on");
+      setMsg("Notifications activées sur cet appareil.");
+    } catch (e) {
+      setState("idle");
+      setMsg(e instanceof Error ? e.message : "Activation impossible.");
+    }
+  }
+
+  async function disable() {
+    setState("busy");
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = await reg?.pushManager.getSubscription();
+    await apiFetch("/api/push", { method: "DELETE", json: { endpoint: sub?.endpoint ?? null } });
+    await sub?.unsubscribe();
+    setState("off");
+    setMsg("Notifications désactivées sur cet appareil.");
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Notifications sur cet appareil</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <p className="text-sm text-muted">Rappels, invitations et changements, même lorsque l&apos;application est fermée. Sur iPhone : ajoutez d&apos;abord CellConnect à l&apos;écran d&apos;accueil (Partager → Sur l&apos;écran d&apos;accueil).</p>
+        {!available ? (
+          <p className="text-sm text-warning">Non configurées sur ce serveur (clés VAPID manquantes).</p>
+        ) : !supported ? (
+          <p className="text-sm text-warning">Ce navigateur ne prend pas en charge les notifications push.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={enable} loading={state === "busy"} disabled={state === "on"}>
+              Activer
+            </Button>
+            <Button variant="outline" onClick={disable} disabled={state === "busy"}>
+              Désactiver
+            </Button>
+          </div>
+        )}
+        {msg && <p className="text-sm">{msg}</p>}
+      </CardContent>
+    </Card>
   );
 }

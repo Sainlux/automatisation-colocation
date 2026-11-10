@@ -3,6 +3,7 @@ import { UniqueViolationError } from "@/lib/db/store";
 import type { ChannelSender } from "@/lib/channels/email";
 import type { NotificationDelivery, NotificationRow, NotificationType } from "@/lib/types";
 import { log } from "@/lib/audit";
+import { getPushSender, type PushSender } from "@/lib/channels/push";
 
 /**
  * NotificationAgent — notifications internes + e-mail.
@@ -96,8 +97,58 @@ export async function notify(store: Store, input: NotifyInput, emailSender: Chan
       sent_at: null,
     });
     deliveries.push(status === "pending" ? await attemptDelivery(store, d, emailSender, now) : d);
+
+    // Push web : uniquement si l'utilisateur a activé le push sur au moins un appareil.
+    const push = getPushSender();
+    const subs = await store.select("push_subscriptions", { where: [["user_id", "eq", input.userId], ["disabled_at", "is", null]] });
+    if (subs.length && push.available) {
+      const pd = await store.insert("notification_deliveries", {
+        notification_id: notification.id,
+        user_id: input.userId,
+        channel: "push",
+        status: "pending",
+        attempts: 0,
+        last_error: null,
+        next_attempt_at: nowIso,
+        sent_at: null,
+      });
+      deliveries.push(await attemptPush(store, pd, push, now));
+    }
   }
   return { notification, duplicate: false, deliveries };
+}
+
+function notificationUrl(n: NotificationRow) {
+  const d = n.data as { eventId?: string; conflictId?: string };
+  return d.conflictId ? "/conflits" : d.eventId ? `/evenements/${d.eventId}` : "/notifications";
+}
+
+async function attemptPush(store: Store, d: NotificationDelivery, sender: PushSender, now: Date): Promise<NotificationDelivery> {
+  const n = await store.get("notifications", d.notification_id);
+  const subs = await store.select("push_subscriptions", { where: [["user_id", "eq", d.user_id], ["disabled_at", "is", null]] });
+  if (!n || subs.length === 0) return store.update("notification_deliveries", d.id, { status: "skipped", last_error: "Aucun appareil abonné", next_attempt_at: null });
+  const attempts = d.attempts + 1;
+  let delivered = 0;
+  const errors: string[] = [];
+  for (const sub of subs) {
+    try {
+      const r = await sender.send(sub, { title: n.title, body: n.body.slice(0, 300), url: notificationUrl(n), tag: n.dedupe_key.slice(0, 60) });
+      if (r === "gone") await store.update("push_subscriptions", sub.id, { disabled_at: now.toISOString(), last_error: "Abonnement expiré" });
+      else delivered++;
+    } catch (e) {
+      errors.push((e as Error).message);
+      await store.update("push_subscriptions", sub.id, { last_error: (e as Error).message.slice(0, 300) });
+    }
+  }
+  if (delivered > 0) return store.update("notification_deliveries", d.id, { status: "sent", attempts, sent_at: now.toISOString(), last_error: errors[0] ?? null, next_attempt_at: null });
+  if (errors.length === 0) return store.update("notification_deliveries", d.id, { status: "skipped", attempts, last_error: "Tous les abonnements ont expiré", next_attempt_at: null });
+  const failed = attempts >= MAX_DELIVERY_ATTEMPTS;
+  return store.update("notification_deliveries", d.id, {
+    status: failed ? "failed" : "pending",
+    attempts,
+    last_error: errors[0].slice(0, 500),
+    next_attempt_at: failed ? null : new Date(now.getTime() + Math.min(60, 2 ** attempts) * 60000).toISOString(),
+  });
 }
 
 async function attemptDelivery(store: Store, d: NotificationDelivery, sender: ChannelSender, now: Date): Promise<NotificationDelivery> {
@@ -136,13 +187,17 @@ export async function processPendingDeliveries(store: Store, sender: ChannelSend
   const due = await store.select("notification_deliveries", {
     where: [
       ["status", "eq", "pending"],
-      ["channel", "eq", "email"],
       ["next_attempt_at", "lte", now.toISOString()],
     ],
     limit: 100,
   });
   const results = [];
   for (const d of due) {
+    if (d.channel === "push") {
+      results.push(await attemptPush(store, d, getPushSender(), now));
+      continue;
+    }
+    if (d.channel !== "email") continue;
     if (!sender.available) {
       results.push(await store.update("notification_deliveries", d.id, { status: "skipped", last_error: "Canal e-mail non configuré (SMTP)", next_attempt_at: null }));
       continue;
