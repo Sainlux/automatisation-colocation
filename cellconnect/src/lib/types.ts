@@ -191,7 +191,7 @@ export interface CalendarConnection {
   id: UUID;
   user_id: UUID;
   organization_id: UUID;
-  provider: "google" | "outlook";
+  provider: "google" | "outlook" | "zoom";
   account_email: string | null;
   access_token_enc: string | null;
   refresh_token_enc: string | null;
@@ -201,6 +201,10 @@ export interface CalendarConnection {
   status: "active" | "error" | "revoked";
   last_synced_at: ISODateTime | null;
   last_error: string | null;
+  /** Canal de notifications de changements (webhook Google / abonnement Microsoft Graph). */
+  watch_channel_id?: string | null;
+  watch_resource_id?: string | null;
+  watch_expires_at?: ISODateTime | null;
   created_at: ISODateTime;
 }
 

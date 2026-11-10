@@ -13,17 +13,30 @@ import { Badge } from "@/components/ui/badge";
 import { Loading, PageHeader } from "@/components/ui/states";
 import { fmtDateTime } from "@/components/app/format";
 
+type Provider = "google" | "outlook" | "zoom";
 interface Data {
-  connections: { id: string; provider: string; accountEmail: string | null; status: string; lastSyncedAt: string | null; lastError: string | null }[];
-  providers: Record<"google" | "outlook" | "ics", { available: boolean; reason: string | null }>;
+  connections: { id: string; provider: Provider; accountEmail: string | null; status: string; lastSyncedAt: string | null; lastError: string | null; webhook: boolean }[];
+  providers: Record<Provider | "ics", { available: boolean; reason: string | null }>;
 }
 
-const FEEDBACK: Record<string, { tone: "success" | "danger" | "warning"; text: string }> = {
-  connecte: { tone: "success", text: "Google Calendar est connecté." },
-  refuse: { tone: "warning", text: "Autorisation refusée : aucun accès n'a été accordé." },
-  erreur: { tone: "danger", text: "La connexion à Google a échoué." },
-  "etat-invalide": { tone: "danger", text: "Session de connexion expirée ou invalide. Réessayez." },
+const LABEL: Record<Provider, string> = { google: "Google Calendar", outlook: "Microsoft Outlook", zoom: "Zoom" };
+const DESCRIPTION: Record<Provider, string> = {
+  google: "Envoi de vos événements, import de vos rendez-vous Google pour détecter les conflits, création de liens Google Meet.",
+  outlook: "Envoi de vos événements vers Outlook / Microsoft 365 et import de vos rendez-vous pour détecter les conflits.",
+  zoom: "Création de réunions Zoom depuis un événement ; mises à jour et annulations répercutées.",
 };
+
+function feedback(params: URLSearchParams): { tone: "success" | "danger" | "warning"; text: string } | null {
+  for (const p of ["google", "outlook", "zoom"] as Provider[]) {
+    const v = params.get(p);
+    if (!v) continue;
+    if (v === "connecte") return { tone: "success", text: `${LABEL[p]} est connecté.` };
+    if (v === "refuse") return { tone: "warning", text: "Autorisation refusée : aucun accès n'a été accordé." };
+    if (v === "etat-invalide") return { tone: "danger", text: "Session de connexion expirée ou invalide. Réessayez." };
+    return { tone: "danger", text: `La connexion à ${LABEL[p]} a échoué.` };
+  }
+  return null;
+}
 
 export default function CalendarsPage() {
   return (
@@ -36,14 +49,14 @@ export default function CalendarsPage() {
 function Calendars() {
   const { me } = useMe();
   const { data, reload } = useApi<Data>("/api/calendar/connections");
-  const g = useSearchParams().get("google");
-  const [msg, setMsg] = useState<{ tone: "success" | "danger" | "warning"; text: string } | null>(g && FEEDBACK[g] ? FEEDBACK[g] : null);
+  const sp = useSearchParams();
+  const [msg, setMsg] = useState<{ tone: "success" | "danger" | "warning"; text: string } | null>(() => feedback(sp));
   const [busy, setBusy] = useState(false);
 
-  async function connect(provider: "google" | "outlook") {
+  async function connect(provider: Provider) {
     try {
       const r = await apiFetch<{ url: string }>("/api/calendar/connect", { method: "POST", json: { provider } });
-      window.location.href = r.url;
+      window.location.assign(r.url); // redirection externe vers le fournisseur OAuth
     } catch (e) {
       setMsg({ tone: "danger", text: e instanceof ApiError ? e.message : "Erreur" });
     }
@@ -73,53 +86,59 @@ function Calendars() {
         <Loading />
       ) : (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Google Calendar</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {data.connections
-                .filter((c) => c.provider === "google" && c.status !== "revoked")
-                .map((c) => (
-                  <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-subtle p-3 text-sm">
-                    <div>
-                      <p className="font-medium">{c.accountEmail ?? "Compte Google"}</p>
-                      <p className="text-xs text-muted">{c.lastSyncedAt ? `Dernière synchronisation : ${fmtDateTime(c.lastSyncedAt, me.profile.timezone)}` : "Jamais synchronisé"}</p>
-                      {c.lastError && <p className="text-xs text-danger">{c.lastError}</p>}
+          {(["google", "outlook", "zoom"] as Provider[]).map((p) => {
+            const conns = data.connections.filter((c) => c.provider === p && c.status !== "revoked");
+            return (
+              <Card key={p}>
+                <CardHeader>
+                  <CardTitle>{LABEL[p]}</CardTitle>
+                  {!data.providers[p].available && <Badge>Non configuré</Badge>}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted">{DESCRIPTION[p]}</p>
+                  {conns.map((c) => (
+                    <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-subtle p-3 text-sm">
+                      <div>
+                        <p className="font-medium">{c.accountEmail ?? `Compte ${LABEL[p]}`}</p>
+                        {p !== "zoom" && (
+                          <p className="text-xs text-muted">
+                            {c.lastSyncedAt ? `Dernière synchronisation : ${fmtDateTime(c.lastSyncedAt, me.profile.timezone)}` : "Jamais synchronisé"}
+                            {c.webhook ? " · mises à jour en temps réel actives" : " · synchronisation périodique"}
+                          </p>
+                        )}
+                        {c.lastError && <p className="text-xs text-danger">{c.lastError}</p>}
+                      </div>
+                      <div className="flex gap-2">
+                        <Badge tone={c.status === "active" ? "success" : "danger"}>{c.status === "active" ? "Actif" : "Erreur"}</Badge>
+                        {c.status !== "active" && (
+                          <Button size="sm" onClick={() => connect(p)}>
+                            Reconnecter
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" onClick={async () => { await apiFetch(`/api/calendar/connections/${c.id}`, { method: "DELETE" }); reload(); }}>
+                          Déconnecter
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Badge tone={c.status === "active" ? "success" : "danger"}>{c.status === "active" ? "Actif" : "Erreur"}</Badge>
-                      <Button size="sm" variant="outline" onClick={async () => { await apiFetch(`/api/calendar/connections/${c.id}`, { method: "DELETE" }); reload(); }}>
-                        Déconnecter
-                      </Button>
+                  ))}
+                  {data.providers[p].available ? (
+                    <div className="flex flex-wrap gap-2">
+                      {conns.length === 0 && <Button onClick={() => connect(p)}>Connecter {LABEL[p]}</Button>}
+                      {p !== "zoom" && conns.some((c) => c.status === "active") && (
+                        <Button variant="outline" onClick={sync} loading={busy}>
+                          <RefreshCw className="h-4 w-4" aria-hidden /> Synchroniser maintenant
+                        </Button>
+                      )}
                     </div>
-                  </div>
-                ))}
-              {data.providers.google.available ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => connect("google")}>Connecter un compte Google</Button>
-                  {data.connections.some((c) => c.status === "active") && (
-                    <Button variant="outline" onClick={sync} loading={busy}>
-                      <RefreshCw className="h-4 w-4" aria-hidden /> Synchroniser maintenant
-                    </Button>
+                  ) : (
+                    <Alert tone="info" title="Indisponible sur ce serveur">
+                      {data.providers[p].reason}
+                    </Alert>
                   )}
-                </div>
-              ) : (
-                <Alert tone="info" title="Indisponible sur ce serveur">
-                  {data.providers.google.reason}
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Microsoft Outlook</CardTitle>
-              <Badge>Bientôt</Badge>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted">{data.providers.outlook.reason}. En attendant, utilisez l&apos;export .ics ci-dessous.</p>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            );
+          })}
           <Card>
             <CardHeader>
               <CardTitle>iCalendar (.ics)</CardTitle>

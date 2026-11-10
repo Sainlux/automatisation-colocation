@@ -94,6 +94,35 @@ export const env = {
       return Boolean(read("GOOGLE_CLIENT_ID") && read("GOOGLE_CLIENT_SECRET") && read("TOKEN_ENCRYPTION_KEY"));
     },
   },
+  microsoft: {
+    get clientId() {
+      return read("MS_CLIENT_ID");
+    },
+    get clientSecret() {
+      return read("MS_CLIENT_SECRET");
+    },
+    get tenant() {
+      return read("MS_TENANT") ?? "common";
+    },
+    get configured() {
+      return Boolean(read("MS_CLIENT_ID") && read("MS_CLIENT_SECRET") && read("TOKEN_ENCRYPTION_KEY"));
+    },
+  },
+  zoom: {
+    get clientId() {
+      return read("ZOOM_CLIENT_ID");
+    },
+    get clientSecret() {
+      return read("ZOOM_CLIENT_SECRET");
+    },
+    get configured() {
+      return Boolean(read("ZOOM_CLIENT_ID") && read("ZOOM_CLIENT_SECRET") && read("TOKEN_ENCRYPTION_KEY"));
+    },
+  },
+  /** Les webhooks exigent une URL publique en https. */
+  get webhooksEnabled() {
+    return (read("APP_URL") ?? "").startsWith("https://");
+  },
   push: {
     get publicKey() {
       return read("VAPID_PUBLIC_KEY");
@@ -134,8 +163,8 @@ export function integrationStatus() {
     ai: env.openai.apiKey ? { available: true, provider: "openai", model: env.openai.model } : { available: false },
     email: { available: env.smtp.configured },
     google: { available: env.google.configured },
-    outlook: { available: false, reason: "Prévu pour une version ultérieure" },
-    zoom: { available: false, reason: "Prévu pour une version ultérieure" },
+    outlook: env.microsoft.configured ? { available: true } : { available: false, reason: "Identifiants Microsoft non configurés (MS_CLIENT_ID, MS_CLIENT_SECRET)" },
+    zoom: env.zoom.configured ? { available: true } : { available: false, reason: "Identifiants Zoom non configurés (ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET)" },
     push: env.push.configured ? { available: true } : { available: false, reason: "Clés VAPID non configurées (npm run vapid)" },
   };
 }

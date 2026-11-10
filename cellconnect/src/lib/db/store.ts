@@ -59,7 +59,7 @@ export const UNIQUE_CONSTRAINTS: Partial<Record<TableName, string[][]>> = {
   notification_deliveries: [["notification_id", "channel"]],
   agent_tasks: [["idempotency_key"]],
   idempotency_keys: [["user_id", "scope", "key"]],
-  calendar_sync_records: [["connection_id", "event_id"]],
+  calendar_sync_records: [["connection_id", "event_id"], ["connection_id", "external_id"]],
 };
 
 export function matches<T>(row: T, where: Filter<T>[] | undefined): boolean {

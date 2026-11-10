@@ -115,6 +115,17 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
             </a>
           )}
           {e.description && <p className="whitespace-pre-line text-sm text-muted">{e.description}</p>}
+          {data.canEdit && !cancelled && !e.meeting_url && (
+            <MeetingButtons
+              eventId={id}
+              zoom={me.integrations.zoom.available}
+              google={me.integrations.google.available}
+              onDone={(r) => {
+                setResult(r);
+                reload();
+              }}
+            />
+          )}
 
           {data.me?.status === "invited" && !cancelled && (
             <div className="flex flex-wrap gap-2 rounded-xl bg-warning-bg p-3">
@@ -572,5 +583,35 @@ function OccurrencePanel({ eventId, occurrenceStart, timezone, durationMin, onDo
         {err && <Alert tone="danger">{err}</Alert>}
       </CardContent>
     </Card>
+  );
+}
+
+function MeetingButtons({ eventId, zoom, google, onDone }: { eventId: string; zoom: boolean; google: boolean; onDone: Done }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!zoom && !google) return null;
+  async function create(provider: "zoom" | "google_meet") {
+    setBusy(provider);
+    try {
+      await apiFetch(`/api/events/${eventId}/meeting`, { method: "POST", json: { provider } });
+      onDone({ tone: "success", text: "Réunion en ligne créée. Les participants ont été informés du lien." });
+    } catch (err) {
+      onDone({ tone: "danger", text: err instanceof ApiError ? err.message : "Création impossible." });
+    } finally {
+      setBusy(null);
+    }
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      {zoom && (
+        <Button size="sm" variant="outline" loading={busy === "zoom"} onClick={() => create("zoom")}>
+          <Video className="h-4 w-4" aria-hidden /> Créer une réunion Zoom
+        </Button>
+      )}
+      {google && (
+        <Button size="sm" variant="outline" loading={busy === "google_meet"} onClick={() => create("google_meet")}>
+          <Video className="h-4 w-4" aria-hidden /> Créer un Google Meet
+        </Button>
+      )}
+    </div>
   );
 }
