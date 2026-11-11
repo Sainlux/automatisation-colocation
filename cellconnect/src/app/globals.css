@@ -1,0 +1,301 @@
+@import "tailwindcss";
+
+/* Mode sombre piloté par la classe .dark sur <html> (préférence utilisateur ou système). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Identité « papier et encre, touche de miel ».
+ * - danger  : erreurs, échecs, actions destructives.
+ * - warning : à relire, chevauchement d'agenda (calme : une décision, pas une erreur).
+ * - success : vérifié, enregistré, gardé.
+ * - warm    : la marque et ce qui est « nouveau / va être ajouté ». Jamais pour une erreur.
+ * Texte posé sur un fond plein success / warning / danger : toujours text-*-fg, jamais text-white.
+ */
+:root {
+  color-scheme: light;
+  /* Neutres */
+  --bg: #f6f4ef;
+  --card: #fffdf9;
+  --subtle: #efebe3;
+  --border: #e4ded3; /* décoratif uniquement */
+  --input-border: #8f877a; /* bord des champs et boutons outline (≈ 3,4:1 sur la carte) */
+  --fg: #1c1a17;
+  --muted: #5f5a52; /* ≈ 6,2:1 */
+  /* Marque */
+  --primary: #23367a;
+  --primary-hover: #1b2a61;
+  --primary-fg: #ffffff;
+  --accent: #3552b0; /* liens, ≈ 6,9:1 */
+  --ring: #3552b0;
+  /* Accent chaud (miel) */
+  --warm: #9a6a12;
+  --warm-bg: #f8eed6;
+  /* Texte miel posé SUR --warm-bg (le miel pur n'y atteint que 4,1:1 en clair) : ≈ 5:1 clair, 9:1 sombre. */
+  --warm-text: color-mix(in srgb, var(--warm) 85%, var(--fg));
+  /* Sémantique */
+  --success: #15803d;
+  --success-bg: #ecf8ef;
+  --success-fg: #ffffff;
+  --warning: #c2410c;
+  --warning-bg: #fdf1e7;
+  --warning-fg: #ffffff;
+  --danger: #b91c1c;
+  --danger-bg: #fcefed;
+  --danger-fg: #ffffff;
+  --info-bg: #eef0f8;
+  /* Désactivé */
+  --disabled-bg: #e7e3da;
+  --disabled-fg: #6b665d;
+  /* Mouvement */
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  /* Hauteur de la barre d'onglets mobile (0 si absente) — consommée par ActionBar. */
+  --bottom-nav-h: 0px;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #12110f;
+  --card: #1b1a17;
+  --subtle: #24221e;
+  --border: #34312b;
+  --input-border: #6d665b;
+  --fg: #eeeae2;
+  --muted: #a39d92;
+  --primary: #8fa6ee;
+  --primary-hover: #a9bbf3;
+  --primary-fg: #12110f;
+  --accent: #a9bbf3;
+  --ring: #c3d0f7;
+  --warm: #e8b65a;
+  --warm-bg: #2a2010;
+  --success: #4ade80;
+  --success-bg: #10261a;
+  --success-fg: #12110f;
+  --warning: #fb923c;
+  --warning-bg: #2c1a0e;
+  --warning-fg: #12110f;
+  --danger: #f87171;
+  --danger-bg: #2c1416;
+  --danger-fg: #12110f;
+  --info-bg: #1c2136;
+  --disabled-bg: #2a2823;
+  --disabled-fg: #8a847a;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-input-border: var(--input-border);
+  --color-subtle: var(--subtle);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-accent: var(--accent);
+  --color-ring: var(--ring);
+  --color-warm: var(--warm);
+  --color-warm-bg: var(--warm-bg);
+  --color-warm-text: var(--warm-text);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-success-fg: var(--success-fg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-fg: var(--warning-fg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-fg: var(--danger-fg);
+  --color-info-bg: var(--info-bg);
+  --color-disabled-bg: var(--disabled-bg);
+  --color-disabled-fg: var(--disabled-fg);
+}
+
+@theme {
+  /* Pile système : pas de webfont. */
+  --font-sans: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Échelle typographique (taille / interligne). */
+  --text-xs: 0.8125rem; /* 13 */
+  --text-xs--line-height: 1.125rem; /* 18 */
+  --text-sm: 0.9375rem; /* 15 */
+  --text-sm--line-height: 1.375rem; /* 22 */
+  --text-base: 1rem; /* 16 */
+  --text-base--line-height: 1.5rem; /* 24 */
+  --text-lg: 1.125rem; /* 18 */
+  --text-lg--line-height: 1.625rem; /* 26 */
+  --text-xl: 1.375rem; /* 22 */
+  --text-xl--line-height: 1.75rem; /* 28 */
+  --text-2xl: 1.625rem; /* 26 */
+  --text-2xl--line-height: 2rem; /* 32 */
+
+  /* Mouvement */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --animate-step-in: step-in var(--dur-base) var(--ease-out) both;
+  --animate-pop-in: pop-in var(--dur-base) var(--ease-out) both;
+
+  @keyframes step-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* Contrat de mise en page mobile : la barre d'onglets (#bottom-nav) réserve sa hauteur. */
+@media (max-width: 1023px) {
+  body:has(#bottom-nav) {
+    --bottom-nav-h: calc(4rem + env(safe-area-inset-bottom));
+  }
+  /* Le champ qui a le focus ne passe jamais sous l'en-tête ni sous une barre collante. */
+  html {
+    scroll-padding-top: 4.5rem;
+    scroll-padding-bottom: 8rem;
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-synthesis-weight: none;
+  overflow-wrap: break-word;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+p,
+li {
+  text-wrap: pretty;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+::-webkit-calendar-picker-indicator {
+  opacity: 0.7;
+}
+
+/* Mouvement réduit : tout est neutralisé, sauf l'indicateur de chargement. */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* FullCalendar — harmonisation avec le thème */
+.fc {
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: var(--card);
+  --fc-neutral-bg-color: var(--subtle);
+  --fc-list-event-hover-bg-color: var(--subtle);
+  --fc-today-bg-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  --fc-button-bg-color: var(--card);
+  --fc-button-border-color: var(--input-border);
+  --fc-button-text-color: var(--fg);
+  --fc-button-hover-bg-color: var(--subtle);
+  --fc-button-hover-border-color: var(--input-border);
+  --fc-button-active-bg-color: var(--primary);
+  --fc-button-active-border-color: var(--primary);
+  --fc-event-bg-color: var(--primary);
+  --fc-event-border-color: var(--primary);
+  --fc-event-text-color: var(--primary-fg);
+  font-size: 0.875rem;
+}
+.fc .fc-button {
+  border-radius: 0.75rem;
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+  color: var(--primary-fg);
+}
+.fc .fc-toolbar-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.fc .fc-col-header-cell-cushion,
+.fc .fc-daygrid-day-number,
+.fc .fc-list-day-text,
+.fc .fc-list-day-side-text {
+  color: var(--fg);
+  text-decoration: none;
+}
+/* Heures alignées */
+.fc .fc-timegrid-slot-label,
+.fc .fc-event-time,
+.fc .fc-list-event-time {
+  font-variant-numeric: tabular-nums;
+}
+/* Chevauchement : une décision à prendre, pas une erreur. */
+.fc .ev-conflict {
+  box-shadow: inset 4px 0 0 var(--warning);
+}
+@media (max-width: 640px) {
+  /* Titre sur toute la largeur, puis les boutons sur une ligne. */
+  .fc .fc-toolbar.fc-header-toolbar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .fc .fc-toolbar-chunk:has(.fc-toolbar-title) {
+    order: -1;
+    flex-basis: 100%;
+  }
+  .fc .fc-button {
+    min-height: 44px;
+  }
+  .fc .fc-today-button:disabled {
+    display: none;
+  }
+  /*
+   * Vue liste : la colonne horaire ne pousse plus le titre hors de l'écran.
+   * Pas de table-layout: fixed ici : la première ligne de la table est l'en-tête de jour
+   * (colspan=3), qui répartirait les colonnes en trois tiers égaux. En disposition automatique,
+   * la largeur posée sur l'heure et overflow-wrap: anywhere sur le titre suffisent.
+   */
+  .fc .fc-list-event-time {
+    width: 4.5rem;
+    white-space: normal;
+  }
+  .fc .fc-list-event-graphic {
+    width: 1.75rem;
+  }
+  .fc .fc-list-event-title {
+    overflow-wrap: anywhere;
+  }
+  .fc .fc-list-event.ev-conflict {
+    box-shadow: none;
+  }
+  .fc .fc-list-event.ev-conflict td:first-child {
+    box-shadow: inset 4px 0 0 var(--warning);
+  }
+}
