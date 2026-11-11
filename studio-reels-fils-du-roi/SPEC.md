@@ -25,6 +25,7 @@ Couleurs : fond `#111214`, panneaux `#1a1c1f`, texte `#ece9e2`, accent or `#f2c1
   - **Automatique** : on donne le début et la fin du chant, et les lignes sont réparties selon leur nombre de mots. Elle se relance seule quand les paroles changent.
   - **Code de Claude** : on colle un `words.json` (`[[mot, début, fin], ...]`).
 - Liste des lignes avec leur temps. La synchro est gardée dans `localStorage`.
+- **Décaler toute la synchro** (visible dès qu'une synchro existe) : boutons −0,5 s, −0,1 s, +0,1 s, +0,5 s. Tous les mots et les débuts de ligne bougent ensemble, jamais avant 0:00. Le total du décalage est affiché ; il revient à 0 à chaque nouvelle synchro. En synchro automatique, « Début / Fin du chant » suivent le décalage (la fin ne dépasse pas la durée du MP3).
 
 **Étape 3 — Style**
 - **18 styles prêts**, chacun montré par une vraie miniature 9:16 rendue par le moteur : Nuit cinéma, Or lumineux, Rap jaune, Un mot, Néon rose, Glacier, Feu, Royal, Vert espoir, Louange douce, Karaoké, Craie, Machine à écrire, Affiche rouge, Pastel aube, Magazine, Contour seul, Minimal.

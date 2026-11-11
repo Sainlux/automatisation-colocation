@@ -175,6 +175,15 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
         <button class="btn" id="codeGo">Utiliser ce code</button>
       </div>
       <div class="status" role="status" aria-live="polite" id="syncStatus"></div>
+      <div class="stack hidden" id="shiftBox" style="margin-top:10px">
+        <p class="small">Les paroles arrivent trop tôt ou trop tard ? Décale toute la synchro d'un coup.</p>
+        <div class="row" role="group" aria-label="Décaler toute la synchro">
+          <button class="btn ghost" data-shift="-0.5" aria-label="Avancer de 0,5 seconde">−0,5 s</button>
+          <button class="btn ghost" data-shift="-0.1" aria-label="Avancer de 0,1 seconde">−0,1 s</button>
+          <button class="btn ghost" data-shift="0.1" aria-label="Retarder de 0,1 seconde">+0,1 s</button>
+          <button class="btn ghost" data-shift="0.5" aria-label="Retarder de 0,5 seconde">+0,5 s</button>
+        </div>
+      </div>
       <div class="lines" id="lineList"></div>
     </section>
 
@@ -313,6 +322,7 @@ let images = [], audio = new Audio(), audioURL = null, duration = 0, syncMode = 
 let words = [];      // [{w,s,e}] mots calés
 let chunks = [];     // [{words:[...], s, e, idx}]
 let lineStarts = []; // pour la synchro au toucher
+let shiftTotal = 0;   // décalage global appliqué à la synchro (s)
 let fontsLoaded = false, engineReady = false, demo = true, playing = false, demoPlaying = true, demoTime = 0, syncSource = null;
 const $ = id => document.getElementById(id);
 const store = { get(k){ try { return JSON.parse(localStorage.getItem("frr_"+k)); } catch(e){ return null; } },
@@ -368,7 +378,7 @@ function autoSync(quiet){
   const a = +$("vStart").value || 0, b = +$("vEnd").value || (duration || 60) * 0.92;
   const counts = lines.map(l => l.split(/\s+/).length), tot = counts.reduce((x,y) => x+y, 0);
   let t = a; const starts = counts.map(c => { const s = t; t += (b - a) * c / tot; return s; });
-  words = wordsFromLines(lines, starts, b); lineStarts = starts; rebuild();
+  words = wordsFromLines(lines, starts, b); lineStarts = starts; shiftTotal = 0; rebuild();
   setStatus("syncStatus", quiet ? "Synchro approximative en place. Pour plus de précision : « Au toucher »." : `${lines.length} lignes réparties de ${fmt(a)} à ${fmt(b)}.`);
 }
 function rebuild(){
@@ -381,7 +391,7 @@ function rebuild(){
   });
   chunks = chunks.map((c, i) => ({words:c, s:c[0].s, e: Math.min(chunks[i+1] ? chunks[i+1][0].s : c[c.length-1].e + 2.5, c[c.length-1].e + 2.5), idx:i}));
   chunks.forEach((c, i) => { if (chunks[i+1]) c.e = Math.min(c.words[c.words.length-1].e + 2.5, chunks[i+1].s); c.emph = emphasisIndex(c.words); });
-  drawLineList(); writeMsg();
+  drawLineList(); writeMsg(); $("shiftBox").classList.toggle("hidden", !words.length);
   store.set("lyrics", $("lyrics").value); store.set("words", words); store.set("starts", lineStarts); store.set("src", syncSource);
 }
 function drawLineList(){
@@ -399,7 +409,7 @@ let tapping = false, tapIdx = 0;
 $("tapStart").onclick = async () => {
   if (!audio.src) return setStatus("syncStatus", "Ajoute d'abord ton MP3 (étape 1).", true);
   if (!lyricLines().length) return setStatus("syncStatus", "Colle d'abord tes paroles.", true);
-  lineStarts = []; tapIdx = 0; tapping = true; demo = false;
+  lineStarts = []; tapIdx = 0; tapping = true; demo = false; shiftTotal = 0;
   audio.currentTime = 0; await safePlay(); playing = true; $("play").textContent = "❚❚ Pause";
   syncSource = "tap"; $("tapBar").classList.remove("hidden"); showNext();
   setStatus("syncStatus", "Écoute, et touche au début de chaque ligne.");
@@ -429,12 +439,30 @@ $("tapBtn").addEventListener("pointerdown", e => { e.preventDefault(); tap(); })
 document.addEventListener("keydown", e => { if (tapping && e.code === "Space") { e.preventDefault(); tap(); } });
 $("tapStop").onclick = () => { stopTap(); audio.pause(); playing = false; setPlay(false); };
 $("autoGo").onclick = autoSync;
+/* ----- décaler toute la synchro (−/+ secondes) ----- */
+function shiftSync(d){
+  if (!words.length) return;
+  const first = Math.min(...words.map(w => w.s), ...lineStarts.filter(x => x != null));
+  d = Math.max(d, -first);                       // jamais avant 0:00
+  if (Math.abs(d) < 0.005) return setStatus("syncStatus", "Les paroles commencent déjà à 0:00 : impossible d'avancer plus.", true);
+  words = words.map(w => ({w:w.w, s:w.s + d, e:w.e + d}));
+  lineStarts = lineStarts.map(x => x == null ? x : x + d);
+  if (syncSource === "auto") {                    // garde la synchro auto cohérente si elle se relance
+    $("vStart").value = +((+$("vStart").value || 0) + d).toFixed(2);
+    if (+$("vEnd").value) $("vEnd").value = +Math.min(+$("vEnd").value + d, duration || Infinity).toFixed(2);
+  }
+  shiftTotal = Math.round((shiftTotal + d) * 100) / 100;
+  rebuild();
+  const n = Math.abs(shiftTotal).toFixed(1).replace(".", ",");
+  setStatus("syncStatus", shiftTotal === 0 ? "Synchro revenue à sa position d'origine." : `Synchro décalée de ${shiftTotal > 0 ? "+" : "−"}${n} s au total (${shiftTotal > 0 ? "paroles plus tard" : "paroles plus tôt"}).`);
+}
+document.querySelectorAll("[data-shift]").forEach(b => b.onclick = () => shiftSync(+b.dataset.shift));
 $("codeGo").onclick = () => {
   try {
     const arr = JSON.parse($("codeIn").value.trim());
     words = arr.map(x => Array.isArray(x) ? {w:String(x[0]), s:+x[1], e:+x[2]} : {w:x.w, s:+x.s, e:+x.e}).filter(x => x.w && !isNaN(x.s));
     if (!$("lyrics").value.trim()) $("lyrics").value = words.map(w => w.w).join(" ");
-    lineStarts = []; syncSource = "code"; rebuild(); setStatus("syncStatus", `${words.length} mots calés importés.`);
+    lineStarts = []; syncSource = "code"; shiftTotal = 0; rebuild(); setStatus("syncStatus", `${words.length} mots calés importés.`);
   } catch(e){ setStatus("syncStatus", "Ce code n'est pas lisible. Copie-le en entier, crochets compris.", true); }
 };
 let lyrT = null, lastLineCount = 0;
@@ -614,6 +642,7 @@ function curTime(){ return demo ? demoTime : audio.currentTime; }
 /* image courante : change au début d'une phrase, fondu de 0,45 s */
 function bgIndexAt(t, C, total){
   const n = images.length; if (n < 2) return {i:0, prev:-1, e:1};
+  t = Math.max(0, Number.isFinite(t) ? t : 0);   // temps négatif ou invalide (début d'export) → image 1
   const raw = Math.min(n-1, Math.floor(t / (total / n)));
   const cut = ci => { const target = ci * total / n; const c = C.find(c => c.s >= target - 0.01); return c ? c.s : target; };
   const cs = cut(raw), i = raw === 0 || t >= cs ? raw : raw - 1, start = i === 0 ? -1 : cut(i);
