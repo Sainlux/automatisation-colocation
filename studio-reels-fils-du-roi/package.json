@@ -1,0 +1,12 @@
+{
+  "name": "studio-reels-fils-du-roi",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Studio de vidéos de paroles (Reels 9:16) pour les chansons du Fils du Roi",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/build.mjs && node server.mjs"
+  },
+  "engines": { "node": ">=18" }
+}

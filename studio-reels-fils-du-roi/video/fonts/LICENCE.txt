@@ -1,0 +1,2 @@
+Polices : SIL Open Font License 1.1 (Google Fonts). Libres d'usage, y compris commercial.
+Sources : github.com/google/fonts (ofl/oswald, ofl/bebasneue, ofl/playfairdisplay, ofl/montserrat)
