@@ -14,6 +14,8 @@ Couleurs : fond `#111214`, panneaux `#1a1c1f`, texte `#ece9e2`, accent or `#f2c1
 **Aperçu (toujours visible)** : un canvas 9:16 avec le bouton Lire/Pause, une barre de position et le temps. Sur téléphone, il reste en haut de l'écran en petit (92 px) et le bouton « Agrandir l'aperçu » le remet en grand. Sans MP3, une démo tourne en boucle.
 
 **Étape 1 — Musique et images**
+- **Chansons créées par Claude** (en tête) : liste lue dans `projets/index.json` (fichiers publiés à côté de la page). Chaque ligne : vignette, titre, durée, date, bouton « Charger » qui remplit d'un coup musique, images, paroles, synchro mot à mot (`words`) et titre. Sans projet : « Aucune chanson prête pour l'instant. »
+- **Faire créer une nouvelle chanson par Claude** (repliable) : titre, paroles ou idée, style musical, nombre d'images, lumière → « Copier la demande pour Claude ». Procédure suivie par Claude : CLAUDE.md § Générer une chanson de A à Z ; rangement par `video/nouveau_projet.py`.
 - Bouton pour choisir le MP3 (gros bouton or, 52 px de haut ; accepte mp3, m4a, wav, aac, ogg ; sur iPhone, passer par « Parcourir / Fichiers »), et bouton pour ajouter plusieurs images. Sur ordinateur, on peut aussi glisser les fichiers sur ces boutons.
 - Vignettes numérotées, avec × pour retirer une image (zone de toucher de 32 px).
 - Lien « Pas encore d'images ? Écrire les prompts ChatGPT » qui descend à l'étape 4.
@@ -23,7 +25,7 @@ Couleurs : fond `#111214`, panneaux `#1a1c1f`, texte `#ece9e2`, accent or `#f2c1
 - Trois méthodes de synchro :
   - **Au toucher** : une barre fixe en bas de l'écran montre la prochaine ligne en grand, un gros bouton « Touche quand elle commence », et les boutons « Annuler la dernière » et « Terminer ». Les lignes non touchées sont réparties automatiquement.
   - **Automatique** : on donne le début et la fin du chant, et les lignes sont réparties selon leur nombre de mots. Elle se relance seule quand les paroles changent.
-  - **Code de Claude** : on colle un `words.json` (`[[mot, début, fin], ...]`).
+  - **Code de Claude** (caché sous « Plus d'options ») : on colle un `words.json` (`[[mot, début, fin], ...]`).
 - Liste des lignes avec leur temps. La synchro est gardée dans `localStorage`.
 - **Décaler toute la synchro** (visible dès qu'une synchro existe) : boutons −0,5 s, −0,1 s, +0,1 s, +0,5 s. Tous les mots et les débuts de ligne bougent ensemble, jamais avant 0:00. Le total du décalage est affiché ; il revient à 0 à chaque nouvelle synchro. En synchro automatique, « Début / Fin du chant » suivent le décalage (la fin ne dépasse pas la durée du MP3).
 
