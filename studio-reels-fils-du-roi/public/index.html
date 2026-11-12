@@ -67,6 +67,14 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
 .pick.main{background:var(--gold);border-color:var(--gold);color:#1a1405}
 .pick:hover,.pick.over{border-color:var(--gold)}
 .vh:focus-visible + .pick, .pick:focus-within{outline:2px solid var(--gold);outline-offset:2px}
+.projList{display:grid;gap:8px}
+.proj{display:flex;gap:10px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.proj img{width:40px;height:71px;object-fit:cover;border-radius:6px;flex:none;background:#000}
+.proj div{flex:1;min-width:0}
+.proj b{display:block;font-family:var(--display);font-size:16px;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj .btn{flex:none}
+.proj.on{border-color:var(--gold)}
+.ask summary{cursor:pointer;color:var(--gold);font-weight:700;min-height:44px;display:flex;align-items:center}
 .vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .thumbs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
 .thumb{position:relative;flex:0 0 auto;width:62px;aspect-ratio:9/16;border-radius:6px;overflow:hidden;border:1px solid var(--line);background:#000}
@@ -130,6 +138,26 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
     <!-- 1 MUSIQUE + IMAGES -->
     <section>
       <h2><span class="n">1</span>Musique et images</h2>
+      <div class="projets stack" id="projBox">
+        <label class="l">Chansons créées par Claude</label>
+        <div class="projList" id="projList"><p class="small" id="projEmpty">Aucune chanson prête pour l'instant.</p></div>
+        <details class="ask" id="askBox">
+          <summary>Faire créer une nouvelle chanson par Claude</summary>
+          <div class="stack" style="margin-top:8px">
+            <div class="ctl"><label for="askTitre" class="small">Titre</label><input type="text" id="askTitre" placeholder="Ex : Psaume 23"></div>
+            <div class="ctl"><label for="askParoles" class="small">Paroles (ou juste l'idée de la chanson)</label><textarea id="askParoles" style="min-height:90px" placeholder="Colle tes paroles, ou décris le thème : « Psaume 23, confiance, berger »"></textarea></div>
+            <div class="grid2">
+              <div class="ctl"><label for="askStyle" class="small">Style musical</label><input type="text" id="askStyle" value="gospel moderne, voix masculine, piano, émotion"></div>
+              <div class="ctl"><label for="askImgs" class="small">Images</label><select id="askImgs"><option>3</option><option selected>5</option><option>7</option></select></div>
+              <div class="ctl"><label for="askLight" class="small">Lumière des images</label><select id="askLight"><option>Nuit cinéma</option><option>Lumière dorée</option><option>Ciel lumineux</option><option>Aube pastel</option><option>Matin lumineux</option><option>Néon urbain</option></select></div>
+            </div>
+            <button class="btn" id="askCopy">Copier la demande pour Claude</button>
+            <p class="small" id="askHelp">Colle ce message dans ta conversation avec Claude. Il crée 2 versions de la chanson sur ton Suno, les images, la synchro mot à mot, et la chanson apparaît ici.</p>
+            <textarea id="askOut" class="hidden" readonly style="min-height:120px"></textarea>
+          </div>
+        </details>
+        <p class="small" style="margin:0">Ou utilise ta propre musique :</p>
+      </div>
       <p class="note">Le MP3 de ta chanson (Suno ou autre), puis tes images dans l'ordre de la chanson.</p>
       <div class="grid2">
         <div>
@@ -155,7 +183,8 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
       <div class="row" style="margin-top:10px" role="group" aria-label="Méthode de synchro">
         <button class="chip" data-sync="tap" aria-pressed="true">Au toucher (précis)</button>
         <button class="chip" data-sync="auto" aria-pressed="false">Automatique (rapide)</button>
-        <button class="chip" data-sync="code" aria-pressed="false">Code de Claude</button>
+        <button class="chip hidden" data-sync="code" aria-pressed="false" id="codeChip">Code de Claude</button>
+        <button class="linkish" id="moreSync">Plus d'options</button>
       </div>
       <div id="syncTap" class="stack" style="margin-top:12px">
         <p class="small">Appuie sur Démarrer, puis touche le gros bouton au moment où chaque ligne commence à être chantée.</p>
@@ -378,6 +407,60 @@ function loadMp3(f){
   el.addEventListener("drop", e => { e.preventDefault(); el.classList.remove("over"); fn([...(e.dataTransfer?.files || [])]); });
 });
 
+/* =================== CHANSONS CRÉÉES PAR CLAUDE =================== */
+// Fichiers publiés à côté de la page : projets/index.json + projets/<slug>/projet.json, chanson.mp3, 1.jpg…
+async function loadProjectList(){
+  let list = [];
+  try { const r = await fetch("projets/index.json", {cache:"no-store"}); if (r.ok) list = await r.json(); } catch(e){}
+  const box = $("projList"); if (!Array.isArray(list) || !list.length) return;
+  box.innerHTML = "";
+  list.forEach(p => {
+    const d = document.createElement("div"); d.className = "proj"; d.dataset.slug = p.slug;
+    d.innerHTML = `<img alt=""><div><b></b><span class="small"></span></div><button class="btn">Charger</button>`;
+    d.querySelector("img").src = "projets/" + (p.couverture || (p.slug + "/1.jpg"));
+    d.querySelector("b").textContent = p.titre || p.slug;
+    d.querySelector("span").textContent = [p.duree ? fmt(p.duree) : "", p.cree || ""].filter(Boolean).join(" · ");
+    d.querySelector("button").onclick = () => loadProject(p.slug, d);
+    box.appendChild(d);
+  });
+}
+async function loadProject(slug, row){
+  const btn = row.querySelector("button"); btn.disabled = true; btn.textContent = "Chargement…";
+  try {
+    const base = "projets/" + slug + "/";
+    const pj = await (await fetch(base + "projet.json", {cache:"no-store"})).json();
+    const blob = await (await fetch(base + (pj.audio || "chanson.mp3"))).blob();
+    images = []; (pj.images || []).forEach((f, i) => addImage(base + f, `${slug}-${i+1}`));
+    $("lyrics").value = pj.paroles || ""; $("titre").value = pj.titre || "";
+    if (Array.isArray(pj.words) && pj.words.length){
+      words = pj.words.map(x => ({w:String(x[0]), s:+x[1], e:+x[2]})).filter(x => x.w && !isNaN(x.s));
+      // début de chaque ligne = premier mot de la ligne
+      let k = 0; lineStarts = lyricLines().map(l => { const s = words[k] ? words[k].s : null; k += l.split(/\s+/).length; return s; });
+      syncSource = "code"; shiftTotal = 0;
+    } else { words = []; syncSource = "auto"; }
+    loadMp3(new File([blob], (pj.titre || slug) + ".mp3", {type: blob.type || "audio/mpeg"}));
+    rebuild();
+    document.querySelectorAll(".proj").forEach(x => x.classList.toggle("on", x === row));
+    setStatus("syncStatus", words.length ? `« ${pj.titre} » chargée : paroles calées mot à mot.` : `« ${pj.titre} » chargée : synchro automatique.`);
+    btn.textContent = "Chargée";
+  } catch(e){ btn.textContent = "Réessayer"; setStatus("syncStatus", "Cette chanson n'a pas pu être chargée. Réessaie, ou demande à Claude de la republier.", true); }
+  finally { btn.disabled = false; }
+}
+$("askCopy").onclick = async () => {
+  const titre = $("askTitre").value.trim(), par = $("askParoles").value.trim();
+  if (!par) { $("askParoles").focus(); return setStatus("syncStatus", "Écris les paroles ou l'idée de la chanson.", true); }
+  const msg = `Crée une chanson pour mon Studio Reels, de A à Z.
+Titre : ${titre || "à toi de proposer"}
+${par.split("\n").length > 2 ? "Paroles (à garder telles quelles) :\n" + par : "Idée : " + par + " (écris les paroles en français, couplets courts, refrain fort)"}
+Style musical Suno : ${$("askStyle").value.trim()}
+Images : ${$("askImgs").value}, lumière « ${$("askLight").value} », format 9:16, sans personne ni texte.
+Suis la procédure « Générer une chanson de A à Z » de CLAUDE.md : 2 versions Suno, synchro mot à mot, images, puis publie-la dans le Studio.`;
+  $("askOut").value = msg; $("askOut").classList.remove("hidden");
+  try { await navigator.clipboard.writeText(msg); $("askHelp").textContent = "Demande copiée. Colle-la dans ta conversation avec Claude."; }
+  catch(e){ $("askOut").select(); $("askHelp").textContent = "Sélectionne le texte ci-dessous et copie-le, puis colle-le dans ta conversation avec Claude."; }
+};
+loadProjectList();
+
 /* =================== PAROLES & SYNCHRO =================== */
 const lyricLines = () => $("lyrics").value.split("\n").map(s => s.trim()).filter(Boolean);
 function wordsFromLines(lines, starts, endT){
@@ -422,6 +505,7 @@ document.querySelectorAll("[data-sync]").forEach(b => b.onclick = () => {
   $("syncAuto").classList.toggle("hidden", syncMode !== "auto");
   $("syncCode").classList.toggle("hidden", syncMode !== "code");
 });
+$("moreSync").onclick = () => { $("codeChip").classList.remove("hidden"); $("moreSync").classList.add("hidden"); };
 let tapping = false, tapIdx = 0;
 $("tapStart").onclick = async () => {
   if (!audio.src) return setStatus("syncStatus", "Ajoute d'abord ton MP3 (étape 1).", true);
