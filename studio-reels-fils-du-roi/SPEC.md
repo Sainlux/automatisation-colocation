@@ -14,7 +14,7 @@ Couleurs : fond `#111214`, panneaux `#1a1c1f`, texte `#ece9e2`, accent or `#f2c1
 **Aperçu (toujours visible)** : un canvas 9:16 avec le bouton Lire/Pause, une barre de position et le temps. Sur téléphone, il reste en haut de l'écran en petit (92 px) et le bouton « Agrandir l'aperçu » le remet en grand. Sans MP3, une démo tourne en boucle.
 
 **Étape 1 — Musique et images**
-- Bouton pour choisir le MP3, et bouton pour ajouter plusieurs images.
+- Bouton pour choisir le MP3 (gros bouton or, 52 px de haut ; accepte mp3, m4a, wav, aac, ogg ; sur iPhone, passer par « Parcourir / Fichiers »), et bouton pour ajouter plusieurs images. Sur ordinateur, on peut aussi glisser les fichiers sur ces boutons.
 - Vignettes numérotées, avec × pour retirer une image (zone de toucher de 32 px).
 - Lien « Pas encore d'images ? Écrire les prompts ChatGPT » qui descend à l'étape 4.
 
@@ -54,7 +54,7 @@ Couleurs : fond `#111214`, panneaux `#1a1c1f`, texte `#ece9e2`, accent or `#f2c1
 - Champs : titre (obligatoire si les titres sont activés) et signature (par défaut « le Fils du Roi »).
 - Passage début/fin, avec des boutons « ▸ ici » qui prennent le temps de l'aperçu, et un résumé « Passage : 0:42 → 1:30 (48 s) ».
 - Qualité : 720 ou 1080. Case « Titre au début et à la fin ».
-- Bouton « Créer la vidéo » : enregistrement en temps réel du canvas et de l'audio, avec une barre de progression et le maintien de l'écran allumé (wakeLock). Le résultat est affiché dans l'aperçu, avec le bouton « Enregistrer la vidéo ».
+- Bouton « Créer la vidéo » : enregistrement en temps réel du canvas et de l'audio, avec une barre de progression et le maintien de l'écran allumé (wakeLock). Le résultat est affiché dans l'aperçu, avec le bouton « Enregistrer la vidéo ». L'enregistrement du fichier part **seulement quand on touche ce bouton** (jamais automatiquement) : dans claude.ai, la fenêtre de confirmation exige un geste de l'utilisateur. Le message d'erreur donne le code reçu.
 - En option : un message à copier pour faire monter la vidéo par Claude, avec le code du style.
 
 ## 3. Moteur de rendu (canvas, identique pour l'aperçu et l'export)

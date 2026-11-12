@@ -63,6 +63,11 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
 .preset small{font-size:11.5px;color:var(--muted)}
 .drop{border:1.5px dashed var(--line);border-radius:10px;padding:14px;text-align:center;color:var(--muted);font-size:13px;cursor:pointer;display:block}
 .drop:hover{border-color:var(--gold);color:var(--ink)}
+.pick{display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:12px 14px;border-radius:10px;border:1.5px solid var(--line);background:var(--panel2);color:var(--ink);font-weight:700;font-size:15px;text-align:center;cursor:pointer}
+.pick.main{background:var(--gold);border-color:var(--gold);color:#1a1405}
+.pick:hover,.pick.over{border-color:var(--gold)}
+.vh:focus-visible + .pick, .pick:focus-within{outline:2px solid var(--gold);outline-offset:2px}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .thumbs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
 .thumb{position:relative;flex:0 0 auto;width:62px;aspect-ratio:9/16;border-radius:6px;overflow:hidden;border:1px solid var(--line);background:#000}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
@@ -128,12 +133,13 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
       <p class="note">Le MP3 de ta chanson (Suno ou autre), puis tes images dans l'ordre de la chanson.</p>
       <div class="grid2">
         <div>
-          <label class="drop" for="mp3">🎵 <span id="mp3Name">Choisir le fichier MP3</span></label>
-          <input type="file" id="mp3" accept="audio/*" hidden>
+          <label class="pick main" for="mp3" id="mp3Lbl">🎵 <span id="mp3Name">Choisir ma musique (MP3)</span></label>
+          <input type="file" id="mp3" class="vh" accept="audio/*,.mp3,.m4a,.wav,.aac,.ogg,audio/mpeg,audio/mp4">
+          <p class="small" style="margin:6px 0 0">Sur iPhone, choisis « Parcourir » / « Fichiers » pour trouver le MP3 téléchargé. Sur ordinateur, tu peux aussi glisser le fichier ici.</p>
         </div>
         <div>
-          <label class="drop" for="imgs">🖼️ Ajouter des images (plusieurs possibles)</label>
-          <input type="file" id="imgs" accept="image/*" multiple hidden>
+          <label class="pick" for="imgs" id="imgsLbl">🖼️ Ajouter des images (plusieurs possibles)</label>
+          <input type="file" id="imgs" class="vh" accept="image/*" multiple>
         </div>
       </div>
       <div class="thumbs" id="thumbs" style="margin-top:10px"></div>
@@ -347,10 +353,10 @@ $("imgs").onchange = e => {
 };
 
 /* ----- musique ----- */
-$("mp3").onchange = e => {
-  const f = e.target.files[0]; if (!f) return;
+$("mp3").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) loadMp3(f); };
+function loadMp3(f){
   if (audioURL) URL.revokeObjectURL(audioURL);
-  audioURL = URL.createObjectURL(f); audio.src = audioURL; $("mp3Name").textContent = f.name;
+  audioURL = URL.createObjectURL(f); audio.src = audioURL; $("mp3Name").textContent = f.name + " · changer";
   audio.onloadedmetadata = () => {
     duration = audio.duration; demo = false; $("seek").max = duration;
     if (!+$("vEnd").value) $("vEnd").value = Math.round(duration * 0.92);
@@ -359,7 +365,18 @@ $("mp3").onchange = e => {
     if ((!words.length || syncSource === "auto") && $("lyrics").value.trim()) autoSync(true);
     rebuild();
   };
-};
+  audio.onerror = () => setStatus("syncStatus", `Ce fichier ne se lit pas comme musique : ${f.name}. Essaie un MP3.`, true);
+}
+// glisser-déposer sur les boutons de l'étape 1
+[["mp3Lbl", fs => { const f = fs.find(x => /^audio\//.test(x.type) || /\.(mp3|m4a|wav|aac|ogg)$/i.test(x.name)); if (f) loadMp3(f); }],
+ ["imgsLbl", fs => { const ims = fs.filter(x => /^image\//.test(x.type)); if (!ims.length) return;
+    if (images.length && images.every(x => IMGS[x.name])) images = [];
+    ims.forEach(f => addImage(URL.createObjectURL(f), f.name)); }]].forEach(([id, fn]) => {
+  const el = $(id);
+  el.addEventListener("dragover", e => { e.preventDefault(); el.classList.add("over"); });
+  el.addEventListener("dragleave", () => el.classList.remove("over"));
+  el.addEventListener("drop", e => { e.preventDefault(); el.classList.remove("over"); fn([...(e.dataTransfer?.files || [])]); });
+});
 
 /* =================== PAROLES & SYNCHRO =================== */
 const lyricLines = () => $("lyrics").value.split("\n").map(s => s.trim()).filter(Boolean);
@@ -905,18 +922,31 @@ $("rec").onclick = async () => {
       const blob = new Blob(parts, {type: mime || "video/webm"});
       const name = `${($("titre").value || "video").replace(/[^\w\- ]+/g,"").trim() || "video"} - Fils du Roi.${ext}`;
       lastVideo = {blob, name}; $("resVid").src = URL.createObjectURL(blob); $("result").classList.remove("hidden"); $("stage").classList.add("big");
-      await saveVideo();
+      $("recBar").style.width = "100%";
+      setStatus("recStatus", `Vidéo prête (${(blob.size/1048576).toFixed(1)} Mo). Touche « Enregistrer la vidéo » sous l'aperçu.`);
+      $("resSave").scrollIntoView({block:"center", behavior:"smooth"});
     };
     recorder.stop();
   }
 };
 
 let lastVideo = null;
+let saving = false;
 async function saveVideo(){
-  if (!lastVideo) return; const dl = await downloadsP;
-  if (!dl) return setStatus("recStatus", "Vidéo prête (visible en haut), mais l'enregistrement de fichier n'est pas disponible dans cette vue. Ouvre la page dans claude.ai.", true);
-  try { await dl.save({filename:lastVideo.name, data:lastVideo.blob}); setStatus("recStatus", `Vidéo enregistrée : ${lastVideo.name} (${(lastVideo.blob.size/1048576).toFixed(1)} Mo).`); }
-  catch(e){ setStatus("recStatus", e && e.code === "declined" ? "Enregistrement refusé. Touche « Enregistrer la vidéo » pour réessayer." : e && e.code === "rate_limited" ? "Patiente un instant puis touche « Enregistrer la vidéo »." : "Le fichier n'a pas pu être enregistré ici.", true); }
+  if (!lastVideo || saving) return;
+  const btn = $("resSave"); saving = true; btn.disabled = true; btn.textContent = "Confirme l'enregistrement…";
+  setStatus("recStatus", "Une fenêtre de confirmation va s'ouvrir : accepte pour enregistrer la vidéo.");
+  try {
+    const dl = await downloadsP;
+    if (!dl) return setStatus("recStatus", "Enregistrer un fichier n'est pas possible dans cette fenêtre. Ouvre le lien de l'appli dans Chrome ou Safari (claude.ai), puis réessaie.", true);
+    await dl.save({filename:lastVideo.name, data:lastVideo.blob});
+    setStatus("recStatus", `Vidéo enregistrée : ${lastVideo.name} (${(lastVideo.blob.size/1048576).toFixed(1)} Mo). Regarde dans tes Téléchargements (ou dans Fichiers sur iPhone).`);
+  } catch(e){
+    const c = e && e.code;
+    setStatus("recStatus", c === "declined" ? "Enregistrement refusé. Touche « Enregistrer la vidéo » pour réessayer."
+      : c === "rate_limited" ? "Une fenêtre de confirmation est déjà ouverte : réponds-y, ou patiente un instant puis réessaie."
+      : `Le fichier n'a pas pu être enregistré ici (code : ${c || (e && e.message) || "inconnu"}). Ouvre le lien dans Chrome ou Safari et réessaie.`, true);
+  } finally { saving = false; btn.disabled = false; btn.textContent = "Enregistrer la vidéo"; }
 }
 $("resSave").onclick = saveVideo;
 
