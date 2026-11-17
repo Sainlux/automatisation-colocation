@@ -266,8 +266,21 @@ describe("Couche HTTP", () => {
     const req = (h: Record<string, string>) => new Request("http://app.test/", { headers: h });
     expect(clientIp(req({ "x-forwarded-for": "6.6.6.6, 203.0.113.9" }), 1)).toBe("203.0.113.9");
     expect(clientIp(req({ "x-forwarded-for": "6.6.6.6, 203.0.113.9, 10.0.0.1" }), 2)).toBe("203.0.113.9");
-    expect(clientIp(req({ "x-real-ip": "198.51.100.7", "x-forwarded-for": "6.6.6.6" }), 1)).toBe("198.51.100.7");
     expect(clientIp(req({}), 1)).toBe("anon");
+  });
+
+  it("IP : X-Real-IP ignoré sauf derrière un proxy de confiance (TRUST_REAL_IP=1 ou Vercel)", () => {
+    const req = (h: Record<string, string>) => new Request("http://app.test/", { headers: h });
+    const r = req({ "x-real-ip": "198.51.100.7", "x-forwarded-for": "6.6.6.6" });
+    vi.stubEnv("TRUST_REAL_IP", "");
+    vi.stubEnv("VERCEL", "");
+    expect(clientIp(r, 1)).toBe("6.6.6.6");
+    vi.stubEnv("TRUST_REAL_IP", "1");
+    expect(clientIp(r, 1)).toBe("198.51.100.7");
+    vi.stubEnv("TRUST_REAL_IP", "");
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("DATA_BACKEND", "local");
+    expect(clientIp(r, 1)).toBe("198.51.100.7");
   });
 
   it("limitation de débit : fenêtre configurable", () => {

@@ -52,7 +52,6 @@ export const extractionResultSchema = z.object({
   warnings: z.array(z.string().max(300)).max(20),
 });
 
-export type PartialDate = z.infer<typeof partialDateSchema>;
 export type ExtractedEvent = z.infer<typeof extractedEventSchema>;
 export type ExtractionResult = z.infer<typeof extractionResultSchema>;
 

@@ -20,13 +20,6 @@ export async function pushEvent(store: Store, c: CalendarConnection, e: Ev, op: 
   return zoom.pushEvent(store, c, e, op);
 }
 
-/** Import des événements externes (calendriers uniquement). */
-export async function pullEvents(store: Store, c: CalendarConnection) {
-  if (c.provider === "google") return google.pullEvents(store, c);
-  if (c.provider === "outlook") return outlook.pullEvents(store, c);
-  return { imported: 0, seen: 0 };
-}
-
 export async function watch(store: Store, c: CalendarConnection) {
   if (c.provider === "google") return google.watch(store, c);
   if (c.provider === "outlook") return outlook.watch(store, c);

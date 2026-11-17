@@ -54,7 +54,7 @@ export class ExtractionError extends Error {
   }
 }
 
-export const SYSTEM_PROMPT = `Tu es VisionAgent, un extracteur d'événements pour l'application CellConnect AI.
+const SYSTEM_PROMPT = `Tu es VisionAgent, un extracteur d'événements pour l'application CellConnect AI.
 Tu reçois des captures d'écran (souvent WhatsApp/Telegram), des PDF ou du texte, en français le plus souvent.
 
 RÈGLES STRICTES
@@ -92,7 +92,7 @@ export function wrapImportedText(text: string, token: string = randomBytes(9).to
 }
 
 /** Un lien proposé par le modèle doit figurer tel quel dans le texte source (jamais inventé). */
-export function dropInventedLinks(result: ExtractionResult, sourceText: string): ExtractionResult {
+function dropInventedLinks(result: ExtractionResult, sourceText: string): ExtractionResult {
   let dropped = false;
   const events = result.events.map((e) => {
     if (e.meetingUrl && !sourceText.includes(e.meetingUrl.trim())) {
@@ -219,7 +219,7 @@ export function parseModelOutput(raw: string | null): ExtractionResult {
 export function getProviders(): ExtractionProvider[] {
   const providers: ExtractionProvider[] = [];
   if (env.openai.apiKey) {
-    providers.push(new OpenAIVisionProvider(new OpenAI({ apiKey: env.openai.apiKey, timeout: 45_000, maxRetries: 1 }) as unknown as ChatClient, env.openai.model));
+    providers.push(new OpenAIVisionProvider(new OpenAI({ apiKey: env.openai.apiKey, timeout: 40_000, maxRetries: 0 }) as unknown as ChatClient, env.openai.model));
   }
   providers.push(new TextParserProvider());
   return providers;

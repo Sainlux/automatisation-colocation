@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/form";
 import { Alert } from "@/components/ui/alert";
+import { Disclosure } from "@/components/ui/disclosure";
 import { PasswordInput } from "@/components/app/password-input";
 import { apiFetch, ApiError } from "@/lib/client/api";
 import { safeNext } from "@/lib/client/safe-next";
@@ -14,6 +15,15 @@ import { safeNext } from "@/lib/client/safe-next";
 type Errors = Partial<Record<"email" | "password", string>>;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Démo locale probable : pas de Supabase configuré et page servie depuis cette machine.
+ * Indication d'interface seulement (le serveur reste seul juge du mode de stockage).
+ */
+const noSubscribe = () => () => undefined;
+function readLocalDemo() {
+  return !process.env.NEXT_PUBLIC_SUPABASE_URL && ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+}
 
 export default function LoginPage() {
   return (
@@ -30,6 +40,7 @@ function Login() {
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Errors>({});
   const [loading, setLoading] = useState(false);
+  const localDemo = useSyncExternalStore(noSubscribe, readLocalDemo, () => false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -88,6 +99,14 @@ function Login() {
           <Field label="Mot de passe" htmlFor="password" error={errors.password}>
             <PasswordInput id="password" name="password" autoComplete="current-password" enterKeyHint="go" autoFocus={Boolean(prefilled)} required />
           </Field>
+          <Disclosure summary={<span className="text-accent">Mot de passe oublié ?</span>}>
+            <p className="text-pretty">Demandez au responsable de votre église de vous renvoyer une invitation.</p>
+            {localDemo && (
+              <p className="mt-2 text-xs text-pretty text-muted">
+                Ceci est une démo locale (données de test sur cet ordinateur) : vous pouvez simplement créer un nouveau compte.
+              </p>
+            )}
+          </Disclosure>
           {error && (
             <Alert tone="danger" live>
               {error}

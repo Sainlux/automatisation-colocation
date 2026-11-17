@@ -28,14 +28,15 @@ import {
   isBlocking,
   liveErrors,
   needsConfirm,
-  scrollBehavior,
   stripClient,
+  uniqueConflicts,
   type Choice,
   type Draft,
   type DraftConflict,
   type GroupOption,
   type Summary,
 } from "@/components/app/review/draft-utils";
+import { scrollBehavior } from "@/components/app/motion";
 import { t } from "@/i18n";
 
 interface JobData {
@@ -336,9 +337,10 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
         if (target) writeStepParam("edit");
         return;
       }
-      setConflicts(r.conflicts);
-      const allChosen = r.conflicts.every((c, i) => Boolean(choices[conflictId(c, i)]));
-      goTo(r.conflicts.length && !(target === "recap" && allChosen) ? "conflicts" : "recap");
+      const found = uniqueConflicts(r.conflicts);
+      setConflicts(found);
+      const allChosen = found.every((c, i) => Boolean(choices[conflictId(c, i)]));
+      goTo(found.length && !(target === "recap" && allChosen) ? "conflicts" : "recap");
     } catch (e) {
       setActionError(errorText(e, "Vérification de l'agenda impossible. Vérifiez votre connexion, puis réessayez."));
       if (target) writeStepParam("edit");
@@ -592,13 +594,18 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
           {errorAlert}
           <ActionBarSpacer />
           <ActionBar status={<EditStatus selected={selected} blocking={blocking.length} saveState={saveState} onRetrySave={() => void flush()} />}>
+            {/* Les compléments sr-only gardent les noms accessibles « Vérifier mon agenda » et « Voir la suivante (n) ». */}
             {selected.length === 0 ? (
-              <Button disabled>Vérifier mon agenda</Button>
+              <Button disabled>
+                Continuer<span className="sr-only"> : vérifier mon agenda</span>
+              </Button>
             ) : blocking.length > 0 ? (
-              <Button onClick={showNextBlocking}>Voir la suivante ({blocking.length})</Button>
+              <Button onClick={showNextBlocking}>
+                Date à corriger ({blocking.length})<span className="sr-only">, voir la suivante ({blocking.length})</span>
+              </Button>
             ) : (
               <Button onClick={() => void checkConflicts()} loading={busy}>
-                Vérifier mon agenda
+                Continuer<span className="sr-only"> : vérifier mon agenda</span>
               </Button>
             )}
           </ActionBar>
@@ -764,8 +771,8 @@ function EditStatus({ selected, blocking, saveState, onRetrySave }: { selected: 
   return (
     <>
       <span className="block font-medium text-fg">{main}</span>
-      {saveState === "saving" && <span className="block">Enregistrement…</span>}
-      {saveState === "saved" && <span className="block">Modifications enregistrées</span>}
+      {saveState === "saving" && <span className="block">Sauvegarde du brouillon…</span>}
+      {saveState === "saved" && <span className="block">Brouillon gardé · pas encore dans l&apos;agenda</span>}
       {saveState === "error" && (
         <span className="block">
           <span className="text-danger">Modifications non enregistrées.</span>{" "}

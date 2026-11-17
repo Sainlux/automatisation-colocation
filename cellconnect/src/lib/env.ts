@@ -18,7 +18,13 @@ export const env = {
   get dataBackend(): DataBackend {
     const explicit = read("DATA_BACKEND");
     if (explicit === "local" || explicit === "supabase") return explicit;
-    return read("NEXT_PUBLIC_SUPABASE_URL") && read("SUPABASE_SERVICE_ROLE_KEY") ? "supabase" : "local";
+    const resolved: DataBackend = read("NEXT_PUBLIC_SUPABASE_URL") && read("SUPABASE_SERVICE_ROLE_KEY") ? "supabase" : "local";
+    // Sur Vercel, le système de fichiers est éphémère : le stockage JSON local perdrait
+    // les données. Il faut le demander explicitement (DATA_BACKEND=local) pour l'accepter.
+    if (resolved === "local" && read("VERCEL")) {
+      throw new Error("DATA_BACKEND=supabase et les clés Supabase sont requis sur Vercel (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).");
+    }
+    return resolved;
   },
   get dataDir(): string {
     return read("DATA_DIR") ?? ".data";
@@ -63,6 +69,13 @@ export const env = {
   get trustProxyHops(): number {
     const n = Number(read("TRUST_PROXY_HOPS") ?? "1");
     return Number.isInteger(n) && n >= 1 && n <= 10 ? n : 1;
+  },
+  /**
+   * X-Real-IP n'est fiable que si un proxy de confiance la pose (et écrase celle
+   * du client) : Vercel, ou TRUST_REAL_IP=1 explicitement.
+   */
+  get trustRealIp(): boolean {
+    return read("TRUST_REAL_IP") === "1" || read("VERCEL") === "1";
   },
   get defaultTimezone(): string {
     return read("DEFAULT_TIMEZONE") ?? "Europe/Zurich";

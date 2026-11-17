@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { fmtDay, fmtShortDate, fmtTime, fmtTimeRange, frTypo } from "@/components/app/format";
+import { fmtShortDate, fmtTime, fmtTimeRange, frTypo } from "@/components/app/format";
 
 /* ───────────── Types partagés par l'écran de vérification d'un import ───────────── */
 
@@ -98,8 +98,29 @@ export function stripClient(d: Draft) {
   return { ...rest, issues: visibleIssues(d) };
 }
 
+/**
+ * Identifiant stable d'un conflit (les choix de l'utilisateur y sont rattachés) :
+ * il ne dépend pas de la position du conflit dans la liste, qui peut changer après une revérification.
+ * L'indice `i` ne sert qu'en dernier recours, si le conflit ne désigne aucun « autre » engagement.
+ */
 export function conflictId(c: DraftConflict, i: number) {
-  return `${c.draftKey}:${c.existing?.id ?? c.otherDraftKey}:${i}`;
+  if (c.existing) return `${c.draftKey}:${c.existing.id}:${c.existing.start}`;
+  if (c.otherDraftKey) return `${c.draftKey}:${c.otherDraftKey}`;
+  return `${c.draftKey}:${i}`;
+}
+
+/**
+ * Un seul conflit par identifiant : deux dates récurrentes du même message qui se chevauchent
+ * chaque semaine donnent plusieurs conflits de même clé (une seule question suffit, et les clés React restent uniques).
+ */
+export function uniqueConflicts(conflicts: readonly DraftConflict[]): DraftConflict[] {
+  const seen = new Set<string>();
+  return conflicts.filter((c, i) => {
+    const id = conflictId(c, i);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
 /* ───────────── Dates et heures ───────────── */
@@ -215,11 +236,20 @@ export function cardIssues(d: Draft, grouped: ReadonlySet<string>) {
 
 /* ───────────── Retrait ───────────── */
 
-/** Aperçu du message poli envoyé par défaut à l'organisateur (l'autre engagement n'est jamais mentionné). */
-export const defaultWithdrawMessage = (title: string, startIso: string, tz: string) =>
-  `Bonjour, je vous informe que je ne pourrai pas participer à « ${title} » du ${fmtDay(startIso, tz)} à ${fmtTime(startIso, tz)} en raison d'un conflit d'agenda. Merci de votre compréhension.`;
+/** Date longue avec l'année (« jeudi 26 novembre 2026 »), comme formatDateFr côté serveur. */
+const fmtDayWithYear = (iso: string, tz: string) => DateTime.fromISO(iso, { zone: "utc" }).setZone(tz).setLocale("fr-CH").toFormat("cccc d LLLL yyyy");
 
-/** Préférences de mouvement : une seule source, src/components/app/motion.ts. */
+/**
+ * Aperçu du message poli envoyé par défaut à l'organisateur (l'autre engagement n'est jamais mentionné).
+ * Même texte que le message par défaut du serveur (calendar-agent), année comprise.
+ */
+export const defaultWithdrawMessage = (title: string, startIso: string, tz: string) =>
+  `Bonjour, je vous informe que je ne pourrai pas participer à « ${title} » du ${fmtDayWithYear(startIso, tz)} à ${fmtTime(startIso, tz)} en raison d'un conflit d'agenda. Merci de votre compréhension.`;
+
+/**
+ * Préférences de mouvement : une seule source, src/components/app/motion.ts (à importer de là).
+ * @deprecated Réexportation conservée tant que tests/unit/import-ux.test.ts l'importe d'ici.
+ */
 export { prefersReducedMotion, scrollBehavior } from "@/components/app/motion";
 
 /* ───────────── Dates déjà passées ───────────── */

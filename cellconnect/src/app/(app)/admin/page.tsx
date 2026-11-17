@@ -7,17 +7,16 @@ import { isAdmin, useMe } from "@/components/app/session";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/form";
-import { Alert } from "@/components/ui/alert";
-import { Dialog } from "@/components/ui/dialog";
+import { Alert, LiveRegion } from "@/components/ui/alert";
+import { ConfirmDialog, type Confirm } from "@/components/ui/confirm-dialog";
 import { EmptyState, ErrorState, ListSkeleton, PageHeader } from "@/components/ui/states";
 import { ManualLinks, type ManualLink } from "@/components/app/event/manual-links";
-import { LiveRegion, useScrollIntoView } from "@/components/app/event/live-region";
+import { useScrollIntoView } from "@/components/app/event/live-region";
 import { t } from "@/i18n";
 
 type Role = "org_admin" | "group_leader" | "member" | "guest" | "super_admin";
 type Member = { id: string; userId: string; role: Role; name: string; email: string | null };
 type Notice = { tone: "success" | "danger"; text: string; links?: ManualLink[] };
-type Confirm = { title: string; body: string; confirmLabel: string; run: () => Promise<void> };
 
 const ASSIGNABLE: Exclude<Role, "super_admin">[] = ["member", "group_leader", "org_admin", "guest"];
 
@@ -91,7 +90,7 @@ export default function AdminPage() {
   return (
     <div className="space-y-4">
       <PageHeader title={t.nav.admin} description={me.organization?.name} />
-      <LiveRegion message={notice?.text} assertive={notice?.tone === "danger"} />
+      <LiveRegion tone={notice?.tone === "danger" ? "danger" : "polite"}>{notice?.text}</LiveRegion>
       {notice && (
         <div ref={noticeRef} className="scroll-mt-20 space-y-2">
           <Alert tone={notice.tone}>{notice.text}</Alert>
@@ -168,37 +167,5 @@ export default function AdminPage() {
       </Card>
       <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
     </div>
-  );
-}
-
-function ConfirmDialog({ confirm, onClose }: { confirm: Confirm | null; onClose: () => void }) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <Dialog
-      open={Boolean(confirm)}
-      onClose={onClose}
-      title={confirm?.title ?? ""}
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose}>
-            Annuler
-          </Button>
-          <Button
-            loading={busy}
-            onClick={async () => {
-              if (!confirm) return;
-              setBusy(true);
-              await confirm.run();
-              setBusy(false);
-              onClose();
-            }}
-          >
-            {confirm?.confirmLabel}
-          </Button>
-        </>
-      }
-    >
-      <p className="text-sm">{confirm?.body}</p>
-    </Dialog>
   );
 }

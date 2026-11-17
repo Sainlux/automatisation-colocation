@@ -239,13 +239,27 @@ export async function runExtractionJob(
         event_id: null,
       })),
     );
-    const updated = await store.update("extraction_jobs", job.id, {
-      status: "needs_review",
-      step: "review",
-      warnings: result.warnings.slice(0, 20),
-      context_notes: result.contextNotes,
-      updated_at: now().toISOString(),
-    });
+    // Passage à la relecture protégé : si l'analyse a été remise en attente (worker) puis reprise
+    // par une autre exécution entre-temps, cette exécution-ci n'écrase rien.
+    const [updated] = await store.updateWhere(
+      "extraction_jobs",
+      [
+        ["id", "eq", job.id],
+        ["status", "eq", "processing"],
+        ["attempts", "eq", claimed.attempts],
+      ],
+      {
+        status: "needs_review",
+        step: "review",
+        warnings: result.warnings.slice(0, 20),
+        context_notes: result.contextNotes,
+        updated_at: now().toISOString(),
+      },
+    );
+    if (!updated) {
+      log("warn", "extraction_superseded", { jobId: job.id });
+      return store.get("extraction_jobs", job.id);
+    }
     if (profile?.delete_captures_after_analysis) await purgeUploads(store, uploads, now());
     log("info", "extraction_done", { jobId: job.id, provider, events: drafts.length });
     await finishInbound(store, updated, opts.mailer);
@@ -388,13 +402,34 @@ export async function commitDrafts(ctx: Ctx, input: { jobId?: string | null; dra
       };
     }
   }
-  const mark = async (key: string, status: "created" | "rejected", eventId: string | null) => {
+  /**
+   * Réservation atomique d'un brouillon enregistré (pending → status) : deux validations
+   * simultanées du même import ne traitent jamais deux fois la même ligne.
+   * Vrai si la ligne est réservée (ou s'il n'y a pas de ligne : création manuelle).
+   */
+  const reserve = async (key: string, status: "created" | "rejected") => {
     const row = rowsByKey.get(key);
-    if (row) rowsByKey.set(key, await ctx.store.update("extracted_events", row.id, { status, event_id: eventId }));
+    if (!row) return true;
+    const [claimed] = await ctx.store.updateWhere(
+      "extracted_events",
+      [
+        ["id", "eq", row.id],
+        ["status", "eq", "pending"],
+      ],
+      { status },
+    );
+    if (claimed) rowsByKey.set(key, claimed);
+    return Boolean(claimed);
+  };
+  const setRow = async (key: string, patch: Partial<ExtractedEventRow>) => {
+    const row = rowsByKey.get(key);
+    if (row) rowsByKey.set(key, await ctx.store.update("extracted_events", row.id, patch));
   };
 
   const summary: CommitSummary = { created: [], skipped: [], withdrawn: [], conflictsRecorded: 0, failures: [] };
   const withdrawTargets = new Map<string, { notify: boolean; message: string | null }>();
+  /** Vrai si une validation concurrente traite déjà certaines lignes de cette analyse. */
+  let concurrent = false;
 
   for (const d of ready) {
     const decision = decisions.get(d.key) ?? { key: d.key, action: "create", withdrawFrom: [], notifyOrganizers: false, withdrawMessage: null };
@@ -406,11 +441,18 @@ export async function commitDrafts(ctx: Ctx, input: { jobId?: string | null; dra
     }
     if (decision.action === "skip") {
       summary.skipped.push(d.key);
-      await mark(d.key, "rejected", null);
+      if (!(await reserve(d.key, "rejected"))) concurrent = true;
       continue;
     }
+    if (!(await reserve(d.key, "created"))) {
+      // Traité à l'instant par une validation concurrente : c'est elle qui clôturera l'analyse.
+      summary.skipped.push(d.key);
+      concurrent = true;
+      continue;
+    }
+    let event: Awaited<ReturnType<typeof createEvent>>;
     try {
-      const event = await createEvent(
+      event = await createEvent(
         ctx,
         {
           title: d.title,
@@ -426,13 +468,17 @@ export async function commitDrafts(ctx: Ctx, input: { jobId?: string | null; dra
         },
         { source: input.jobId ? "capture" : "manual", sourceJobId: input.jobId ?? null, detectConflicts: false },
       );
-      summary.created.push({ key: d.key, eventId: event.id, title: event.title });
-      await mark(d.key, "created", event.id);
-      for (const id of decision.withdrawFrom) withdrawTargets.set(id, { notify: decision.notifyOrganizers, message: decision.withdrawMessage });
     } catch (e) {
+      // Échec : la ligne redevient disponible pour un nouvel essai.
+      await setRow(d.key, { status: "pending", event_id: null }).catch(() => undefined);
       summary.failures.push({ key: d.key, message: e instanceof AppError ? e.message : "Création impossible." });
       log("error", "commit_draft_failed", { key: d.key, error: (e as Error).message });
+      continue;
     }
+    // Événement créé : la ligne reste « created » même si le lien event_id ne peut pas être enregistré.
+    summary.created.push({ key: d.key, eventId: event.id, title: event.title });
+    await setRow(d.key, { event_id: event.id }).catch((e: Error) => log("warn", "commit_draft_link_failed", { key: d.key, error: e.message }));
+    for (const id of decision.withdrawFrom) withdrawTargets.set(id, { notify: decision.notifyOrganizers, message: decision.withdrawMessage });
   }
 
   // Désistements choisis par l'utilisateur pour résoudre les conflits.
@@ -450,7 +496,7 @@ export async function commitDrafts(ctx: Ctx, input: { jobId?: string | null; dra
     summary.conflictsRecorded += (await detectForUserEvent(ctx.store, ctx.mailer, ctx.userId, c.eventId, ctx.now())).length;
   }
 
-  if (input.jobId && summary.failures.length === 0) {
+  if (input.jobId && summary.failures.length === 0 && !concurrent) {
     await ctx.store.update("extraction_jobs", input.jobId, { status: "completed", step: "ready", completed_at: ctx.now().toISOString() });
   }
   await audit(ctx.store, {

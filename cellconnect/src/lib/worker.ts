@@ -6,7 +6,7 @@ import { log } from "@/lib/audit";
 import { extendRecurringReminders, processDueReminders } from "@/lib/agents/reminder-agent";
 import { processPendingDeliveries } from "@/lib/agents/notification-agent";
 import { runExtractionJob } from "@/lib/agents/orchestrator";
-import { detectForUserEvents, withExceptions } from "@/lib/agents/conflict-agent";
+import { detectForUserEvents, extendRecurringConflicts, withExceptions } from "@/lib/agents/conflict-agent";
 import type { CalendarConnection } from "@/lib/types";
 import { purgeDue, purgeExpiredData, retentionPolicy } from "@/lib/retention";
 
@@ -17,7 +17,7 @@ import { purgeDue, purgeExpiredData, retentionPolicy } from "@/lib/retention";
  *  3. les synchronisations de calendriers externes (file agent_tasks) ;
  *  4. au plus 2 analyses en attente (reprise après interruption) ;
  *  puis l'entretien : canaux de webhooks, prolongation quotidienne des rappels
- *  des séries, purge quotidienne de conservation.
+ *  et des conflits des séries, purge quotidienne de conservation.
  *
  * Chaque étape est isolée (une erreur n'empêche pas les suivantes) et le tick
  * respecte un budget de 45 s (fonction serverless limitée à 60 s) : les étapes
@@ -34,6 +34,14 @@ const EXTRACTION_MAX_ATTEMPTS = 3;
 const EXTRACTION_STUCK_MS = 2 * 60000;
 /** Analyses lancées au plus par tick (appels IA coûteux). */
 const EXTRACTIONS_PER_TICK = 2;
+/** Durée maximale d'une exécution serverless (maxDuration de /api/cron/tick). */
+const FUNCTION_LIMIT_MS = 60000;
+/**
+ * Temps à réserver avant de lancer une analyse : délai d'expiration du modèle
+ * (40 s, sans relance automatique) plus une marge pour l'enregistrement.
+ * Une analyse n'est donc lancée que si elle peut se terminer avant la limite.
+ */
+export const EXTRACTION_RESERVE_MS = 45000;
 const TASK_MAX_ATTEMPTS = 5;
 /** Une tâche « running » depuis plus de 10 min est considérée comme interrompue. */
 const TASK_STUCK_MS = 10 * 60000;
@@ -46,18 +54,38 @@ export interface TickReport {
   syncErrors: number;
   watches: number;
   extended: number;
+  /** Conflits enregistrés par la prolongation quotidienne des séries. */
+  conflictsExtended: number;
   purged: number;
   /** Étapes en erreur (journalisées) ou reportées faute de temps. */
   failedSteps: number;
   skippedSteps: number;
 }
 
-export async function tick(store: Store, mailer: ChannelSender, now = new Date()): Promise<TickReport> {
-  const report: TickReport = { extractions: 0, reminders: 0, deliveries: 0, syncs: 0, syncErrors: 0, watches: 0, extended: 0, purged: 0, failedSteps: 0, skippedSteps: 0 };
-  const started = performance.now();
+export interface TickOptions {
+  /** Horloge monotone en ms (injectable pour les tests). */
+  clock?: () => number;
+}
+
+export async function tick(store: Store, mailer: ChannelSender, now = new Date(), opts: TickOptions = {}): Promise<TickReport> {
+  const report: TickReport = {
+    extractions: 0,
+    reminders: 0,
+    deliveries: 0,
+    syncs: 0,
+    syncErrors: 0,
+    watches: 0,
+    extended: 0,
+    conflictsExtended: 0,
+    purged: 0,
+    failedSteps: 0,
+    skippedSteps: 0,
+  };
+  const clock = opts.clock ?? (() => performance.now());
+  const started = clock();
 
   const step = async (name: string, fn: () => Promise<void>) => {
-    if (performance.now() - started > TICK_BUDGET_MS) {
+    if (clock() - started > TICK_BUDGET_MS) {
       report.skippedSteps++;
       log("warn", "worker_step_skipped", { step: name, reason: "budget" });
       return;
@@ -82,7 +110,7 @@ export async function tick(store: Store, mailer: ChannelSender, now = new Date()
     report.syncErrors = r.errors;
   });
   await step("extractions", async () => {
-    report.extractions = await processExtractions(store, mailer, now);
+    report.extractions = await processExtractions(store, mailer, now, () => FUNCTION_LIMIT_MS - (clock() - started));
   });
   await step("watches", async () => {
     report.watches = await renewWatches(store, now);
@@ -91,6 +119,12 @@ export async function tick(store: Store, mailer: ChannelSender, now = new Date()
     if (await dailyDue(store, "reminders.extended", now)) {
       report.extended = await extendRecurringReminders(store, now);
       await markDaily(store, "reminders.extended", now, { created: report.extended });
+    }
+  });
+  await step("extend_conflicts", async () => {
+    if (await dailyDue(store, "conflicts.extended", now)) {
+      report.conflictsExtended = await extendRecurringConflicts(store, mailer, now);
+      await markDaily(store, "conflicts.extended", now, { created: report.conflictsExtended });
     }
   });
   await step("purge", async () => {
@@ -169,8 +203,11 @@ async function processSyncTasks(store: Store, now: Date) {
   return { syncs, errors };
 }
 
-/** Analyses en attente (le traitement immédiat a échoué ou été interrompu) : au plus 2 par tick. */
-async function processExtractions(store: Store, mailer: ChannelSender, now: Date) {
+/**
+ * Analyses en attente (le traitement immédiat a échoué ou été interrompu) : au plus 2 par tick,
+ * et seulement s'il reste assez de temps (`remainingMs`) pour qu'une analyse se termine.
+ */
+async function processExtractions(store: Store, mailer: ChannelSender, now: Date, remainingMs: () => number) {
   const nowIso = now.toISOString();
   // Analyses bloquées en « processing » depuis plus de 2 min : remises en attente.
   // Tentatives épuisées : l'orchestrateur les passe en échec et prévient l'utilisateur (sans appel IA).
@@ -191,6 +228,10 @@ async function processExtractions(store: Store, mailer: ChannelSender, now: Date
   });
   let n = 0;
   for (const j of pending) {
+    if (remainingMs() < EXTRACTION_RESERVE_MS) {
+      log("info", "worker_extractions_deferred", { reason: "budget", pending: pending.length - n });
+      break;
+    }
     await runExtractionJob(store, j.id, { mailer });
     n++;
   }

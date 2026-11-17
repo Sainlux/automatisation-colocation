@@ -166,11 +166,11 @@ function readFirstStepsHidden() {
 }
 
 /**
- * Premiers pas, cochés d'après les données. La carte reste affichée tant qu'une étape
- * n'est pas faite ; une fois tout fait, un bouton « Masquer » la retire de cet appareil.
+ * Premiers pas, cochés d'après les données. Le bouton « Masquer » (« Ne plus afficher » tant
+ * qu'il reste des étapes) retire la carte de cet appareil, pour tous les rôles.
  * - 1 : au moins une date enregistrée ;
- * - 2 : au moins un groupe ;
- * - 3 : un agenda relié (étape considérée comme faite si aucun fournisseur n'est disponible).
+ * - 2 : au moins un groupe (responsables seulement : un membre ne crée pas de groupe) ;
+ * - 3 : un agenda relié (étape absente si aucun fournisseur n'est disponible).
  */
 function FirstSteps({ me, firstEventSaved, hasGroups }: { me: Me; firstEventSaved: boolean; hasGroups: boolean }) {
   const providers = [me.integrations.google.available && "Google", me.integrations.outlook.available && "Outlook"].filter((p): p is string => Boolean(p));
@@ -187,19 +187,26 @@ function FirstSteps({ me, firstEventSaved, hasGroups }: { me: Me; firstEventSave
   }, []);
   const lead = canLead(me.role);
   const calendarLinked = Boolean(cal?.connections.some((c) => c.status !== "revoked"));
-  const steps = [
+  const baseSteps = [
     {
-      href: "/capture?exemple=1",
+      href: "/capture",
       title: "Ajouter une première date",
-      hint: "Essayez avec un message type. Rien n'est ajouté sans votre accord.",
+      hint: "Collez un message reçu, ou touchez « Essayer avec un exemple ». Rien n'est ajouté sans votre accord.",
       done: firstEventSaved,
     },
-    {
-      href: "/groupes",
-      title: lead ? "Créer mon premier groupe" : t.nav.groups,
-      hint: lead ? "Réunissez les membres de votre cellule pour les inviter en un geste." : "Retrouvez les groupes dont vous faites partie.",
-      done: hasGroups,
-    },
+    ...(lead
+      ? [
+          {
+            href: "/groupes",
+            title: "Créer mon premier groupe",
+            hint: "Réunissez les membres de votre cellule pour les inviter en un geste.",
+            done: hasGroups,
+          },
+        ]
+      : []),
+  ];
+  const steps = [
+    ...baseSteps,
     ...(providers.length
       ? [
           {
@@ -213,20 +220,17 @@ function FirstSteps({ me, firstEventSaved, hasGroups }: { me: Me; firstEventSave
   ];
   const calendarPending = providers.length > 0 && !cal;
   const allDone = steps.every((s) => s.done) && !calendarPending;
-  // Carte masquée : elle ne réapparaît que si une étape est vraiment à refaire (pas pendant le chargement de l'agenda).
-  if ((storedHidden || hiddenNow) && (allDone || calendarPending)) return null;
+  if (storedHidden || hiddenNow) return null;
   // Seul l'agenda reste à vérifier : on attend sa réponse plutôt que d'afficher une étape peut-être déjà faite.
-  if (calendarPending && steps.slice(0, 2).every((s) => s.done)) return null;
+  if (calendarPending && baseSteps.every((s) => s.done)) return null;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>{allDone ? "Premiers pas terminés" : "Premiers pas"}</CardTitle>
-        {allDone && (
-          <Button variant="ghost" size="sm" onClick={hide}>
-            Masquer
-          </Button>
-        )}
+        <Button variant="ghost" size="sm" onClick={hide}>
+          {allDone ? "Masquer" : "Ne plus afficher"}
+        </Button>
       </CardHeader>
       <CardContent>
         <ol className="-mx-1 space-y-1">

@@ -202,14 +202,19 @@ export async function inviteByEmail(
   if (emails.length > 50) throw badRequest("50 adresses maximum à la fois.");
   let eventTitle: string | null = null;
   let eventWhen: string | null = null;
+  let orgRole: OrgRole = input.orgRole ?? "member";
   if (input.eventId) {
     const event = await loadEditableEvent(ctx, input.eventId);
     if (event.status === "cancelled") throw badRequest("Impossible d'inviter à un événement annulé.");
     eventTitle = event.title;
     eventWhen = formatRangeFr(event.starts_at, event.ends_at, event.timezone);
-  } else {
-    if (!isOrgAdmin(ctx)) throw forbidden("Seuls les administrateurs peuvent inviter dans l'organisation.");
-    if (input.orgRole === "super_admin") throw forbidden("Rôle non attribuable.");
+  } else if (!isOrgAdmin(ctx)) {
+    // Un responsable de groupe peut inviter dans SON groupe (contrôle canManageGroup
+    // ci-dessous), toujours avec le simple rôle de membre de l'église.
+    if (!input.groupId) throw forbidden("Seuls les administrateurs peuvent inviter dans l'église.");
+    orgRole = "member";
+  } else if (input.orgRole === "super_admin") {
+    throw forbidden("Rôle non attribuable.");
   }
   let groupId: string | null = null;
   if (input.groupId) {
@@ -243,7 +248,7 @@ export async function inviteByEmail(
       status: "pending",
       token_hash: sha256Hex(token),
       responded_at: null,
-      org_role: input.eventId ? "guest" : (input.orgRole ?? "member"),
+      org_role: input.eventId ? "guest" : orgRole,
       email_status: null,
       email_error: null,
       expires_at: new Date(ctx.now().getTime() + INVITATION_TTL_DAYS * 86400000).toISOString(),

@@ -2,7 +2,7 @@ import type { Store } from "@/lib/db/store";
 import { UniqueViolationError, type Filter, type NewRow } from "@/lib/db/store";
 import type { ChannelSender } from "@/lib/channels/email";
 import type { NotificationDelivery, NotificationRow, NotificationType } from "@/lib/types";
-import { log } from "@/lib/audit";
+import { log, maskEmails } from "@/lib/audit";
 import { getPushSender, type PushSender } from "@/lib/channels/push";
 
 /**
@@ -240,11 +240,12 @@ async function attemptDelivery(store: Store, d: NotificationDelivery, sender: Ch
   } catch (e) {
     const failed = attempts >= MAX_DELIVERY_ATTEMPTS;
     const backoffMs = Math.min(60, 2 ** attempts) * 60000; // 2, 4, 8, 16, 32 min
-    log("warn", "email_delivery_failed", { deliveryId: d.id, attempts, error: (e as Error).message });
+    const error = maskEmails((e as Error).message);
+    log("warn", "email_delivery_failed", { deliveryId: d.id, attempts, error });
     return store.update("notification_deliveries", d.id, {
       status: failed ? "failed" : "pending",
       attempts,
-      last_error: (e as Error).message.slice(0, 500),
+      last_error: error.slice(0, 500),
       next_attempt_at: failed ? null : new Date(now.getTime() + backoffMs).toISOString(),
     });
   }

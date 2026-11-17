@@ -32,10 +32,6 @@ export function isValidIsoDate(date: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && DateTime.fromISO(date).isValid;
 }
 
-export function isValidTime(time: string): boolean {
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
-}
-
 /**
  * Convertit une date + heure locales d'un fuseau en instant UTC (ISO).
  * Lors du passage à l'heure d'été, une heure inexistante (ex. 02:30 le
@@ -51,12 +47,6 @@ export function zonedToUtc(date: string, time: string, tz: string): { iso: strin
 
 export function utcToZoned(iso: string, tz: string): { date: string; time: string } {
   const dt = DateTime.fromISO(iso, { zone: "utc" }).setZone(tz);
-  return { date: dt.toISODate()!, time: dt.toFormat("HH:mm") };
-}
-
-/** Ajoute une durée en minutes à une heure murale, en restant dans le fuseau. */
-export function addMinutesToTime(date: string, time: string, minutes: number, tz: string) {
-  const dt = DateTime.fromISO(`${date}T${time}`, { zone: tz }).plus({ minutes });
   return { date: dt.toISODate()!, time: dt.toFormat("HH:mm") };
 }
 

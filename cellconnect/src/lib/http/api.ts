@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { z, ZodError, type ZodType } from "zod";
 import { AppError, notFound } from "@/lib/errors";
@@ -57,14 +58,17 @@ export function checkRateLimit(key: string, perMinute: number, now = Date.now(),
 }
 
 /**
- * Adresse IP du client. X-Real-IP (posé par le proxy) est prioritaire ; sinon
- * l'entrée de X-Forwarded-For ajoutée par le proxy de confiance le plus proche
- * (TRUST_PROXY_HOPS, 1 par défaut) : les valeurs plus à gauche sont fournies
- * par le client et peuvent être falsifiées.
+ * Adresse IP du client. X-Real-IP n'est lue que si un proxy de confiance la
+ * pose (env.trustRealIp : Vercel ou TRUST_REAL_IP=1) ; sinon le client pourrait
+ * la falsifier. À défaut, l'entrée de X-Forwarded-For ajoutée par le proxy de
+ * confiance le plus proche (TRUST_PROXY_HOPS, 1 par défaut) : les valeurs plus
+ * à gauche sont fournies par le client et peuvent être falsifiées.
  */
 export function clientIp(req: Request, hops = env.trustProxyHops): string {
-  const real = req.headers.get("x-real-ip")?.trim();
-  if (real) return real;
+  if (env.trustRealIp) {
+    const real = req.headers.get("x-real-ip")?.trim();
+    if (real) return real;
+  }
   const chain = (req.headers.get("x-forwarded-for") ?? "")
     .split(",")
     .map((x) => x.trim())
@@ -78,10 +82,12 @@ export function clientIp(req: Request, hops = env.trustProxyHops): string {
  * (fonction rate_limit_hit), valable pour toutes les instances serverless.
  * En mode local (une seule instance), compteur en mémoire.
  * En cas d'indisponibilité de la base, repli sur la mémoire (journalisé).
+ * La clé (qui contient une IP ou un identifiant) n'est stockée en base que
+ * sous forme d'empreinte SHA-256 (minimisation des données).
  */
 export async function sharedRateLimit(key: string, perWindow: number, windowSeconds = 60): Promise<boolean> {
   if (env.dataBackend !== "supabase") return checkRateLimit(key, perWindow, Date.now(), windowSeconds * 1000);
-  const { data, error } = await supabaseAdmin().rpc("rate_limit_hit", { p_key: key.slice(0, 300), p_max: perWindow, p_window_seconds: windowSeconds });
+  const { data, error } = await supabaseAdmin().rpc("rate_limit_hit", { p_key: createHash("sha256").update(key).digest("hex"), p_max: perWindow, p_window_seconds: windowSeconds });
   if (error) {
     log("warn", "rate_limit_fallback", { error: error.message });
     return checkRateLimit(key, perWindow, Date.now(), windowSeconds * 1000);

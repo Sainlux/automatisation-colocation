@@ -85,7 +85,7 @@ export async function apiFetch<T = unknown>(url: string, init: RequestInit & { j
     throw e;
   }
   if (res.status === 401 && !init.noAuthRedirect && typeof window !== "undefined" && !url.startsWith("/api/auth/")) {
-    window.location.href = `/connexion?suite=${encodeURIComponent(window.location.pathname)}`;
+    window.location.href = `/connexion?suite=${encodeURIComponent(window.location.pathname + window.location.search)}`;
   }
   const ct = res.headers.get("content-type") ?? "";
   let data: unknown = null;

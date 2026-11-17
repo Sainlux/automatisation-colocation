@@ -12,6 +12,7 @@
 - Contexte construit uniquement à partir de la session côté serveur (jamais d'identifiant d'organisation fourni par le client sans vérification d'appartenance).
 - Règles centralisées (`src/lib/auth/permissions.ts`) + RLS PostgreSQL (`DATABASE.md`).
 - **RLS durcies** (migration `20261119000000_securite_rls.sql`) : toutes les écritures sensibles passent par le serveur (clé service role, règles métier appliquées).
+- **Durcissement RLS complémentaire** (migration `20261122000000_rls_durcissement.sql`) : lecture des profils réservée à la personne elle-même et aux administrateurs de son église ; écritures directes (clé anonyme + jeton utilisateur) fermées sur les tables métier, tout passe par le serveur.
   - Invitations : aucune insertion ni mise à jour directe (politiques `invitations_write` et `invitations_respond` supprimées).
   - Participations : la personne peut changer sa réponse, mais un déclencheur refuse toute modification de l'événement, de l'église, de la personne ou du rôle.
   - Captures (`uploads`), analyses (`extraction_jobs`) et dates proposées (`extracted_events`) : lecture seule (plus suppression de ses captures).
@@ -25,7 +26,8 @@
 - **CSRF** : toute requête d'écriture dont l'en-tête `Origin` ne correspond pas à l'hôte est refusée ; cookies SameSite=Lax.
 - **Validation** Zod sur toutes les entrées (messages en français) ; requêtes paramétrées (supabase-js) ; aucune concaténation SQL. Un identifiant d'URL (`id`, `…Id`) qui n'est pas un UUID donne 404 avant tout accès aux données.
 - **Limitation de débit** par utilisateur et par route, **partagée entre instances** en mode Supabase (fonction PostgreSQL atomique `rate_limit_hit`, exécutable uniquement par le serveur) ; en mémoire en mode local (éviction des clés les plus anciennes). Connexion : limite supplémentaire par compte visé (5 essais / 15 min). Ajout de membres et invitations par e-mail : 10 / min.
-- **Adresse IP du client** : `X-Real-IP`, sinon l'entrée de `X-Forwarded-For` ajoutée par le proxy de confiance (`TRUST_PROXY_HOPS`, 1 par défaut) ; les valeurs fournies par le client sont ignorées.
+- **Adresse IP du client** : `X-Real-IP` n'est lu que sur Vercel ou si `TRUST_REAL_IP=1` (proxy qui réécrit cet en-tête) ; sinon l'entrée de `X-Forwarded-For` ajoutée par le proxy de confiance (`TRUST_PROXY_HOPS`, 1 par défaut). Les valeurs fournies par le client sont ignorées.
+- **Clés de limitation de débit** : hachées avant stockage (aucune adresse IP ni e-mail en clair dans `rate_limits`) et purgées après un jour.
 - **Idempotence** (`Idempotency-Key`) sur la création en lot, la création d'événement et la résolution de conflits : la clé est réservée **avant** l'exécution (deux requêtes simultanées n'exécutent l'opération qu'une fois, la seconde reçoit 409) et libérée si l'opération échoue.
 - **Taille des envois** : `Content-Length` obligatoire pour l'envoi de captures (411 sinon) ; le webhook e-mail lit le corps avec une borne de 30 Mo.
 - En-têtes : `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` ; en production, `Strict-Transport-Security` (2 ans, sous-domaines) et **Content-Security-Policy** : `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; worker-src 'self'` (`'unsafe-inline'` reste nécessaire aux scripts d'hydratation de Next.js sans nonce).

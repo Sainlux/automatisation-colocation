@@ -14,6 +14,18 @@ const OFFLINE_CACHE = `cc-offline-${VERSION}`;
 const OFFLINE_URL = "/hors-ligne";
 const NAVIGATION_TIMEOUT_MS = 3000;
 const KEEP = [SHARE_CACHE, STATIC_CACHE, OFFLINE_CACHE];
+const STATIC_MAX_ENTRIES = 150;
+
+/**
+ * Limite la taille d'un cache : au-delà de `max` entrées, les plus anciennes sont supprimées
+ * (cache.keys() les rend dans l'ordre d'insertion). Évite d'accumuler les fichiers des anciens builds.
+ */
+async function trimCache(name, max) {
+  const cache = await caches.open(name);
+  const keys = await cache.keys();
+  if (keys.length <= max) return;
+  await Promise.all(keys.slice(0, keys.length - max).map((k) => cache.delete(k)));
+}
 
 /** Met en cache la page hors ligne et les fichiers statiques qu'elle utilise (styles, scripts). */
 async function precacheOffline() {
@@ -29,6 +41,7 @@ async function precacheOffline() {
       if (r && isImmutable(r)) await statics.put(a, r);
     }),
   );
+  await trimCache(STATIC_CACHE, STATIC_MAX_ENTRIES);
 }
 
 /**
@@ -93,7 +106,12 @@ async function cacheFirst(request) {
   const hit = await cache.match(request);
   if (hit) return hit;
   const res = await fetch(request);
-  if (isImmutable(res)) cache.put(request, res.clone()).catch(() => undefined);
+  if (isImmutable(res)) {
+    cache
+      .put(request, res.clone())
+      .then(() => trimCache(STATIC_CACHE, STATIC_MAX_ENTRIES))
+      .catch(() => undefined);
+  }
   return res;
 }
 

@@ -77,7 +77,7 @@ function EmailRow({ state, admin }: { state: InboundState["email"]; admin: boole
           <p className="font-medium">Par e-mail</p>
           {state.address ? (
             <>
-              <p className="mt-0.5 text-xs text-muted">Transférez l&apos;e-mail à votre adresse personnelle :</p>
+              <p className="mt-0.5 text-xs text-muted">Transférez l&apos;e-mail à cette adresse CellConnect (elle est à vous seul) :</p>
               <p className="mt-2 rounded-xl bg-subtle px-3 py-2 text-sm wrap-anywhere select-all">{state.address}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Button type="button" size="sm" variant="outline" onClick={copy}>
@@ -87,7 +87,7 @@ function EmailRow({ state, admin }: { state: InboundState["email"]; admin: boole
                   {copied === "ok" ? "Adresse copiée" : copied === "ko" ? "Copie impossible : sélectionnez l'adresse ci-dessus." : ""}
                 </span>
               </div>
-              <p className="mt-2 text-xs text-pretty text-muted">Astuce : ajoutez-la à vos contacts sous le nom « CellConnect ». Gardez-la pour vous : elle est propre à votre compte.</p>
+              <p className="mt-2 text-xs text-pretty text-muted">Astuce : ajoutez-la à vos contacts sous le nom « CellConnect ». Ne la partagez pas.</p>
             </>
           ) : (
             <p className="mt-0.5 text-xs text-muted">

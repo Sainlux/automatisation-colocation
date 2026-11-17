@@ -34,7 +34,11 @@ export function CancelDialog({ open, onClose, eventId, participants, onDone }: {
     setBusy(true);
     setErr(null);
     try {
-      const r = await apiFetch<{ notified: number; deliveries: Delivery[] }>(`/api/events/${eventId}?confirm=true&message=${encodeURIComponent(message)}`, { method: "DELETE" });
+      const r = await apiFetch<{ notified: number; deliveries: Delivery[] }>(`/api/events/${eventId}?confirm=true`, {
+        method: "DELETE",
+        // Message dans le corps (jamais dans l'adresse : elle finit dans les journaux et l'historique).
+        json: { message: message.trim() || null },
+      });
       onDone({
         tone: "success",
         text: `Événement annulé. ${r.notified ? `${plural(r.notified, "participant prévenu", "participants prévenus")}.` : "Personne d'autre n'était inscrit."}`,
@@ -68,7 +72,7 @@ export function CancelDialog({ open, onClose, eventId, participants, onDone }: {
           {participants > 0 ? ` (${plural(participants, "autre participant", "autres participants")})` : ""}. Pour simplement ne pas y aller, choisissez plutôt « Me retirer ».
         </p>
         <Field label="Message aux participants (facultatif)" htmlFor="cancel-msg">
-          <Textarea id="cancel-msg" rows={3} value={message} onChange={(e) => setMessage(e.target.value)} />
+          <Textarea id="cancel-msg" rows={3} maxLength={1000} value={message} onChange={(e) => setMessage(e.target.value)} />
         </Field>
         <DialogError text={err} />
       </div>

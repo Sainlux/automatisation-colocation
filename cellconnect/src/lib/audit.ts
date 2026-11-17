@@ -22,9 +22,16 @@ export async function audit(
   });
 }
 
-/** Journalisation applicative structurée (JSON sur stdout). */
+const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+
+/** Remplace les adresses e-mail par « [email] » (minimisation des données dans les journaux). */
+export function maskEmails(text: string): string {
+  return text.replace(EMAIL_RE, "[email]");
+}
+
+/** Journalisation applicative structurée (JSON sur stdout), adresses e-mail masquées. */
 export function log(level: "info" | "warn" | "error", msg: string, data: Record<string, unknown> = {}) {
-  const line = JSON.stringify({ level, msg, time: new Date().toISOString(), ...data });
+  const line = maskEmails(JSON.stringify({ level, msg, time: new Date().toISOString(), ...data }));
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.log(line);

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { FakeMailer, makeUser, memoryStore, NOW } from "./helpers";
+import { FakeMailer, joinOrg, makeUser, memoryStore, NOW } from "./helpers";
 import { createEvent, listCalendar } from "@/lib/agents/calendar-agent";
 import { acceptInvitationToken, inviteByEmail, previewInvitation } from "@/lib/agents/invitation-agent";
 import { bootstrapAccount } from "@/lib/auth/account";
+import { createGroup } from "@/lib/agents/group-agent";
 
 const tz = "Europe/Zurich";
 const linkOf = (text: string) => /\/invitation\/([A-Za-z0-9_-]+)/.exec(text)![1];
@@ -86,5 +87,27 @@ describe("Invitations par e-mail (sans compte)", () => {
     const u = await newcomer(store, mailer, "n@exemple.ch");
     await acceptInvitationToken(u, linkOf(mailer.sent[0].text), "declined");
     expect(await store.select("organization_members", { where: [["organization_id", "eq", leader.orgId], ["user_id", "eq", u.userId]] })).toHaveLength(0);
+  });
+
+  it("responsable de groupe non administrateur : invite dans son groupe (rôle membre forcé), pas dans l'église", async () => {
+    const store = memoryStore();
+    const mailer = new FakeMailer();
+    const admin = await makeUser(store, "Admin", mailer);
+    const resp = await joinOrg(admin, await makeUser(store, "Resp", mailer), "group_leader");
+    const g = await createGroup(resp, { name: "Cellule Nord", color: "#1d4ed8" });
+
+    const [r] = await inviteByEmail(resp, { emails: ["nouveau@exemple.ch"], groupId: g.id, orgRole: "org_admin" }, "https://app.test");
+    expect(["email_sent", "email_skipped"]).toContain(r.status);
+    const [inv] = await store.select("invitations", { where: [["invitee_email", "eq", "nouveau@exemple.ch"]] });
+    expect(inv).toMatchObject({ org_role: "member", group_id: g.id, organization_id: admin.orgId });
+
+    // Sans groupe : refus, avec le message attendu.
+    await expect(inviteByEmail(resp, { emails: ["z@exemple.ch"] }, "https://app.test")).rejects.toMatchObject({
+      status: 403,
+      message: "Seuls les administrateurs peuvent inviter dans l'église.",
+    });
+    // Un membre simple ne peut pas inviter dans un groupe qu'il ne dirige pas.
+    const simple = await joinOrg(admin, await makeUser(store, "Simple", mailer), "member");
+    await expect(inviteByEmail(simple, { emails: ["y@exemple.ch"], groupId: g.id }, "https://app.test")).rejects.toMatchObject({ status: 403 });
   });
 });

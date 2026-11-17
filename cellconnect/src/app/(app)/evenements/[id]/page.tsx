@@ -8,7 +8,7 @@ import { apiFetch, errorText, useApi } from "@/lib/client/api";
 import { useMe } from "@/components/app/session";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert } from "@/components/ui/alert";
+import { Alert, LiveRegion } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Sheet } from "@/components/ui/sheet";
@@ -20,7 +20,7 @@ import { scrollBehavior } from "@/components/app/motion";
 import { CancelDialog, EditScopeDialog, InviteDialog, RemindersDialog, WithdrawDialog, type EditScope } from "@/components/app/event/dialogs";
 import { OccurrencePanel, type OccurrenceMode } from "@/components/app/event/occurrence-panel";
 import { MeetingItems, SheetItem, sheetItemClass } from "@/components/app/event/sheet-items";
-import { LiveRegion, useScrollIntoView } from "@/components/app/event/live-region";
+import { useScrollIntoView } from "@/components/app/event/live-region";
 import { effectiveTimes } from "@/components/app/event/logic";
 import type { ActionResult, Done, EventDetails } from "@/components/app/event/types";
 import { t } from "@/i18n";
@@ -170,10 +170,17 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
   const actions: ReactNode[] = off
     ? []
     : [
-        active && (
-          <Button key="rem" variant="outline" className="h-auto min-h-12 py-2" onClick={() => setDialog("reminders")}>
-            <BellRing className="h-4 w-4 shrink-0" aria-hidden /> Rappels
+        // Qui peut modifier voit « Inviter » ; ses rappels passent dans « Plus d'actions » (4 tuiles au plus).
+        data.canEdit ? (
+          <Button key="invite" variant="outline" className="h-auto min-h-12 py-2" onClick={() => setDialog("invite")}>
+            <UserPlus className="h-4 w-4 shrink-0" aria-hidden /> Inviter
           </Button>
+        ) : (
+          active && (
+            <Button key="rem" variant="outline" className="h-auto min-h-12 py-2" onClick={() => setDialog("reminders")}>
+              <BellRing className="h-4 w-4 shrink-0" aria-hidden /> Rappels
+            </Button>
+          )
         ),
         <a
           key="wa"
@@ -198,7 +205,7 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
   return (
     <div className="space-y-4">
       <PageHeader title={frTypo(e.title)} back={backFor(from, e.source_job_id)} />
-      <LiveRegion message={result?.text} assertive={result?.tone === "danger"} />
+      <LiveRegion tone={result?.tone === "danger" ? "danger" : "polite"}>{result?.text}</LiveRegion>
 
       {result && (
         <div ref={resultRef} className="scroll-mt-20">
@@ -446,16 +453,16 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
 
       <Sheet open={more} onClose={() => setMore(false)} title="Plus d'actions">
         <ul className="space-y-1 py-1">
-          {data.canEdit && !off && (
+          {data.canEdit && active && !off && (
             <li>
               <SheetItem
-                icon={UserPlus}
+                icon={BellRing}
                 onClick={() => {
                   setMore(false);
-                  setDialog("invite");
+                  setDialog("reminders");
                 }}
               >
-                Inviter
+                Rappels
               </SheetItem>
             </li>
           )}

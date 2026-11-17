@@ -18,10 +18,3 @@ export interface Ctx {
   /** Canal e-mail (injectable pour les tests). */
   mailer: ChannelSender;
 }
-
-/** Contexte système (worker, cron) : pas d'utilisateur, accès restreint aux tâches planifiées. */
-export interface SystemCtx {
-  store: Store;
-  now: () => Date;
-  mailer: ChannelSender;
-}

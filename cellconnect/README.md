@@ -50,6 +50,7 @@ En mode local, les données sont stockées dans `.data/` (fichier JSON privé + 
 | `npm run test:supabase` | Intégration contre un vrai Supabase + SMTP (voir docs/SUPABASE.md, « Développement local ») |
 | `npm run vapid` | Génère les clés des notifications push |
 | `npm run check` | Types + lint + tests |
+| `npm run verify` | Vérification complète avant mise en ligne : `check` + build + tests de bout en bout (comme la CI, `.github/workflows/ci.yml`) — voir [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md) |
 
 ## Documentation
 

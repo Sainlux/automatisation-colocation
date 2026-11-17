@@ -183,9 +183,9 @@ function Signup() {
             </Field>
             {!invited && (
               <Field
-                label="Église ou organisation (facultatif)"
+                label="Nom de votre église (facultatif)"
                 htmlFor="organizationName"
-                hint="Laissez vide si un responsable vous a invité."
+                hint="Vous avez reçu une invitation ? Ouvrez plutôt le lien reçu par e-mail."
                 error={errors.organizationName}
               >
                 <Input id="organizationName" name="organizationName" autoComplete="organization" enterKeyHint="done" placeholder="Ex. Église de Genève" />

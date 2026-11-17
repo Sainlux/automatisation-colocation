@@ -1,6 +1,23 @@
 # Base de données
 
-Schéma : `supabase/migrations/*.sql`, à appliquer dans l'ordre (PostgreSQL ≥ 13, Supabase) — schéma initial, invitations par e-mail, abonnements push, intégrations (Outlook, Zoom, webhooks), limitation de débit. Les types TypeScript correspondants sont dans `src/lib/types.ts`.
+Schéma : `supabase/migrations/*.sql` (PostgreSQL ≥ 13, Supabase). Les types TypeScript correspondants sont dans `src/lib/types.ts`.
+
+**Appliquer le schéma** : `npx supabase link --project-ref <ref>` puis `npx supabase db push`. À défaut, exécutez les fichiers dans le SQL Editor **dans l'ordre de leur nom, une seule fois chacun**. Réglages Auth (SMTP, limite d'envoi, Site URL / Redirect URLs = `APP_URL/**`) : voir [docs/SUPABASE.md](docs/SUPABASE.md).
+
+| Fichier | Contenu |
+|---|---|
+| `20261110000000_initial_schema.sql` | Schéma initial, RLS, fonctions d'aide, bucket privé `captures` |
+| `20261111000000_email_invitations.sql` | Invitations par e-mail (jeton haché, 30 jours) |
+| `20261112000000_push_subscriptions.sql` | Abonnements aux notifications push |
+| `20261113000000_integrations.sql` | Connexions Outlook et Zoom, canaux webhook des calendriers |
+| `20261114000000_rate_limits.sql` | Limitation de débit partagée (`rate_limit_hit`) |
+| `20261115000000_messaging_links.sql` | Comptes Telegram liés |
+| `20261119000000_securite_rls.sql` | Durcissement RLS (écritures sensibles par le serveur) |
+| `20261120000000_extraction_source.sql` | Canal d'arrivée d'une analyse (e-mail, Telegram) |
+| `20261121000000_perf_index.sql` | Index de performance |
+| `20261122000000_rls_durcissement.sql` | Durcissement RLS complémentaire : profils et adhésions lisibles par soi-même et les administrateurs, colonnes du profil modifiables limitées, écritures directes fermées ; clés de limitation purgées après un jour |
+
+Toute évolution du schéma passe par une **nouvelle** migration.
 
 Les migrations sont **appliquées réellement** dans PostgreSQL (PGlite) par `tests/unit/migrations.test.ts`, et dans un Supabase complet par `npm run test:supabase` (RLS vérifiée avec de vrais jetons utilisateurs).
 
@@ -31,6 +48,7 @@ Toutes les clés sont des UUID ; clés étrangères avec `on delete cascade` pou
 RLS est activée sur **toutes** les tables. Fonctions d'aide `SECURITY DEFINER` : `is_org_member`, `is_org_admin`, `is_group_member`, `is_group_leader`, `is_event_participant`, `can_view_event`, `can_edit_event`.
 
 - Données personnelles (captures, analyses, conflits, rappels, notifications, connexions) : propriétaire uniquement.
+- Profils et adhésions : lisibles par la personne elle-même et par les administrateurs de son église (`20261122000000_rls_durcissement.sql`) ; écritures directes fermées sur les tables métier (événements, groupes, membres, organisations) : tout passe par le serveur.
 - Événements : visibles par créateur, participants, membres du groupe (visibilité `group`), membres de l'organisation (visibilité `organization`), administrateurs ; modifiables par créateur, responsable du groupe, administrateur.
 - Un participant ne peut modifier que **sa** participation.
 - Journal d'audit : lecture par l'acteur et les administrateurs ; écriture serveur uniquement.

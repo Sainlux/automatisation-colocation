@@ -2,19 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useState, type ReactNode } from "react";
+import { use, useState } from "react";
 import { CalendarDays, LogOut, Mail, Search, UserMinus, UserPlus } from "lucide-react";
 import { apiFetch, errorText, useApi } from "@/lib/client/api";
 import { isAdmin, useMe } from "@/components/app/session";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
-import { Alert } from "@/components/ui/alert";
-import { Dialog } from "@/components/ui/dialog";
+import { Alert, LiveRegion } from "@/components/ui/alert";
+import { ConfirmDialog, type Confirm } from "@/components/ui/confirm-dialog";
 import { ErrorState, ListSkeleton, PageHeader } from "@/components/ui/states";
 import { plural } from "@/components/app/format";
 import { ManualLinks, type ManualLink } from "@/components/app/event/manual-links";
-import { LiveRegion, useScrollIntoView } from "@/components/app/event/live-region";
+import { useScrollIntoView } from "@/components/app/event/live-region";
 import { splitEmails } from "@/components/app/event/logic";
 import { t } from "@/i18n";
 
@@ -31,7 +31,6 @@ interface Data {
   canManage: boolean;
   members: Member[];
 }
-type Confirm = { title: string; body: ReactNode; confirmLabel: string; danger?: boolean; run: () => Promise<void> };
 
 const ROLES: GroupRole[] = ["member", "leader", "guest"];
 /** Recherche tolérante : sans casse ni accents. */
@@ -45,7 +44,6 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
   const { data, error, reload } = useApi<Data>(`/api/groups/${id}`);
   const org = useApi<{ members: { userId: string; name: string }[] }>(data?.canManage ? "/api/orgs/members" : null);
   const [query, setQuery] = useState("");
-  const [addRole, setAddRole] = useState<GroupRole>("member");
   const [notice, setNotice] = useState<{ tone: "success" | "warning" | "danger"; text: string; links?: ManualLink[] } | null>(null);
   const [emails, setEmails] = useState("");
   const [inviting, setInviting] = useState(false);
@@ -199,7 +197,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
           </Link>
         }
       />
-      <LiveRegion message={notice?.text} assertive={notice?.tone === "danger"} />
+      <LiveRegion tone={notice?.tone === "danger" ? "danger" : "polite"}>{notice?.text}</LiveRegion>
       {notice && (
         <div ref={noticeRef} className="scroll-mt-20 space-y-2">
           <Alert tone={notice.tone}>{notice.text}</Alert>
@@ -254,23 +252,12 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-[1fr_12rem]">
-              <Field label="Rechercher une personne de l'église" htmlFor="member-search">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
-                  <Input id="member-search" type="search" className="pl-9" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Prénom ou nom" autoComplete="off" />
-                </div>
-              </Field>
-              <Field label="Ajouter comme" htmlFor="member-role">
-                <Select id="member-role" value={addRole} onChange={(e) => setAddRole(e.target.value as GroupRole)}>
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {t.roles[r]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
+            <Field label="Rechercher une personne de l'église" htmlFor="member-search">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
+                <Input id="member-search" type="search" className="pl-9" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Prénom ou nom" autoComplete="off" />
+              </div>
+            </Field>
             {org.loading && !org.data ? (
               <ListSkeleton rows={2} />
             ) : org.error && !org.data ? (
@@ -298,7 +285,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
                       disabled={busy}
                       onClick={async () => {
                         setBusy(true);
-                        await run(() => apiFetch(`/api/groups/${id}/members`, { method: "POST", json: { userId: c.userId, role: addRole } }), `${c.name} fait maintenant partie du groupe (${t.roles[addRole].toLowerCase()}).`);
+                        await run(() => apiFetch(`/api/groups/${id}/members`, { method: "POST", json: { userId: c.userId, role: "member" } }), `${c.name} fait maintenant partie du groupe.`);
                         setQuery("");
                         setBusy(false);
                       }}
@@ -348,38 +335,5 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
 
       <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
     </div>
-  );
-}
-
-function ConfirmDialog({ confirm, onClose }: { confirm: Confirm | null; onClose: () => void }) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <Dialog
-      open={Boolean(confirm)}
-      onClose={onClose}
-      title={confirm?.title ?? ""}
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose}>
-            Annuler
-          </Button>
-          <Button
-            variant={confirm?.danger ? "danger" : "primary"}
-            loading={busy}
-            onClick={async () => {
-              if (!confirm) return;
-              setBusy(true);
-              await confirm.run();
-              setBusy(false);
-              onClose();
-            }}
-          >
-            {confirm?.confirmLabel}
-          </Button>
-        </>
-      }
-    >
-      <p className="text-sm">{confirm?.body}</p>
-    </Dialog>
   );
 }

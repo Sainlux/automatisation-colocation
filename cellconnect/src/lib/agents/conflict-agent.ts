@@ -332,3 +332,33 @@ export async function closeConflictsForEvent(store: Store, eventId: string, now:
     await store.updateWhere("calendar_conflicts", where, patch);
   }
 }
+
+/** Taille des lots (requêtes « in » et détection par utilisateur). */
+const EXTEND_BATCH = 50;
+
+/**
+ * Tâche quotidienne : les conflits des séries ne sont enregistrés que sur
+ * 90 jours. Quand l'horizon avance, les nouvelles dates des séries actives
+ * (non annulées, non terminées) sont vérifiées pour chacun de leurs
+ * participants actifs, sans notification (le conflit apparaît dans l'agenda).
+ * Renvoie le nombre de conflits nouvellement enregistrés.
+ */
+export async function extendRecurringConflicts(store: Store, mailer: ChannelSender, now: Date): Promise<number> {
+  const series = (await store.select("events", { where: [["recurrence_rule", "not_is", null], ["status", "neq", "cancelled"]] })).filter(
+    (e) => !e.recurrence_until || Date.parse(e.recurrence_until) >= now.getTime(),
+  );
+  const byUser = new Map<string, Set<string>>();
+  for (let i = 0; i < series.length; i += EXTEND_BATCH) {
+    const ids = series.slice(i, i + EXTEND_BATCH).map((e) => e.id);
+    const parts = await store.select("event_participants", { where: [["event_id", "in", ids], ["status", "in", ACTIVE_STATUSES]] });
+    for (const p of parts) byUser.set(p.user_id, (byUser.get(p.user_id) ?? new Set()).add(p.event_id));
+  }
+  let created = 0;
+  for (const [userId, ids] of byUser) {
+    const list = [...ids];
+    for (let i = 0; i < list.length; i += EXTEND_BATCH) {
+      created += (await detectForUserEvents(store, mailer, userId, list.slice(i, i + EXTEND_BATCH), now, { notify: false })).length;
+    }
+  }
+  return created;
+}

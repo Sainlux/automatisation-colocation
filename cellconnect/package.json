@@ -9,9 +9,10 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test --trace off",
+    "test:e2e": "playwright test",
     "worker": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/worker.ts",
     "check": "npm run typecheck && npm run lint && npm test",
+    "verify": "npm run check && npm run build && npm run test:e2e",
     "test:supabase": "vitest run --config vitest.integration.config.mts",
     "vapid": "node scripts/vapid.mjs",
     "telegram:webhook": "tsx --conditions=react-server --tsconfig tsconfig.json scripts/telegram-webhook.ts"

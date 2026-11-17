@@ -471,8 +471,11 @@ export async function listCalendar(ctx: Ctx, from: string, to: string, scope: st
     ctx.store.select("events", { where: [...base, RECURRING_FILTER] }),
   ]);
   let events = [...single, ...recurring.filter((e) => e.recurrence_rule)].filter(visible);
-  // Un événement annulé n'est montré que s'il chevauche la période demandée.
-  events = events.filter((e) => (e.status === "cancelled" ? includeCancelled && Date.parse(e.starts_at) < toMs && Date.parse(e.ends_at) > fromMs : true));
+  // Un événement annulé n'est montré que sur demande ; un événement simple annulé seulement s'il
+  // chevauche la période (une série annulée est développée comme une série active, plus bas).
+  events = events.filter((e) =>
+    e.status !== "cancelled" ? true : includeCancelled && (Boolean(e.recurrence_rule) || (Date.parse(e.starts_at) < toMs && Date.parse(e.ends_at) > fromMs)),
+  );
   const withEx = await withExceptions(ctx.store, events);
 
   const [groups, conflicts] = await Promise.all([
@@ -484,7 +487,7 @@ export async function listCalendar(ctx: Ctx, from: string, to: string, scope: st
 
   return withEx
     .flatMap((e) =>
-      (e.status === "cancelled"
+      (e.status === "cancelled" && !e.recurrence_rule
         ? [{ eventId: e.id, title: e.title, start: Date.parse(e.starts_at), end: Date.parse(e.ends_at), originalStart: Date.parse(e.starts_at) }]
         : expandOccurrences(eventToSlot(e), fromMs, toMs)
       ).map(
@@ -575,9 +578,4 @@ export async function getEventDetails(ctx: Ctx, eventId: string, occurrence?: st
     defaultWithdrawMessage: defaultWithdrawMessage(event),
     occurrence: occurrence ? await occurrenceDetails(ctx, event, occurrence) : null,
   };
-}
-
-export function nextOccurrence(e: EventRow, now: Date) {
-  const occ = expandOccurrences(eventToSlot(e), now.getTime(), now.getTime() + 400 * 86400000);
-  return occ[0] ?? null;
 }

@@ -1,18 +1,10 @@
-import { ChevronLeft, LoaderCircle, RotateCw, WifiOff, type LucideIcon } from "lucide-react";
+import { ChevronLeft, RotateCw, WifiOff, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Alert } from "./alert";
 import { Button, buttonVariants } from "./button";
-
-export function Loading({ label = t.states.loading }: { label?: string }) {
-  return (
-    <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted" role="status">
-      <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden /> {label}
-    </div>
-  );
-}
 
 /** Bloc gris de chargement (décoratif). */
 export function Skeleton({ className }: { className?: string }) {

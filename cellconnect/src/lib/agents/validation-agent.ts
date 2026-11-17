@@ -198,16 +198,6 @@ export function toDraft(ev: ExtractedEvent, opts: ValidationOptions, context: st
   return draft;
 }
 
-/** Le brouillon est-il proposé coché par défaut ? (faux pour une date déjà passée) */
-export function draftIncludedByDefault(d: EventDraft & { included?: boolean }): boolean {
-  return d.included !== false;
-}
-
 export function validateExtraction(result: ExtractionResult, opts: ValidationOptions): EventDraft[] {
   return result.events.map((e) => toDraft(e, opts, result.contextNotes));
-}
-
-/** Un brouillon nécessite-t-il une action de l'utilisateur ? */
-export function draftNeedsAttention(d: EventDraft): boolean {
-  return d.issues.some((i) => i.severity === "error") || (!d.confirmed && d.issues.some((i) => i.severity === "warning"));
 }

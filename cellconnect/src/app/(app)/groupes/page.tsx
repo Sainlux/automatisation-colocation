@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CalendarDays, Check, Plus, Users } from "lucide-react";
 import { apiFetch, errorText, useApi } from "@/lib/client/api";
@@ -110,6 +111,8 @@ function Section({ title, groups }: { title?: string; groups: G[] }) {
 
 export default function GroupsPage() {
   const { me } = useMe();
+  const router = useRouter();
+  const leader = canLead(me.role);
   const { data, error, loading, reload } = useApi<{ groups: G[] }>("/api/groups");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", color: DEFAULT_COLOR });
@@ -126,7 +129,7 @@ export default function GroupsPage() {
         title={t.nav.groups}
         description="Cellules, équipes, formations : chaque groupe a son agenda commun."
         actions={
-          canLead(me.role) && (
+          leader && (
             <Button onClick={() => setOpen(true)}>
               <Plus className="h-4 w-4" aria-hidden /> Créer un groupe
             </Button>
@@ -138,8 +141,18 @@ export default function GroupsPage() {
       ) : error && !data ? (
         <ErrorState status={error.status} message={error.message} onRetry={reload} />
       ) : !data?.groups.length ? (
-        <EmptyState icon={Users} title="Aucun groupe">
-          {canLead(me.role) ? "Créez votre premier groupe (ex. « Cellule Annemasse »)." : "Un responsable doit vous ajouter à un groupe."}
+        <EmptyState
+          icon={Users}
+          title="Aucun groupe"
+          action={
+            leader && (
+              <Button onClick={() => setOpen(true)}>
+                <Plus className="h-4 w-4" aria-hidden /> Créer un groupe
+              </Button>
+            )
+          }
+        >
+          {leader ? "Créez votre premier groupe (ex. « Cellule Annemasse »)." : "Un responsable doit vous ajouter à un groupe."}
         </EmptyState>
       ) : (
         <div className="space-y-5">
@@ -163,10 +176,12 @@ export default function GroupsPage() {
               setBusy(true);
               setErr(null);
               try {
-                await apiFetch("/api/groups", { method: "POST", json: { ...form, description: form.description || null } });
+                const r = await apiFetch<{ group?: { id: string } }>("/api/groups", { method: "POST", json: { ...form, description: form.description.trim() || null } });
                 setOpen(false);
                 setForm({ name: "", description: "", color: DEFAULT_COLOR });
-                reload();
+                // Le nouveau groupe s'ouvre directement : on peut y ajouter les membres.
+                if (r.group?.id) router.push(`/groupes/${r.group.id}`);
+                else reload();
               } catch (e) {
                 setErr(errorText(e, t.words.actionFailed));
               } finally {
@@ -179,10 +194,10 @@ export default function GroupsPage() {
         }
       >
         <div className="space-y-3">
-          <Field label="Nom" htmlFor="g-name">
-            <Input id="g-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Field label="Nom du groupe" htmlFor="g-name">
+            <Input id="g-name" placeholder="Ex. Cellule Annemasse" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
-          <Field label="Description" htmlFor="g-desc">
+          <Field label="Description (facultatif)" htmlFor="g-desc">
             <Textarea id="g-desc" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </Field>
           <ColorSwatches value={form.color} onChange={(color) => setForm({ ...form, color })} />

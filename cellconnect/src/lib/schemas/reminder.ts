@@ -12,5 +12,3 @@ export const REMINDER_LIMITS = { min: 5, max: 40320, count: 6 } as const;
 export const DEFAULT_REMINDER_OFFSETS: number[] = [1440, 120, 30];
 
 export const reminderOffsetsSchema = z.array(z.number().int().min(REMINDER_LIMITS.min).max(REMINDER_LIMITS.max)).max(REMINDER_LIMITS.count);
-
-export type ReminderOffsets = z.infer<typeof reminderOffsetsSchema>;

@@ -1,7 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-
-/** Même valeur que TEST_NOW dans playwright.config.ts (horloge figée du serveur en mode local). */
-const TEST_NOW = "2026-11-10T12:00:00Z";
+import { TEST_NOW } from "./constants";
 
 const CAPTURE = `Voici aussi les dates pour les formations de leaders par ZOOM :
 Formation Cellules « Zoom »
