@@ -70,6 +70,18 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
 .pick:hover,.pick.over{border-color:var(--gold)}
 .vh:focus-visible + .pick, .pick:focus-within{outline:2px solid var(--gold);outline-offset:2px}
 .projList{display:grid;gap:8px}
+.guide{background:var(--panel);border:1px solid var(--gold);border-radius:12px;padding:12px;display:grid;gap:10px}
+.guide{min-width:0}
+.gsteps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
+.gstep{min-width:0;font:inherit;font-size:11px;line-height:1.25;padding:6px 4px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);text-align:center;cursor:pointer;min-height:52px}
+.gstep b{display:block;font-family:var(--display);font-size:13px;letter-spacing:.03em;color:var(--ink)}
+.gstep.done{border-color:var(--gold)} .gstep.done b{color:var(--gold)}
+.gstep.next{background:#3a3122;color:var(--ink)}
+.gstep span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px}
+.gnext{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:14px;min-width:0}
+.gnext .btn{flex:none}
+.gnext span{min-width:0}
+.sunoCard{border:1px solid var(--gold);border-radius:10px;padding:10px;background:var(--panel2);margin-bottom:10px}
 .proj{display:flex;gap:10px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
 .proj img{width:40px;height:71px;object-fit:cover;border-radius:6px;flex:none;background:#000}
 .proj div{flex:1;min-width:0}
@@ -145,9 +157,22 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
   </div>
 
   <div class="stack">
+    <!-- GUIDE -->
+    <div class="guide" id="guide" aria-live="polite">
+      <div class="gsteps" id="gSteps"></div>
+      <div class="gnext"><span id="gNext"></span><button class="btn" id="gGo">Aller →</button></div>
+    </div>
     <!-- 1 MUSIQUE + IMAGES -->
-    <section>
+    <section id="s1">
       <h2><span class="n">1</span>Musique et images</h2>
+      <div class="sunoCard stack hidden" id="sunoCard">
+        <label class="l" style="margin:0">Ma chanson Suno · le plus simple</label>
+        <p class="small" style="margin:0"><b>1.</b> Cherche ta chanson et touche « Choisir ». <b>2.</b> Ajoute son MP3 avec le bouton doré plus bas. Les paroles et la synchro mot à mot se font toutes seules.</p>
+        <div class="row" style="flex-wrap:nowrap"><input type="text" id="sunoQ" placeholder="Titre sur Suno, ex : Psaume 91" aria-label="Titre de la chanson sur Suno"><button class="btn" id="sunoGo">Chercher</button></div>
+        <div class="projList" id="sunoList"></div>
+        <label class="toggle"><input type="checkbox" id="sunoKeep" checked> Si j'ai déjà écrit mes paroles, garder mes lignes (sinon : le texte chanté par Suno, avec les répétitions)</label>
+        <p class="small" id="sunoStatus" role="status" aria-live="polite" style="margin:0"></p>
+      </div>
       <div class="projets stack" id="projBox">
         <label class="l">Chansons créées par Claude</label>
         <div class="projList" id="projList"><p class="small" id="projEmpty">Aucune chanson prête pour l'instant.</p></div>
@@ -191,7 +216,7 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
     </section>
 
     <!-- 2 PAROLES -->
-    <section>
+    <section id="s2">
       <h2><span class="n">2</span>Paroles et synchro</h2>
       <p class="note">Une ligne = une phrase chantée. Ensuite, cale chaque ligne sur la voix.</p>
       <details class="ask bibleBox"><summary>📖 Prendre un passage de la Bible</summary><div id="bibleLyr"></div></details>
@@ -215,10 +240,8 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
         </div>
       </div>
       <div id="syncSuno" class="stack hidden" style="margin-top:12px">
-        <p class="small">L'appli lit dans ton compte Suno le moment exact où chaque mot est chanté. Cherche la chanson qui correspond à ton MP3 (même version).</p>
-        <div class="row" style="flex-wrap:nowrap"><input type="text" id="sunoQ" placeholder="Titre sur Suno, ex : Psaume 91" aria-label="Titre de la chanson sur Suno"><button class="btn" id="sunoGo">Chercher</button></div>
-        <label class="toggle"><input type="checkbox" id="sunoKeep" checked> Garder mes paroles et leurs lignes (sinon : le texte chanté par Suno, avec les répétitions)</label>
-        <div class="projList" id="sunoList"></div>
+        <p class="small" id="sunoState">L'appli lit dans ton compte Suno le moment exact où chaque mot est chanté. Choisis ta chanson à l'étape 1 (« Ma chanson Suno »).</p>
+        <div class="row"><button class="btn" id="sunoRedo">Caler avec Suno</button></div>
       </div>
       <div id="syncAuto" class="stack hidden" style="margin-top:12px">
         <p class="small">L'appli écoute la musique, repère les moments où la voix commence et y place chaque ligne. Indique à peu près où le chant commence et finit (lance l'aperçu et touche « ▸ ici »).</p>
@@ -247,7 +270,7 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
     </section>
 
     <!-- 3 STYLE -->
-    <section>
+    <section id="s3">
       <h2><span class="n">3</span>Style</h2>
       <p class="note">Touche un style prêt, ou décris le tien avec tes mots.</p>
       <div class="row" style="justify-content:space-between"><label class="l" style="margin:0">Styles prêts</label><button class="btn" id="surprise">🎲 Surprise</button></div>
@@ -312,7 +335,7 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
     </section>
 
     <!-- 5 EXPORT -->
-    <section>
+    <section id="s5">
       <h2><span class="n">5</span>Créer la vidéo</h2>
       <p class="note">La vidéo s'enregistre en temps réel (une chanson de 3 min prend 3 min). Garde la page ouverte et l'écran allumé.</p>
       <div class="grid2">
@@ -488,7 +511,8 @@ function loadMp3(f){
     if (!+$("vEnd").value) $("vEnd").value = Math.round(duration * 0.92);
     $("stageInfo").textContent = "Ta musique est chargée. Synchronise les paroles (étape 2).";
     setPlay(false); passageInfo();
-    if ((!words.length || syncSource === "auto") && $("lyrics").value.trim()) autoSync(true);
+    if (sunoPick) sunoAlign(sunoPick, null);
+    else if ((!words.length || syncSource === "auto") && $("lyrics").value.trim()) autoSync(true);
     rebuild();
   };
   audio.onerror = () => setStatus("syncStatus", `Ce fichier ne se lit pas comme musique : ${f.name}. Essaie un MP3.`, true);
@@ -807,40 +831,52 @@ function mcpMsg(e){
 }
 $("sunoGo").onclick = async () => {
   const mcp = await mcpP;
-  if (!mcp) return setStatus("syncStatus", "La synchro Suno marche dans l'appli ouverte sur claude.ai (elle lit tes chansons Suno). Ici, utilise « Automatique (écoute la voix) » ou « Au toucher ».", true);
-  const q = $("sunoQ").value.trim(); if (!q) { $("sunoQ").focus(); return setStatus("syncStatus", "Écris le titre de la chanson sur Suno.", true); }
-  $("sunoGo").disabled = true; setStatus("syncStatus", "Recherche dans ton Suno…");
+  if (!mcp) return sunoSay("La synchro Suno marche dans l'appli ouverte sur claude.ai (elle lit tes chansons Suno). Ici, utilise « Automatique (écoute la voix) » ou « Au toucher ».", true);
+  const q = $("sunoQ").value.trim(); if (!q) { $("sunoQ").focus(); return sunoSay("Écris le titre de la chanson sur Suno.", true); }
+  $("sunoGo").disabled = true; sunoSay("Recherche dans ton Suno…");
   try {
     const r = await mcp.callTool("Suno", "library-search", {query: q.slice(0, 200), limit: 12});
     const items = ((r.payload && r.payload.items) || []).filter(it => it && it.id && it.status !== "error");
     const box = $("sunoList"); box.innerHTML = "";
-    if (!items.length) return setStatus("syncStatus", `Aucune chanson « ${q} » dans ton Suno. Essaie un mot du titre.`, true);
+    if (!items.length) return sunoSay(`Aucune chanson « ${q} » dans ton Suno. Essaie un mot du titre.`, true);
     items.forEach(it => {
       const d = (it.metadata && it.metadata.duration) || 0, close = duration && d && Math.abs(d - duration) < 1.5;
       const row = document.createElement("div"); row.className = "proj" + (close ? " on" : "");
-      row.innerHTML = `<div><b></b><span class="small"></span></div><button class="btn">Caler</button>`;
+      row.innerHTML = `<div><b></b><span class="small"></span></div><button class="btn">Choisir</button>`;
       row.querySelector("b").textContent = it.title || "Sans titre";
       row.querySelector("span").textContent = [d ? fmt(d) : "", (it.created_at || "").slice(0, 10), close ? "✓ même durée que ton MP3" : ""].filter(Boolean).join(" · ");
-      row.querySelector("button").onclick = () => sunoAlign(it, row);
+      row.querySelector("button").onclick = () => pickSuno(it, row);
       close ? box.prepend(row) : box.appendChild(row);
     });
-    setStatus("syncStatus", duration ? `${items.length} chanson(s). La version en doré a la même durée que ton MP3 : touche « Caler ».` : `${items.length} chanson(s) trouvée(s). Ajoute d'abord ton MP3 (étape 1) pour voir laquelle correspond.`);
-  } catch(e){ setStatus("syncStatus", mcpMsg(e), true); }
+    sunoSay(duration ? `${items.length} chanson(s). La version en doré a la même durée que ton MP3 : touche « Choisir ».` : `${items.length} chanson(s). Touche « Choisir » sur la bonne version (Suno en fait souvent 2).`);
+  } catch(e){ sunoSay(mcpMsg(e), true); }
   finally { $("sunoGo").disabled = false; }
 };
+$("sunoQ").addEventListener("keydown", e => { if (e.key === "Enter") $("sunoGo").click(); });
+let sunoPick = null, sunoRow = null;
+function sunoSay(msg, err){ setStatus("sunoStatus", msg, err); setStatus("syncStatus", msg, err); }
+function pickSuno(it, row){
+  sunoPick = it; sunoRow = row;
+  document.querySelectorAll("#sunoList .proj").forEach(x => { x.classList.toggle("on", x === row); x.querySelector("button").textContent = x === row ? "Choisie ✓" : "Choisir"; });
+  if (!$("titre").value.trim()) $("titre").value = (it.title || "").replace(/\s*[–-]\s*(rap|v\d+|version.*)$/i, "").trim();
+  $("sunoState").textContent = `Chanson Suno choisie : « ${it.title || "sans titre"} ». « Caler avec Suno » relance la synchro mot à mot.`;
+  if (duration) sunoAlign(it, row);
+  else { sunoSay(`« ${it.title} » choisie. Ajoute maintenant son MP3 avec le bouton doré : les paroles et la synchro se feront toutes seules.`); $("mp3Lbl").scrollIntoView({block:"center", behavior:"smooth"}); }
+}
+$("sunoRedo").onclick = () => { if (sunoPick && duration) sunoAlign(sunoPick, sunoRow); else { $("sunoCard").scrollIntoView({block:"center", behavior:"smooth"}); sunoSay(sunoPick ? "Ajoute d'abord le MP3 de ta chanson." : "Cherche et choisis ta chanson Suno ici.", true); } };
 async function sunoAlign(it, row){
   const mcp = await mcpP; if (!mcp) return;
-  const btn = row.querySelector("button"); btn.disabled = true; btn.textContent = "Lecture…";
+  const btn = row ? row.querySelector("button") : {}; btn.disabled = true; btn.textContent = "Lecture…"; sunoSay("Lecture de la synchro Suno…");
   try {
     let pl = null;
     for (let k = 0; k < 8; k++){   // l'alignement peut être « processing » quelques secondes
       pl = (await mcp.callTool("Suno", "audio-lyrics-alignment", {id: it.id}, {cache: false})).payload || {};
       if (pl.status !== "processing") break;
-      setStatus("syncStatus", "Suno prépare la synchro mot à mot de cette chanson…"); await new Promise(r => setTimeout(r, 4000));
+      sunoSay("Suno prépare la synchro mot à mot de cette chanson…"); await new Promise(r => setTimeout(r, 4000));
     }
-    if (!pl || pl.status === "processing") return setStatus("syncStatus", "Suno n'a pas encore fini de caler cette chanson. Réessaie dans une minute.", true);
+    if (!pl || pl.status === "processing") return sunoSay("Suno n'a pas encore fini de caler cette chanson. Réessaie dans une minute.", true);
     const sung = sunoTokensToWords(pl.words || []);
-    if (!sung.length) return setStatus("syncStatus", pl.status === "unavailable" ? "Suno n'a pas de synchro pour cette chanson (instrumentale ou trop ancienne). Utilise « Automatique » ou « Au toucher »." : "Cette chanson n'a pas de paroles chantées.", true);
+    if (!sung.length) return sunoSay(pl.status === "unavailable" ? "Suno n'a pas de synchro pour cette chanson (instrumentale ou trop ancienne). Utilise « Automatique » ou « Au toucher »." : "Cette chanson n'a pas de paroles chantées.", true);
     const mine = lyricLines(); let msg;
     if ($("sunoKeep").checked && mine.length){
       const r = mapLyricsOnSung(mine, sung);
@@ -853,9 +889,9 @@ async function sunoAlign(it, row){
     } else { applySung(sung); msg = `Calé mot à mot avec Suno : ${sung.length} mots, texte chanté par Suno.`; }
     syncSource = "code"; shiftTotal = 0; rebuild();
     if (duration && it.metadata && it.metadata.duration && Math.abs(it.metadata.duration - duration) > 1.5) msg += " Attention : ton MP3 n'a pas la même durée que cette version Suno ; si c'est décalé, choisis l'autre version.";
-    setStatus("syncStatus", msg); btn.textContent = "Calée";
-    document.querySelectorAll("#sunoList .proj").forEach(x => x.classList.toggle("on", x === row));
-  } catch(e){ btn.textContent = "Réessayer"; setStatus("syncStatus", mcpMsg(e), true); }
+    sunoSay(msg + " Regarde l'aperçu : les mots tombent sur la voix."); btn.textContent = "Calée ✓";
+    const chip = document.querySelector('[data-sync="suno"]'); if (chip && syncMode !== "suno") chip.click();
+  } catch(e){ btn.textContent = "Réessayer"; sunoSay(mcpMsg(e), true); }
   finally { btn.disabled = false; }
 }
 function applySung(sung){
@@ -863,7 +899,37 @@ function applySung(sung){
   words = sung.map(w => ({w: w.w, s: w.s, e: w.e})); lineStarts = ls.map(l => l[0].s); store.set("lyrics", $("lyrics").value);
 }
 // méthode par défaut : Suno dans claude.ai, sinon l'écoute automatique
-mcpP.then(m => { const b = document.querySelector(`[data-sync="${m ? "suno" : "auto"}"]`); if (b && !tapping) b.click(); });
+mcpP.then(m => { if (m) $("sunoCard").classList.remove("hidden"); const b = document.querySelector(`[data-sync="${m ? "suno" : "auto"}"]`); if (b && !tapping) b.click(); });
+
+/* =================== GUIDE « Où j'en suis » =================== */
+function guideState(){
+  const userImgs = images.filter(x => !IMGS[x.name]).length, hasLyr = lyricLines().length > 0;
+  const syncLbl = !words.length || demo ? "" : syncSource === "code" ? (sunoPick ? "Suno mot à mot" : "mot à mot") : syncSource === "tap" ? "au toucher" : syncSource === "auto" ? (voiceAna && voiceAna.ok ? "sur la voix" : "approximative") : "calées";
+  return [
+    {n:"Musique", sec:"s1", el:"mp3Lbl", done: duration > 0, sub: duration > 0 ? fmt(duration) : sunoPick ? "MP3 à ajouter" : "à faire",
+     next: sunoPick ? `Ajoute le MP3 de « ${sunoPick.title} »` : $("sunoCard").classList.contains("hidden") ? "Ajoute ta musique (MP3)" : "Choisis ta chanson Suno, ou ajoute un MP3"},
+    {n:"Paroles", sec:"s2", el: hasLyr ? "syncStatus" : "lyrics", done: !!syncLbl && hasLyr, sub: syncLbl || (hasLyr ? "à caler" : "à faire"),
+     next: hasLyr ? "Cale les paroles sur la voix" : "Mets les paroles (ou un passage de la Bible)"},
+    {n:"Images", sec:"s1", el:"imgsLbl", done: userImgs > 0, sub: userImgs ? userImgs + " image" + (userImgs > 1 ? "s" : "") : "exemples", next: "Ajoute tes images (les exemples marchent aussi)", optional: true},
+    {n:"Style", sec:"s3", el:"presets", done: true, sub: presetName, next: "Choisis un style"},
+    {n:"Vidéo", sec:"s5", el:"rec", done: !!(typeof lastVideo !== "undefined" && lastVideo), sub: recording ? "en cours…" : (typeof lastVideo !== "undefined" && lastVideo) ? "prête ✓" : "à faire", next: "Crée la vidéo"},
+  ];
+}
+let guideNext = null, guideImgSkip = false;
+function updateGuide(){
+  const g = guideState(); let nx = g.find(s => !s.done && !(s.optional && guideImgSkip)) || null;
+  const html = g.map((s, i) => `<button class="gstep${s.done ? " done" : ""}${nx === s ? " next" : ""}" data-g="${i}"><b>${s.done ? "✓ " : ""}${s.n}</b></button>`).join("");
+  if ($("gSteps").dataset.h !== html){ $("gSteps").innerHTML = html; $("gSteps").dataset.h = html;
+    $("gSteps").querySelectorAll(".gstep").forEach(b => b.onclick = () => goStep(guideState()[+b.dataset.g])); }
+  $("gSteps").querySelectorAll(".gstep").forEach((b, i) => { b.title = g[i].sub; if (!b.querySelector("span")) b.insertAdjacentHTML("beforeend", "<span></span>"); b.querySelector("span").textContent = g[i].sub; });
+  guideNext = nx; const txt = nx ? "Prochaine étape : " + nx.next : "Tout est prêt : ta vidéo est faite. Touche « Enregistrer la vidéo » sous l'aperçu.";
+  if ($("gNext").textContent !== txt) $("gNext").textContent = txt;
+  $("gGo").textContent = nx && nx.optional ? "Aller →" : "Aller →"; $("gGo").classList.toggle("hidden", !nx);
+}
+function goStep(s){ if (!s) return; if (s.optional) guideImgSkip = true; const el = $(s.el) || $(s.sec); el.scrollIntoView({block:"center", behavior:"smooth"});
+  if (s.n === "Paroles" && lyricLines().length && !words.length) { const c = document.querySelector('[data-sync="' + ($("sunoCard").classList.contains("hidden") ? "auto" : "suno") + '"]'); if (c) c.click(); } }
+$("gGo").onclick = () => goStep(guideNext);
+setInterval(() => { try { updateGuide(); } catch(e){} }, 600);
 function rebuild(){
   chunks = [];
   let cur = [];
