@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { CalendarDays, Plus, Users } from "lucide-react";
-import { apiFetch, ApiError, useApi } from "@/lib/client/api";
+import { CalendarDays, Check, Plus, Users } from "lucide-react";
+import { apiFetch, errorText, useApi } from "@/lib/client/api";
 import { canLead, useMe } from "@/components/app/session";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Textarea } from "@/components/ui/form";
+import { cn } from "@/lib/utils";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Dialog } from "@/components/ui/dialog";
@@ -27,7 +28,7 @@ interface G {
 function GroupCard({ g }: { g: G }) {
   return (
     <Card className="flex h-full flex-col hover:bg-subtle/60">
-      {/* Deux liens distincts : la carte mène au groupe, « Voir l'agenda » à son agenda. */}
+      {/* Deux liens distincts : la carte mène au groupe, « Agenda du groupe » à son agenda. */}
       <Link href={`/groupes/${g.id}`} className="flex flex-1 items-start gap-3 rounded-2xl p-4 sm:p-5">
         <span aria-hidden className="mt-1.5 h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: g.color }} />
         <span className="min-w-0 flex-1">
@@ -40,9 +41,54 @@ function GroupCard({ g }: { g: G }) {
         </span>
       </Link>
       <Link href={`/calendrier?vue=group:${g.id}`} className="mx-4 mb-2 inline-flex min-h-11 items-center gap-2 self-start text-sm font-medium text-accent hover:underline sm:mx-5">
-        <CalendarDays className="h-4 w-4" aria-hidden /> Voir l&apos;agenda<span className="sr-only"> de « {g.name} »</span>
+        <CalendarDays className="h-4 w-4" aria-hidden /> {t.words.groupCalendar}
+        <span className="sr-only"> « {g.name} »</span>
       </Link>
     </Card>
+  );
+}
+
+/** Huit couleurs de groupe, lisibles en mode clair comme en mode sombre. */
+const COLORS: { value: string; label: string }[] = [
+  { value: "#23367a", label: "Bleu encre" },
+  { value: "#2f6f9f", label: "Bleu ciel" },
+  { value: "#1f7a5c", label: "Vert" },
+  { value: "#6b8e23", label: "Vert olive" },
+  { value: "#c58b1a", label: "Miel" },
+  { value: "#c2552d", label: "Orange brique" },
+  { value: "#a23b5c", label: "Framboise" },
+  { value: "#6a4c93", label: "Violet" },
+];
+const DEFAULT_COLOR = COLORS[0].value;
+
+/** Choix de couleur en pastilles (vrais boutons radio, flèches du clavier incluses). */
+function ColorSwatches({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <fieldset className="min-w-0">
+      <legend className="mb-2 text-sm font-medium">Couleur</legend>
+      <div className="flex flex-wrap gap-2">
+        {COLORS.map((c) => {
+          const checked = value.toLowerCase() === c.value;
+          return (
+            <label key={c.value} className="cursor-pointer">
+              <input type="radio" name="g-color" value={c.value} checked={checked} onChange={() => onChange(c.value)} className="peer sr-only" />
+              <span className="sr-only">{c.label}</span>
+              <span
+                aria-hidden
+                className={cn(
+                  "flex h-11 w-11 items-center justify-center rounded-full border-2 border-transparent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring peer-focus-visible:outline-solid",
+                  checked && "border-fg",
+                )}
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-full text-white" style={{ background: c.value }}>
+                  {checked && <Check className="h-4 w-4" />}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 
@@ -66,7 +112,7 @@ export default function GroupsPage() {
   const { me } = useMe();
   const { data, error, loading, reload } = useApi<{ groups: G[] }>("/api/groups");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", color: "#23367a" });
+  const [form, setForm] = useState({ name: "", description: "", color: DEFAULT_COLOR });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const led = data?.groups.filter((g) => g.myRole === "leader") ?? [];
@@ -119,10 +165,10 @@ export default function GroupsPage() {
               try {
                 await apiFetch("/api/groups", { method: "POST", json: { ...form, description: form.description || null } });
                 setOpen(false);
-                setForm({ name: "", description: "", color: "#23367a" });
+                setForm({ name: "", description: "", color: DEFAULT_COLOR });
                 reload();
               } catch (e) {
-                setErr(e instanceof ApiError ? e.message : "Création impossible.");
+                setErr(errorText(e, t.words.actionFailed));
               } finally {
                 setBusy(false);
               }
@@ -139,9 +185,7 @@ export default function GroupsPage() {
           <Field label="Description" htmlFor="g-desc">
             <Textarea id="g-desc" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </Field>
-          <Field label="Couleur" htmlFor="g-color">
-            <Input id="g-color" type="color" className="h-11 w-20 p-1" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} />
-          </Field>
+          <ColorSwatches value={form.color} onChange={(color) => setForm({ ...form, color })} />
           {err && (
             <Alert tone="danger" live>
               {err}

@@ -1,6 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TableName, Tables } from "@/lib/types";
-import { UniqueViolationError, type Filter, type NewRow, type Query, type Store } from "./store";
+import { notFound } from "@/lib/errors";
+import { UniqueViolationError, type Filter, type FilterOp, type NewRow, type Query, type Store } from "./store";
+
+/** Sous-ensemble typé des méthodes de filtre de PostgREST utilisées ici. */
+type SimpleOp = Exclude<FilterOp, "in" | "not_is">;
+type Filterable = { [O in SimpleOp]: (column: string, value: unknown) => Filterable } & {
+  in: (column: string, values: readonly unknown[]) => Filterable;
+  not: (column: string, operator: string, value: unknown) => Filterable;
+};
 
 /**
  * Implémentation Supabase/PostgreSQL de l'interface Store.
@@ -15,40 +23,24 @@ export class SupabaseStore implements Store {
 
   private fail(table: string, error: { code?: string; message: string; details?: string }): never {
     if (error.code === "23505") throw new UniqueViolationError(table, [error.details ?? "?"]);
+    // 22P02 : valeur invalide pour le type (ex. identifiant qui n'est pas un UUID) => ressource introuvable.
+    if (error.code === "22P02") throw notFound();
     throw new Error(`Supabase ${table}: ${error.message}`);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private applyFilters(q: any, where: Filter<unknown>[] = []) {
+  /**
+   * Applique les filtres au constructeur de requête PostgREST. Le type d'origine
+   * (très générique) est conservé en sortie ; seules les méthodes de filtre sont
+   * appelées, via l'interface typée `Filterable`.
+   */
+  private applyFilters<B>(builder: B, where: Filter<unknown>[] = []): B {
+    let q = builder as unknown as Filterable;
     for (const [col, op, value] of where) {
-      switch (op) {
-        case "eq":
-          q = q.eq(col, value);
-          break;
-        case "neq":
-          q = q.neq(col, value);
-          break;
-        case "in":
-          q = q.in(col, value as unknown[]);
-          break;
-        case "is":
-          q = q.is(col, value);
-          break;
-        case "lt":
-          q = q.lt(col, value);
-          break;
-        case "lte":
-          q = q.lte(col, value);
-          break;
-        case "gt":
-          q = q.gt(col, value);
-          break;
-        case "gte":
-          q = q.gte(col, value);
-          break;
-      }
+      if (op === "not_is") q = q.not(col, "is", value);
+      else if (op === "in") q = q.in(col, value as readonly unknown[]);
+      else q = q[op](col, value);
     }
-    return q;
+    return q as unknown as B;
   }
 
   async select<K extends TableName>(table: K, query: Query<Tables[K]> = {}) {
@@ -87,6 +79,21 @@ export class SupabaseStore implements Store {
   async delete<K extends TableName>(table: K, id: string) {
     const { error } = await this.client.from(table).delete().eq("id", id);
     if (error) this.fail(table, error);
+  }
+
+  async updateWhere<K extends TableName>(table: K, where: Filter<Tables[K]>[], patch: Partial<Tables[K]>) {
+    if (where.length === 0) throw new Error("updateWhere sans filtre refusé");
+    const q = this.applyFilters(this.client.from(table).update(patch as never), where as Filter<unknown>[]);
+    const { data, error } = await q.select("*");
+    if (error) this.fail(table, error);
+    return (data ?? []) as Tables[K][];
+  }
+
+  async count<K extends TableName>(table: K, where: Filter<Tables[K]>[] = []) {
+    const q = this.applyFilters(this.client.from(table).select("id", { count: "exact", head: true }), where as Filter<unknown>[]);
+    const { error, count } = await q;
+    if (error) this.fail(table, error);
+    return count ?? 0;
   }
 
   async deleteWhere<K extends TableName>(table: K, where: Filter<Tables[K]>[]) {

@@ -2,7 +2,8 @@ import { api, body } from "@/lib/http/api";
 import { eventPatchSchema } from "@/lib/schemas/event";
 import { cancelEvent, getEventDetails, updateEvent } from "@/lib/agents/calendar-agent";
 
-export const GET = api(async ({ ctx, params }) => getEventDetails(ctx, params.id));
+/** Détail d'un événement ; ?occurrence=<début d'origine ISO> ajoute l'état de cette date (prévue, déplacée, annulée). */
+export const GET = api(async ({ req, ctx, params }) => getEventDetails(ctx, params.id, req.nextUrl.searchParams.get("occurrence")));
 
 export const PATCH = api(async ({ req, ctx, params }) => {
   const patch = await body(req, eventPatchSchema);

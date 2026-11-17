@@ -9,6 +9,7 @@ import { Field, Input } from "@/components/ui/form";
 import { Alert } from "@/components/ui/alert";
 import { PasswordInput } from "@/components/app/password-input";
 import { apiFetch, ApiError } from "@/lib/client/api";
+import { safeNext } from "@/lib/client/safe-next";
 
 type Errors = Partial<Record<"email" | "password", string>>;
 
@@ -49,8 +50,11 @@ function Login() {
     }
     setLoading(true);
     try {
-      await apiFetch("/api/auth/login", { method: "POST", json: { email, password } });
-      window.location.href = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      await apiFetch("/api/auth/login", {
+        method: "POST",
+        json: { email, password },
+      });
+      window.location.href = safeNext(next);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Connexion impossible. Vérifiez votre connexion internet, puis réessayez.");
       setLoading(false);

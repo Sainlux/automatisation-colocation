@@ -29,11 +29,19 @@ export async function recordPush(store: Store, c: CalendarConnection, eventId: s
   });
 }
 
+/** Résultat d'un import : identifiant de l'événement créé ou modifié. */
+export interface ImportResult {
+  eventId: string;
+  created: boolean;
+}
+
 /**
  * Importe (ou met à jour) un événement externe comme événement PRIVÉ de
- * l'utilisateur, uniquement pour la détection de conflits. Renvoie true si créé.
+ * l'utilisateur, uniquement pour la détection de conflits. Renvoie
+ * l'identifiant de l'événement créé ou modifié, ou null si rien n'a changé.
  */
-export async function importExternalEvent(store: Store, c: CalendarConnection, x: ExternalEvent, source: EventSource): Promise<boolean> {
+export async function importExternalEvent(store: Store, c: CalendarConnection, x: ExternalEvent, source: EventSource, now = new Date()): Promise<ImportResult | null> {
+  const nowIso = now.toISOString();
   const [rec] = await store.select("calendar_sync_records", { where: [["connection_id", "eq", c.id], ["external_id", "eq", x.externalId]] });
   const fields = {
     title: x.title,
@@ -44,13 +52,13 @@ export async function importExternalEvent(store: Store, c: CalendarConnection, x
     status: x.cancelled ? ("cancelled" as const) : ("confirmed" as const),
   };
   if (rec) {
-    if (rec.direction === "push" || rec.external_updated_at === x.updated) return false;
+    if (rec.direction === "push" || rec.external_updated_at === x.updated) return null;
     const ev = await store.get("events", rec.event_id);
     if (ev) await store.update("events", ev.id, { ...fields, version: ev.version + 1 });
-    await store.update("calendar_sync_records", rec.id, { external_updated_at: x.updated, last_synced_at: new Date().toISOString() });
-    return false;
+    await store.update("calendar_sync_records", rec.id, { external_updated_at: x.updated, last_synced_at: nowIso });
+    return ev ? { eventId: ev.id, created: false } : null;
   }
-  if (x.cancelled) return false;
+  if (x.cancelled) return null;
   const ev = await store.insert("events", {
     organization_id: c.organization_id,
     group_id: null,
@@ -65,7 +73,7 @@ export async function importExternalEvent(store: Store, c: CalendarConnection, x
     source_job_id: null,
     external_uid: x.externalId,
     version: 1,
-    updated_at: new Date().toISOString(),
+    updated_at: nowIso,
     ...fields,
   });
   await store.insert("event_participants", { event_id: ev.id, organization_id: c.organization_id, user_id: c.user_id, role: "organizer", status: "accepted", responded_at: null });
@@ -77,7 +85,7 @@ export async function importExternalEvent(store: Store, c: CalendarConnection, x
     external_updated_at: x.updated,
     status: "synced",
     error: null,
-    last_synced_at: new Date().toISOString(),
+    last_synced_at: nowIso,
   });
-  return true;
+  return { eventId: ev.id, created: true };
 }

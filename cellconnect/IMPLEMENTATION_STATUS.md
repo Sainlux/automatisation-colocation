@@ -1,14 +1,36 @@
 # État d'implémentation
 
-Dernière vérification complète : `npm run check` (types, lint, **97 tests Vitest dans 10 fichiers**), `npm run build`, `npm run test:e2e` (**8 tests Playwright**, mobile + ordinateur) en mode local **et** contre Supabase, `npm run test:supabase` (**8 tests d'intégration** contre un vrai Supabase + un vrai serveur SMTP) : tout passe.
+## Ce qui a été vérifié, et où
 
-## ✅ Implémenté et testé en conditions réelles
+**Dernière vérification (17 novembre 2026), dans l'environnement de développement, sans aucun service externe :**
+
+- `npx tsc --noEmit` (types), `npx eslint` : sans erreur.
+- `npx vitest run` : **16 fichiers, 196 tests unitaires**, tous passés (dont `tests/unit/import-ux.test.ts` : adresse de retour sûre après connexion, récapitulatif d'import, dates passées décochées).
+- **Playwright (`tests/e2e/parcours.spec.ts`, 8 scénarios × mobile + ordinateur) : non exécuté lors de cette vérification.** Les navigateurs de Playwright ne sont pas installés ici et le build de production n'a pas été relancé (d'autres modifications étaient en cours en parallèle). Seule la liste des tests a été contrôlée (`npx playwright test --list` : 16 tests). À lancer avec `npm run build && npm run test:e2e` (ou `E2E_CHROMIUM_PATH=/chemin/vers/chrome` si seul un Chrome système est disponible).
+- **Rien n'a été testé contre un vrai Supabase, un vrai OpenAI ni un vrai serveur SMTP.** Les tests d'intégration `tests/integration/supabase.test.ts` (`npm run test:supabase`) existent mais n'ont pas été exécutés ici : ils demandent un Supabase et un SMTP de test (ex. `supabase start` + Mailpit).
+
+Les colonnes « Preuve » ci-dessous indiquent quel test couvre chaque fonction. Celles qui citent `test:supabase` ou un service réel n'ont **pas** été revérifiées lors de cette passe : elles décrivent ce que ces tests vérifient quand on les lance.
+
+### Scénarios de bout en bout (Playwright, mode local, horloge serveur figée par `TEST_NOW=2026-11-10T12:00:00Z`)
+
+| Scénario | Ce qui est vérifié |
+|---|---|
+| Visiteur non connecté | Redirection vers `/connexion`, API en 401 |
+| Parcours complet | Inscription → message collé → 5 dates → conflit → récapitulatif → ajout → résolution → export .ics |
+| Invitation par e-mail (sans SMTP) | Lien renvoyé à l'organisateur ; inscription sans champ « église » ; réponse « Je participe » |
+| Partage vers l'application | Web Share Target + service worker (Chromium) |
+| Suppression du compte | Mot faux refusé (bouton inactif, API 400), puis `SUPPRIMER` : session fermée, connexion impossible |
+| Date déplacée d'une série | La fiche de la date montre « Date déplacée » et le nouvel horaire |
+| Agenda en vue liste | Tab atteint l'événement, Entrée ouvre sa fiche |
+| Double appui sur « Ajouter » | Un seul jeu de 5 événements créé |
+
+## ✅ Implémenté et couvert par des tests automatisés
 
 | Fonction | Preuve |
 |---|---|
-| **Mode production Supabase** : Auth (inscription, connexion), PostgreSQL via PostgREST, Storage privé, migrations | E2E complets contre Supabase local (`supabase start`), `test:supabase` |
+| **Mode production Supabase** : Auth (inscription, connexion), PostgreSQL via PostgREST, Storage privé, migrations | `test:supabase` (non exécuté ici), `migrations.test.ts` (lecture statique des migrations) |
 | **RLS** avec de vrais jetons utilisateurs : isolation entre organisations, écriture refusée ailleurs, participant incapable d'annuler un événement collectif via l'API REST directe | `test:supabase`, `migrations.test.ts` |
-| **E-mails réels** (SMTP) : invitations, désistement, annulation, liens d'invitation | `test:supabase` (Mailpit : messages reçus et lus) |
+| **E-mails** (SMTP) : invitations, désistement, annulation, liens d'invitation | `test:supabase` avec Mailpit (non exécuté ici) ; envoi simulé dans les tests unitaires |
 | Inscription, connexion, sessions, redirections, 401, CSRF | E2E, `core.test.ts` |
 | Texte collé → 5 formations (capture WhatsApp), année justifiée et confirmée, aucun lien inventé | E2E, `text-parser.test.ts`, `core.test.ts` |
 | Vérification d'agenda avant création, choix par conflit, récapitulatif, création idempotente | E2E, `agents.test.ts` |
@@ -41,7 +63,8 @@ Les tests vérifient les requêtes exactes envoyées (URL, méthode, en-têtes, 
 | **Fournisseur d'e-mails entrants** | Formats Postmark (JSON), Mailgun et SendGrid (multipart) | Relier un domaine (MX) au fournisseur choisi |
 
 ## 🟡 Implémenté, non couvert par un test automatisé
-- Pages : modification d'événement, rappels personnalisés, groupes et membres, historique, administration, export / suppression de compte, changement d'organisation (compilées ; parcours principaux vérifiés manuellement).
+- Pages : modification d'événement, rappels personnalisés, groupes et membres, historique, administration, export de compte, changement d'organisation (y compris la bascule automatique quand on ouvre un import d'une autre église).
+- Reprise de l'écran de vérification après rechargement (`?etape=conflits|recap`, choix gardés dans `sessionStorage`) : seule l'étape « recap » est contrôlée par le scénario « double appui ».
 - Affichage effectif d'une notification push par un navigateur réel (nécessite l'accès aux serveurs push de Google/Mozilla/Apple).
 
 ## Limites assumées

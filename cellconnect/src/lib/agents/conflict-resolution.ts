@@ -2,7 +2,8 @@ import { z } from "zod";
 import type { Ctx } from "@/lib/context";
 import { audit } from "@/lib/audit";
 import { badRequest, notFound } from "@/lib/errors";
-import { canEditEvent } from "@/lib/auth/permissions";
+import { canEditEventWith } from "@/lib/auth/permissions";
+import type { Filter } from "@/lib/db/store";
 import { formatRangeFr } from "@/lib/time";
 import type { CalendarConflict, EventRow } from "@/lib/types";
 import { withdrawFromEvent } from "./calendar-agent";
@@ -32,49 +33,57 @@ async function loadOwnConflict(ctx: Ctx, conflictId: string) {
   return c;
 }
 
-export async function listConflicts(ctx: Ctx, status: CalendarConflict["status"][] = ["open", "postponed"]) {
-  const rows = await ctx.store.select("calendar_conflicts", {
-    where: [["user_id", "eq", ctx.userId], ["organization_id", "eq", ctx.orgId], ["status", "in", status]],
-    order: [{ column: "occurrence_a_start", ascending: true }],
-    limit: 200,
-  });
+export async function listConflicts(ctx: Ctx, status: CalendarConflict["status"][] = ["open", "postponed"], opts: { eventId?: string } = {}) {
+  const base: Filter<CalendarConflict>[] = [["user_id", "eq", ctx.userId], ["organization_id", "eq", ctx.orgId], ["status", "in", status]];
+  const query = (extra: Filter<CalendarConflict>[]) =>
+    ctx.store.select("calendar_conflicts", { where: [...base, ...extra], order: [{ column: "occurrence_a_start", ascending: true }], limit: 200 });
+  // Filtre par événement : côté A ou côté B (deux requêtes indexées, fusionnées).
+  const rows = opts.eventId
+    ? (await Promise.all([query([["event_a_id", "eq", opts.eventId]]), query([["event_b_id", "eq", opts.eventId]])]))
+        .flat()
+        .sort((x, y) => x.occurrence_a_start.localeCompare(y.occurrence_a_start))
+        .slice(0, 200)
+    : await query([]);
   const ids = [...new Set(rows.flatMap((r) => [r.event_a_id, r.event_b_id]))];
-  const events = ids.length ? await ctx.store.select("events", { where: [["id", "in", ids]] }) : [];
-  const groups = await ctx.store.select("groups", { where: [["organization_id", "eq", ctx.orgId]] });
+  const [events, groups, memberships, parts] = await Promise.all([
+    ids.length ? ctx.store.select("events", { where: [["id", "in", ids]] }) : Promise.resolve([]),
+    ctx.store.select("groups", { where: [["organization_id", "eq", ctx.orgId]] }),
+    ctx.store.select("group_members", { where: [["user_id", "eq", ctx.userId]] }),
+    ids.length ? ctx.store.select("event_participants", { where: [["event_id", "in", ids]] }) : Promise.resolve([]),
+  ]);
   const creatorIds = [...new Set(events.map((e) => e.created_by))];
   const creators = creatorIds.length ? await ctx.store.select("profiles", { where: [["id", "in", creatorIds]] }) : [];
   const byId = new Map(events.map((e) => [e.id, e]));
   const gName = new Map(groups.map((g) => [g.id, g.name]));
   const cName = new Map(creators.map((p) => [p.id, p.display_name]));
-  const parts = ids.length ? await ctx.store.select("event_participants", { where: [["event_id", "in", ids]] }) : [];
+  const myRoles = new Map(memberships.map((m) => [m.group_id, m.role]));
 
-  const shape = async (e: EventRow | undefined, start: string, end: string) =>
+  const shape = (e: EventRow | undefined, start: string, end: string) =>
     e && {
       id: e.id,
       title: e.title,
       start,
       end,
       timezone: e.timezone,
+      createdAt: e.created_at,
       groupName: e.group_id ? (gName.get(e.group_id) ?? null) : null,
       organizer: cName.get(e.created_by) ?? "—",
       isOrganizer: e.created_by === ctx.userId,
-      canEdit: await canEditEvent(ctx, e),
+      canEdit: canEditEventWith(ctx, e, myRoles),
       otherParticipants: parts.filter((p) => p.event_id === e.id && p.user_id !== ctx.userId && ["accepted", "tentative", "invited"].includes(p.status)).length,
       location: e.location,
       meetingUrl: e.meeting_url,
     };
 
-  return Promise.all(
-    rows.map(async (c) => ({
-      id: c.id,
-      status: c.status,
-      kind: c.kind,
-      overlapMinutes: c.overlap_minutes,
-      detectedAt: c.detected_at,
-      a: await shape(byId.get(c.event_a_id), c.occurrence_a_start, c.occurrence_a_end),
-      b: await shape(byId.get(c.event_b_id), c.occurrence_b_start, c.occurrence_b_end),
-    })),
-  );
+  return rows.map((c) => ({
+    id: c.id,
+    status: c.status,
+    kind: c.kind,
+    overlapMinutes: c.overlap_minutes,
+    detectedAt: c.detected_at,
+    a: shape(byId.get(c.event_a_id), c.occurrence_a_start, c.occurrence_a_end),
+    b: shape(byId.get(c.event_b_id), c.occurrence_b_start, c.occurrence_b_end),
+  }));
 }
 
 export async function resolveConflict(ctx: Ctx, conflictId: string, input: ResolveInput) {

@@ -4,6 +4,8 @@ import { audit } from "@/lib/audit";
 import { badRequest, forbidden, notFound } from "@/lib/errors";
 import { assertCanManageGroup, canManageGroup, hasOrgRole, isOrgAdmin, loadGroupInOrg } from "@/lib/auth/permissions";
 import { UniqueViolationError } from "@/lib/db/store";
+import { env } from "@/lib/env";
+import { inviteByEmail } from "./invitation-agent";
 import type { GroupRole, OrgRole } from "@/lib/types";
 
 /** GroupAgent — organisations, groupes, membres et rôles. */
@@ -21,16 +23,18 @@ export async function listGroups(ctx: Ctx) {
   const groups = await ctx.store.select("groups", { where: [["organization_id", "eq", ctx.orgId]], order: [{ column: "name" }] });
   const memberships = await ctx.store.select("group_members", { where: [["organization_id", "eq", ctx.orgId]] });
   const mine = new Map(memberships.filter((m) => m.user_id === ctx.userId).map((m) => [m.group_id, m.role]));
-  return Promise.all(
-    groups
-      .filter((g) => isOrgAdmin(ctx) || mine.has(g.id))
-      .map(async (g) => ({
-        ...g,
-        myRole: mine.get(g.id) ?? null,
-        memberCount: memberships.filter((m) => m.group_id === g.id).length,
-        canManage: await canManageGroup(ctx, g),
-      })),
-  );
+  const admin = isOrgAdmin(ctx);
+  const counts = new Map<string, number>();
+  for (const m of memberships) counts.set(m.group_id, (counts.get(m.group_id) ?? 0) + 1);
+  return groups
+    .filter((g) => admin || mine.has(g.id))
+    .map((g) => ({
+      ...g,
+      myRole: mine.get(g.id) ?? null,
+      memberCount: counts.get(g.id) ?? 0,
+      // Même règle que canManageGroup, sans requête par groupe.
+      canManage: admin || mine.get(g.id) === "leader",
+    }));
 }
 
 export async function createGroup(ctx: Ctx, input: z.infer<typeof groupInputSchema>) {
@@ -78,10 +82,18 @@ export async function listGroupMembers(ctx: Ctx, groupId: string) {
   if (!isOrgAdmin(ctx) && !members.some((m) => m.user_id === ctx.userId)) throw notFound("Groupe introuvable.");
   const profiles = members.length ? await ctx.store.select("profiles", { where: [["id", "in", members.map((m) => m.user_id)]] }) : [];
   const byId = new Map(profiles.map((p) => [p.id, p]));
+  // Les e-mails ne sont visibles que des administrateurs et des responsables du groupe.
+  const canManage = isOrgAdmin(ctx) || (await canManageGroup(ctx, g));
   return {
     group: g,
-    canManage: await canManageGroup(ctx, g),
-    members: members.map((m) => ({ id: m.id, userId: m.user_id, role: m.role, name: byId.get(m.user_id)?.display_name ?? "—", email: byId.get(m.user_id)?.email ?? null })),
+    canManage,
+    members: members.map((m) => ({
+      id: m.id,
+      userId: m.user_id,
+      role: m.role,
+      name: byId.get(m.user_id)?.display_name ?? "—",
+      email: canManage ? (byId.get(m.user_id)?.email ?? null) : null,
+    })),
   };
 }
 
@@ -120,6 +132,8 @@ export async function removeGroupMember(ctx: Ctx, groupId: string, memberId: str
 // --- Organisation -----------------------------------------------------------
 
 export async function listOrgMembers(ctx: Ctx) {
+  // Un invité (personne extérieure venue pour un événement) ne voit pas l'annuaire de l'église.
+  if (ctx.orgRole === "guest") return [];
   const members = await ctx.store.select("organization_members", { where: [["organization_id", "eq", ctx.orgId]] });
   const profiles = members.length ? await ctx.store.select("profiles", { where: [["id", "in", members.map((m) => m.user_id)]] }) : [];
   const byId = new Map(profiles.map((p) => [p.id, p]));
@@ -133,19 +147,18 @@ export async function listOrgMembers(ctx: Ctx) {
   }));
 }
 
-export async function addOrgMemberByEmail(ctx: Ctx, email: string, role: OrgRole) {
+/**
+ * Ajout d'un membre par e-mail : passe TOUJOURS par une invitation (lien à
+ * usage unique), que la personne ait déjà un compte ou non. La réponse est
+ * identique dans les deux cas : on ne peut pas savoir si une adresse est inscrite.
+ */
+export async function addOrgMemberByEmail(ctx: Ctx, email: string, role: OrgRole, appUrl: string = env.appUrl) {
   if (!isOrgAdmin(ctx)) throw forbidden("Réservé aux administrateurs de l'organisation.");
-  if (role === "super_admin" && ctx.orgRole !== "super_admin") throw forbidden("Rôle non attribuable.");
-  const [profile] = await ctx.store.select("profiles", { where: [["email", "eq", email.trim().toLowerCase()]] });
-  if (!profile) throw badRequest("Aucun compte CellConnect avec cet e-mail. La personne doit d'abord créer son compte.");
-  try {
-    const m = await ctx.store.insert("organization_members", { organization_id: ctx.orgId, user_id: profile.id, role });
-    await audit(ctx.store, { orgId: ctx.orgId, actorId: ctx.userId, action: "org.member_added", entityType: "organization", entityId: ctx.orgId, metadata: { userId: profile.id, role } });
-    return m;
-  } catch (e) {
-    if (e instanceof UniqueViolationError) throw badRequest("Cette personne est déjà membre.");
-    throw e;
-  }
+  if (role === "super_admin") throw forbidden("Rôle non attribuable.");
+  const [r] = await inviteByEmail(ctx, { emails: [email], orgRole: role }, appUrl);
+  if (!r) throw badRequest("Adresse e-mail invalide.");
+  // Le lien n'est renvoyé que si l'e-mail n'a pas pu partir : l'administrateur le transmet lui-même.
+  return { invited: true as const, emailSent: r.status === "email_sent" || r.status === "already_member", link: r.link ?? null };
 }
 
 export async function updateOrgMemberRole(ctx: Ctx, memberId: string, role: OrgRole) {

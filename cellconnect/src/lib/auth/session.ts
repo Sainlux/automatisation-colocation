@@ -7,7 +7,8 @@ import type { Ctx } from "@/lib/context";
 import { unauthorized } from "@/lib/errors";
 import { smtpSender } from "@/lib/channels/email";
 import { hmac, safeEqual } from "./crypto";
-import { bootstrapAccount } from "./account";
+import { serverNow } from "@/lib/clock";
+import { bootstrapAccount, createPersonalOrganization } from "./account";
 
 /**
  * Sessions.
@@ -75,7 +76,10 @@ export async function getSessionUser(): Promise<{ id: string; email: string } | 
     return data.user ? { id: data.user.id, email: data.user.email ?? "" } : null;
   }
   const s = verifySession((await cookies()).get(SESSION_COOKIE)?.value);
-  return s ? { id: s.uid, email: s.email } : null;
+  if (!s) return null;
+  // Un cookie encore valide d'un compte supprimé ne doit plus rien ouvrir.
+  const user = await getStore().get("local_users", s.uid);
+  return user ? { id: user.id, email: user.email } : null;
 }
 
 export async function setActiveOrg(orgId: string) {
@@ -88,9 +92,19 @@ export async function requireCtx(): Promise<Ctx> {
   if (!user) throw unauthorized();
   const store = getStore();
   let profile = await store.get("profiles", user.id);
-  if (!profile) profile = await bootstrapAccount(store, { id: user.id, email: user.email, name: user.email.split("@")[0] });
-  const memberships = await store.select("organization_members", { where: [["user_id", "eq", user.id]], order: [{ column: "created_at" }] });
-  if (memberships.length === 0) throw unauthorized("Aucune organisation associée à ce compte.");
+  if (!profile) {
+    // Mode local : getSessionUser a déjà vérifié local_users ; on revérifie avant
+    // de recréer quoi que ce soit (jamais de compte fantôme pour un utilisateur effacé).
+    if (env.dataBackend !== "supabase" && !(await store.get("local_users", user.id))) throw unauthorized();
+    profile = await bootstrapAccount(store, { id: user.id, email: user.email, name: user.email.split("@")[0] });
+  }
+  let memberships = await store.select("organization_members", { where: [["user_id", "eq", user.id]], order: [{ column: "created_at" }] });
+  if (memberships.length === 0) {
+    // Compte créé via une invitation puis refusée (ou retiré de toutes ses églises) :
+    // on lui donne son propre espace plutôt que de le bloquer.
+    await createPersonalOrganization(store, user.id);
+    memberships = await store.select("organization_members", { where: [["user_id", "eq", user.id]], order: [{ column: "created_at" }] });
+  }
   const wanted = (await cookies()).get(ORG_COOKIE)?.value;
   const m = memberships.find((x) => x.organization_id === wanted) ?? memberships[0];
   return {
@@ -100,7 +114,7 @@ export async function requireCtx(): Promise<Ctx> {
     orgId: m.organization_id,
     orgRole: m.role,
     timezone: profile.timezone,
-    now: () => new Date(),
+    now: serverNow,
     mailer: smtpSender,
   };
 }

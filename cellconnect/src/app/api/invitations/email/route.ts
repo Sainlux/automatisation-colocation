@@ -4,10 +4,11 @@ import { inviteByEmail } from "@/lib/agents/invitation-agent";
 import { env } from "@/lib/env";
 
 const schema = z.object({
-  emails: z.array(z.string().trim().email("E-mail invalide")).min(1).max(50),
+  emails: z.array(z.string().trim().email("Cette adresse e-mail semble incomplète (exemple : prenom@exemple.ch).")).min(1, "Indiquez au moins une adresse e-mail.").max(50, "50 adresses maximum à la fois."),
   eventId: z.string().uuid().nullish(),
   orgRole: z.enum(["org_admin", "group_leader", "member", "guest"]).nullish(),
+  groupId: z.string().uuid().nullish(),
 });
 
-/** Invitation par e-mail (lien à usage unique) — événement ou organisation. */
-export const POST = api(async ({ req, ctx }) => ({ results: await inviteByEmail(ctx, await body(req, schema), env.appUrl) }), { rateLimit: 20 });
+/** Invitation par e-mail (lien à usage unique) — événement, organisation, et éventuellement groupe. */
+export const POST = api(async ({ req, ctx }) => ({ results: await inviteByEmail(ctx, await body(req, schema), env.appUrl) }), { rateLimit: 10 });

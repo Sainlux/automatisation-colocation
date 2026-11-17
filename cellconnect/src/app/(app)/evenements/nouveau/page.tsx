@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
 import { DateTime } from "luxon";
-import { apiFetch, ApiError, newIdempotencyKey } from "@/lib/client/api";
+import { apiFetch, errorText, newIdempotencyKey } from "@/lib/client/api";
 import { useMe } from "@/components/app/session";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/states";
@@ -59,7 +59,7 @@ function NewEvent() {
                 refreshCounters();
                 router.push(`/evenements/${r.event.id}`);
               } catch (e) {
-                setError(e instanceof ApiError ? [e.message, ...((e.details as { message: string }[] | null) ?? []).map((d) => d.message)].join(" ") : "Enregistrement impossible.");
+                setError(errorText(e, "Enregistrement impossible pour le moment. Vérifiez votre connexion internet, puis réessayez."));
               }
             }}
           />

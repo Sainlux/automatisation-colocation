@@ -51,3 +51,19 @@ export function Alert({
     </div>
   );
 }
+
+/**
+ * Région d'annonce permanente pour les lecteurs d'écran (invisible à l'écran).
+ * Elle est montée une fois avec la page et seul son texte change : une région insérée
+ * en même temps que son texte n'est pas annoncée de façon fiable (VoiceOver sur iPhone).
+ * `tone="danger"` annonce sans attendre (role="alert"), sinon poliment (role="status").
+ *
+ * Exemple : <LiveRegion>{flash?.text}</LiveRegion>
+ */
+export function LiveRegion({ children, tone = "polite", className }: { children?: ReactNode; tone?: "polite" | "danger"; className?: string }) {
+  return (
+    <div role={tone === "danger" ? "alert" : "status"} aria-live={tone === "danger" ? "assertive" : "polite"} aria-atomic="true" className={cn("sr-only", className)}>
+      {children}
+    </div>
+  );
+}

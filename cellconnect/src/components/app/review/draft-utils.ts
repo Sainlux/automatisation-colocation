@@ -28,6 +28,8 @@ export interface Draft {
   confirmed: boolean;
   status?: "pending" | "created" | "rejected";
   eventId?: string | null;
+  /** Indication du serveur : `false` quand la date est déjà passée (proposée décochée). */
+  included?: boolean;
 }
 
 export interface DraftConflict {
@@ -217,7 +219,102 @@ export function cardIssues(d: Draft, grouped: ReadonlySet<string>) {
 export const defaultWithdrawMessage = (title: string, startIso: string, tz: string) =>
   `Bonjour, je vous informe que je ne pourrai pas participer à « ${title} » du ${fmtDay(startIso, tz)} à ${fmtTime(startIso, tz)} en raison d'un conflit d'agenda. Merci de votre compréhension.`;
 
-/** Préférence système « réduire les animations ». */
-export const prefersReducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** Préférences de mouvement : une seule source, src/components/app/motion.ts. */
+export { prefersReducedMotion, scrollBehavior } from "@/components/app/motion";
 
-export const scrollBehavior = (): ScrollBehavior => (prefersReducedMotion() ? "auto" : "smooth");
+/* ───────────── Dates déjà passées ───────────── */
+
+/** Avertissement « date passée » fourni par le serveur (ValidationAgent), s'il existe. */
+export const pastIssue = (d: Draft): Issue | undefined => d.issues.find((i) => i.field === "date" && i.severity === "warning" && /déjà passée/.test(i.message));
+
+/** Une date est proposée cochée, sauf si elle a été refusée ou si elle est déjà passée. */
+export const includedByDefault = (d: Draft) => d.status !== "rejected" && d.included !== false && !pastIssue(d);
+
+/* ───────────── Décisions et récapitulatif (fonctions pures) ───────────── */
+
+export interface Decision {
+  key: string;
+  action: "create" | "skip";
+  withdrawFrom: string[];
+  notifyOrganizers: boolean;
+  withdrawMessage: string | null;
+}
+
+/** Décisions envoyées à l'API pour les dates sélectionnées, d'après les choix faits pour chaque conflit. */
+export function buildDecisions(
+  selected: readonly Draft[],
+  conflicts: readonly DraftConflict[],
+  choices: Readonly<Record<string, Choice>>,
+  notify: Readonly<Record<string, boolean>>,
+  messages: Readonly<Record<string, string>>,
+): Decision[] {
+  const byKey = new Map<string, Decision>();
+  for (const d of selected) byKey.set(d.key, { key: d.key, action: "create", withdrawFrom: [], notifyOrganizers: false, withdrawMessage: null });
+  conflicts.forEach((c, i) => {
+    const id = conflictId(c, i);
+    const choice = choices[id] ?? "keep_both";
+    const dec = byKey.get(c.draftKey);
+    if (!dec) return;
+    if (choice === "skip_new") dec.action = "skip";
+    if (choice === "withdraw_existing" && c.existing) {
+      dec.withdrawFrom.push(c.existing.id);
+      dec.notifyOrganizers = dec.notifyOrganizers || Boolean(notify[id]);
+      if (messages[id]?.trim()) dec.withdrawMessage = messages[id].trim();
+    }
+  });
+  return [...byKey.values()];
+}
+
+export interface RecapData {
+  added: Draft[];
+  notAdded: { draft: Draft; conflictWith: string | null }[];
+  withdrawn: { id: string; title: string; start: string; end: string; notify: boolean }[];
+  kept: { id: string; draft: Draft; otherTitle: string }[];
+}
+
+/** Titre de « l'autre » engagement d'un conflit : événement existant, ou autre date du même message. */
+export function otherTitle(c: DraftConflict, byKey: ReadonlyMap<string, Draft>): string {
+  return c.existing?.title ?? byKey.get(c.otherDraftKey ?? "")?.title ?? "";
+}
+
+/**
+ * Listes du récapitulatif, calculées à partir des décisions.
+ * - `drafts` : toutes les dates de l'import ; `selected` : celles cochées ; `excluded` : celles décochées.
+ */
+export function buildRecap(input: {
+  drafts: readonly Draft[];
+  selected: readonly Draft[];
+  excluded: readonly Draft[];
+  conflicts: readonly DraftConflict[];
+  choices: Readonly<Record<string, Choice>>;
+  notify: Readonly<Record<string, boolean>>;
+  decisions: readonly Decision[];
+}): RecapData {
+  const { drafts, selected, excluded, conflicts, choices, notify, decisions } = input;
+  const byKey = new Map(drafts.map((d) => [d.key, d]));
+  const skippedFor = new Map<string, string>();
+  conflicts.forEach((c, i) => {
+    if (choices[conflictId(c, i)] === "skip_new") skippedFor.set(c.draftKey, otherTitle(c, byKey));
+  });
+  const selectedKeys = new Set(selected.map((d) => d.key));
+  // Après « Réessayer ces dates », les conflits des dates déjà créées ne concernent plus ce récapitulatif.
+  const pairs = conflicts.map((c, i) => ({ c, id: conflictId(c, i) })).filter(({ c }) => selectedKeys.has(c.draftKey));
+  return {
+    added: decisions.filter((d) => d.action === "create").flatMap((d) => byKey.get(d.key) ?? []),
+    notAdded: [...decisions.filter((d) => d.action === "skip").map((d) => d.key), ...excluded.map((d) => d.key)].flatMap((k) => {
+      const draft = byKey.get(k);
+      return draft ? [{ draft, conflictWith: skippedFor.get(k) || null }] : [];
+    }),
+    withdrawn: pairs.flatMap(({ c, id }) =>
+      choices[id] === "withdraw_existing" && c.existing
+        ? [{ id, title: c.existing.title, start: c.existing.start, end: c.existing.end, notify: Boolean(notify[id]) }]
+        : [],
+    ),
+    kept: pairs
+      .filter(({ id }) => (choices[id] ?? "keep_both") === "keep_both")
+      .flatMap(({ c, id }) => {
+        const draft = byKey.get(c.draftKey);
+        return draft ? [{ id, draft, otherTitle: otherTitle(c, byKey) }] : [];
+      }),
+  };
+}

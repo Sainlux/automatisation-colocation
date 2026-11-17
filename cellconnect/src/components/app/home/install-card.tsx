@@ -7,12 +7,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 
 const HIDDEN_KEY = "cc-install-card-hidden";
+/** « Plus tard » : la carte revient au bout de 7 jours. */
+export const INSTALL_SNOOZE_MS = 7 * 24 * 3600 * 1000;
 
 type Mode = "none" | "install" | "enable";
 
+/** Vrai si la carte a été repoussée il y a moins de 7 jours (valeur stockée : date du clic, en ms). */
+export function isSnoozed(stored: string | null, now = Date.now()) {
+  const at = stored ? Number(stored) : NaN;
+  return Number.isFinite(at) && now - at < INSTALL_SNOOZE_MS;
+}
+
 function isHidden() {
   try {
-    return localStorage.getItem(HIDDEN_KEY) === "1";
+    return isSnoozed(localStorage.getItem(HIDDEN_KEY));
   } catch {
     return false; // stockage indisponible (navigation privée) : la carte reste proposée
   }
@@ -40,7 +48,7 @@ const noSubscribe = () => () => undefined;
  * Sur iPhone, les rappels n'arrivent que si CellConnect est ajouté à l'écran d'accueil.
  * - Safari (hors écran d'accueil) : comment ajouter l'application.
  * - Application ouverte depuis l'écran d'accueil, notifications pas encore demandées : lien vers les réglages.
- * « Plus tard » masque la carte sur cet appareil.
+ * « Plus tard » masque la carte sur cet appareil pendant 7 jours.
  */
 export function InstallCard({ pushAvailable }: { pushAvailable: boolean }) {
   const getSnapshot = useCallback(() => detect(pushAvailable), [pushAvailable]);
@@ -50,7 +58,7 @@ export function InstallCard({ pushAvailable }: { pushAvailable: boolean }) {
   function later() {
     setDismissed(true);
     try {
-      localStorage.setItem(HIDDEN_KEY, "1");
+      localStorage.setItem(HIDDEN_KEY, String(Date.now()));
     } catch {
       // stockage indisponible : masqué pour cette visite seulement
     }

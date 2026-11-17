@@ -125,6 +125,7 @@ export async function pullEvents(store: Store, c: CalendarConnection, now = new 
   const { value = [] } = (await res.json()) as { value?: GraphEvent[] };
   const pushed = new Set((await store.select("calendar_sync_records", { where: [["connection_id", "eq", c.id], ["direction", "eq", "push"]] })).map((r) => r.external_id));
   let imported = 0;
+  const changedEventIds: string[] = [];
   for (const g of value) {
     if (pushed.has(g.id) || (g.seriesMasterId && pushed.has(g.seriesMasterId)) || g.transactionId) continue; // créés par CellConnect
     if (g.isAllDay || g.showAs === "free") continue;
@@ -138,10 +139,13 @@ export async function pullEvents(store: Store, c: CalendarConnection, now = new 
       timezone: "Europe/Zurich",
       cancelled: Boolean(g.isCancelled),
     };
-    if (await importExternalEvent(store, c, x, "outlook")) imported++;
+    const r = await importExternalEvent(store, c, x, "outlook", now);
+    if (!r) continue;
+    changedEventIds.push(r.eventId);
+    if (r.created) imported++;
   }
-  await store.update("calendar_connections", c.id, { last_synced_at: new Date().toISOString(), last_error: null, status: "active" });
-  return { imported, seen: value.length };
+  await store.update("calendar_connections", c.id, { last_synced_at: now.toISOString(), last_error: null, status: "active" });
+  return { imported, seen: value.length, changedEventIds };
 }
 
 /** Abonnement Microsoft Graph aux changements (≈ 3 jours, renouvelé par le worker). */

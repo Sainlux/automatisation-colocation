@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { CalendarPlus, Camera, ChevronRight, ClipboardPaste, FileText, ImagePlus, MessageSquareText, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
-import { apiFetch, ApiError, useApi } from "@/lib/client/api";
+import { ApiError, apiFetch, errorText, useApi } from "@/lib/client/api";
 import { isAdmin, useMe } from "@/components/app/session";
 import { prepareImage } from "@/components/app/image-prep";
 import { DEMO_MESSAGE } from "@/components/app/demo-message";
@@ -18,6 +18,7 @@ import { ErrorState, PageHeader, StaleBanner } from "@/components/ui/states";
 import { Badge } from "@/components/ui/badge";
 import { plural, relative } from "@/components/app/format";
 import { t } from "@/i18n";
+import { scrollBehavior } from "@/components/app/motion";
 import { cn } from "@/lib/utils";
 
 type Mode = "text" | "image" | "ics";
@@ -28,6 +29,12 @@ const MAX_IMAGE_MB = 10;
 const MAX_PDF_MB = 15;
 const MAX_ICS_MB = 1;
 const MB = 1024 * 1024;
+/** Longueur maximale du texte collé (même limite que le serveur). */
+const MAX_TEXT = 20000;
+/** À partir de cette longueur, on suggère de ne garder que la partie utile. */
+const TEXT_WARN = 18000;
+const TOO_LONG_HINT = "Gardez seulement la partie avec les dates.";
+const fmtCount = (n: number) => n.toLocaleString("fr-CH");
 
 const JOB_STATUS: Record<string, { label: string; tone: "neutral" | "warning" | "danger" | "success" }> = {
   pending: { label: "En attente", tone: "neutral" },
@@ -62,14 +69,14 @@ function Capture() {
   const example = sp.get("exemple") === "1";
   const modeParam = sp.get("mode");
 
+  // Par défaut : coller le message (le cas le plus courant, et sans IA).
   const [mode, setMode] = useState<Mode>(() => {
     if (sharedFiles || filesFallback || modeParam === "photo") return "image";
     if (modeParam === "ics") return "ics";
-    if (modeParam === "texte" || shared || example || !aiOn) return "text";
-    return "image";
+    return "text";
   });
   const [files, setFiles] = useState<{ file: File; preview: string | null }[]>([]);
-  const [text, setText] = useState(() => shared || (example ? DEMO_MESSAGE : ""));
+  const [text, setText] = useState(() => (shared || (example ? DEMO_MESSAGE : "")).slice(0, MAX_TEXT));
   const [demo, setDemo] = useState(!shared && example);
   const [ics, setIcs] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +85,7 @@ function Capture() {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Record<Mode, HTMLButtonElement | null>>({ text: null, image: null, ics: null });
   const jobs = useApi<{ jobs: Job[] }>("/api/extract-events");
 
@@ -178,9 +186,13 @@ function Capture() {
     try {
       const copied = await navigator.clipboard.readText();
       if (copied.trim()) {
-        setText(copied);
+        setText(copied.slice(0, MAX_TEXT));
         setDemo(false);
         setError(null);
+        if (copied.length > MAX_TEXT) {
+          setPasteHint(`Message trop long : seuls les ${fmtCount(MAX_TEXT)} premiers caractères ont été gardés. ${TOO_LONG_HINT}`);
+          textRef.current?.focus();
+        }
         return;
       }
       setPasteHint("Rien à coller : copiez d'abord le message dans WhatsApp.");
@@ -217,6 +229,13 @@ function Capture() {
     selectMode(tabs[target].id, true);
   }
 
+  // Une erreur est amenée à l'écran et reçoit le focus : elle n'est jamais cachée sous la barre d'action.
+  useEffect(() => {
+    if (!error) return;
+    errorRef.current?.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
+    errorRef.current?.focus({ preventScroll: true });
+  }, [error]);
+
   const imageBlocked = mode === "image" && !aiOn;
   const ready = mode === "text" ? Boolean(text.trim()) : mode === "image" ? aiOn && files.length > 0 : Boolean(ics);
 
@@ -238,13 +257,15 @@ function Capture() {
       if (e instanceof ApiError && (e.status === 413 || e.message === "Envoi trop volumineux.")) {
         setError(`Ces fichiers sont trop lourds ensemble. Retirez-en un, ou utilisez des captures d'écran plutôt que des photos.`);
       } else {
-        setError(e instanceof ApiError ? e.message : "Envoi impossible. Vérifiez votre connexion internet, puis réessayez.");
+        setError(errorText(e, "Envoi impossible. Vérifiez votre connexion internet, puis réessayez."));
       }
     }
   }
 
   const status = busy
     ? busy
+    : error
+      ? "Voir le message en haut de la page."
     : imageBlocked
       ? "Passez au texte pour continuer."
       : !ready
@@ -258,6 +279,10 @@ function Capture() {
           : mode === "ics"
             ? "Fichier prêt à lire."
             : "Message prêt à lire.";
+
+  const countHint = text.length
+    ? `${fmtCount(text.length)} / ${fmtCount(MAX_TEXT)} caractères${text.length >= TEXT_WARN ? ` · ${TOO_LONG_HINT}` : ""}`
+    : undefined;
 
   return (
     <div className="space-y-4">
@@ -295,6 +320,12 @@ function Capture() {
         })}
       </div>
 
+      {/* Erreur au-dessus de la carte : visible sans défiler, annoncée et focalisée. */}
+      <div ref={errorRef} tabIndex={-1} className="scroll-mt-20 focus:outline-none">
+        {/* Pas de région live ici : le focus déplacé suffit à faire lire l'erreur (évite une double annonce). */}
+        {error && <Alert tone="danger">{error}</Alert>}
+      </div>
+
       <Card id="capture-panel" role="tabpanel" aria-labelledby={`tab-${mode}`}>
         <CardContent className="space-y-4 pt-4 sm:pt-5">
           {mode === "text" && (
@@ -304,16 +335,20 @@ function Capture() {
                   <ClipboardPaste className="h-5 w-5" aria-hidden /> Coller le message copié
                 </Button>
               )}
-              <Field label="Texte du message" htmlFor="paste" hint={pasteHint ?? undefined}>
+              <Field label="Texte du message" htmlFor="paste" hint={pasteHint ?? countHint}>
                 <Textarea
                   ref={textRef}
                   id="paste"
                   value={text}
                   onChange={(e) => {
                     setText(e.target.value);
+                    setPasteHint(null);
+                    // Le message corrigé : l'ancienne erreur n'a plus lieu d'être.
+                    if (error) setError(null);
                     if (!e.target.value.trim()) setDemo(false);
                   }}
                   rows={6}
+                  maxLength={MAX_TEXT}
                   enterKeyHint="enter"
                   className="max-h-[40dvh]"
                   placeholder={"Ex. Formation Cellules « Zoom »\n1. Lundi 16 novembre 20h30 - 22h"}
@@ -345,7 +380,7 @@ function Capture() {
               )}
               {!aiOn ? (
                 <div className="space-y-3">
-                  <p className="text-sm">La lecture des photos n&apos;est pas encore activée. Copiez le texte du message.</p>
+                  <p className="text-sm">La lecture des photos n&apos;est pas activée sur ce service. Copiez plutôt le texte du message.</p>
                   <Button type="button" variant="outline" onClick={() => selectMode("text")}>
                     <MessageSquareText className="h-4 w-4" aria-hidden /> Passer au texte
                   </Button>
@@ -452,15 +487,9 @@ function Capture() {
         </CardContent>
       </Card>
 
-      {error && (
-        <Alert tone="danger" live>
-          {error}
-        </Alert>
-      )}
-
-      <ActionBar status={status}>
+      <ActionBar status={status} tone={error && !busy ? "danger" : "default"}>
         <Button size="lg" onClick={analyze} loading={Boolean(busy)} disabled={!ready} className="min-w-36">
-          Analyser
+          Trouver les dates
         </Button>
       </ActionBar>
 
@@ -484,7 +513,7 @@ function RecentJobs({ jobs }: { jobs: ReturnType<typeof useApi<{ jobs: Job[] }>>
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Analyses récentes</CardTitle>
+        <CardTitle>Messages importés récemment</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         {error && <StaleBanner onRetry={reload} />}
@@ -494,7 +523,7 @@ function RecentJobs({ jobs }: { jobs: ReturnType<typeof useApi<{ jobs: Job[] }>>
             return (
               <li key={j.id}>
                 <Link href={`/capture/${j.id}`} className="flex min-h-12 items-center gap-2 py-2 text-sm hover:underline">
-                  <span className="min-w-0 flex-1 first-letter:uppercase">Import {relative(j.created_at)}</span>
+                  <span className="min-w-0 flex-1">Importé {relative(j.created_at)}</span>
                   <Badge tone={s.tone}>{s.label}</Badge>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />
                 </Link>

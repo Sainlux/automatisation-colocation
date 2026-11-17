@@ -8,12 +8,13 @@ import interactionPlugin, { type DateClickArg } from "@fullcalendar/interaction"
 import luxonPlugin from "@fullcalendar/luxon3";
 import frLocale from "@fullcalendar/core/locales/fr";
 import type { DatesSetArg, EventContentArg, EventSourceFuncArg } from "@fullcalendar/core";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { apiFetch } from "@/lib/client/api";
+import { apiFetch, errorText } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { EventBadges, eventHref, type CalItem } from "./event-list";
-import { frTypo } from "./format";
+import { frTypo } from "./text";
 
 const MOBILE_QUERY = "(max-width: 640px)";
 const MOBILE_VIEWS = ["listMonth", "listDay", "timeGridDay", "dayGridMonth"];
@@ -40,30 +41,108 @@ function writeSaved(s: Saved) {
   }
 }
 
-/** Texte lisible sur la couleur d'un groupe (choisie librement) : blanc ou presque noir selon la luminance. */
-function readableOn(hex: string | null): string | undefined {
-  const m = hex && /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return undefined;
-  const n = parseInt(m[1], 16);
+const DARK_TEXT = "#12110f";
+const LIGHT_TEXT = "#ffffff";
+
+/** Luminance relative (WCAG) d'une couleur #rrggbb. */
+function luminance(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
   const lin = (c: number) => {
     const v = c / 255;
-    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
   };
-  const l = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-  return l > 0.179 ? "#12110f" : "#ffffff";
+  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
 }
 
-/** Vue liste : titre lisible et pastilles (conflit, visio, lieu…), qui passent à la ligne à 320 px. */
+const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+
+/** Texte lisible sur la couleur d'un groupe (choisie librement) : celle des deux encres qui contraste le plus. */
+export function readableOn(hex: string | null): string | undefined {
+  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return undefined;
+  const bg = luminance(hex);
+  return contrast(bg, luminance(DARK_TEXT)) >= contrast(bg, luminance(LIGHT_TEXT)) ? DARK_TEXT : LIGHT_TEXT;
+}
+
+/**
+ * Mention écrite en tête du titre : l'état ne repose jamais sur la seule couleur
+ * (bordure orange, hachures), il est aussi lu par les lecteurs d'écran.
+ */
+function eventPrefix(x: Ext): string {
+  if (x.status === "cancelled") return "";
+  if (x.hasConflict) return "Conflit · ";
+  if (x.myStatus === "invited") return "Invitation · ";
+  return "";
+}
+
+/**
+ * Vue liste : chaque événement est un vrai lien (atteint avec Tab), avec un titre lisible
+ * et des pastilles (conflit, visio, lieu…) qui passent à la ligne à 320 px.
+ */
 function ListEventContent({ event }: EventContentArg) {
   const x = event.extendedProps as Ext;
+  const prefix = eventPrefix(x);
   return (
-    <span className="block min-w-0">
-      <span className={cn("block font-medium wrap-anywhere", x.status === "cancelled" && "text-muted line-through")}>{frTypo(event.title)}</span>
+    <Link href={eventHref(x, "agenda")} className="block min-w-0 rounded-md text-fg no-underline">
+      <span className={cn("block font-medium wrap-anywhere", x.status === "cancelled" && "text-muted line-through")}>
+        {prefix && <span className="sr-only">{prefix}</span>}
+        {frTypo(event.title)}
+      </span>
       {x.groupName && <span className="block text-xs text-muted wrap-anywhere">{x.groupName}</span>}
       <EventBadges item={x} className="mt-1" />
+    </Link>
+  );
+}
+
+/** Vues Semaine et Jour : heure puis titre, précédé de la mention « Conflit · » ou « Invitation · ». */
+function TimeGridEventContent({ event, timeText }: EventContentArg) {
+  const prefix = eventPrefix(event.extendedProps as Ext);
+  return (
+    <div className="fc-event-main-frame">
+      {timeText && <div className="fc-event-time">{timeText}</div>}
+      <div className="fc-event-title-container">
+        <div className="fc-event-title fc-sticky">
+          {prefix && <span className="font-semibold">{prefix}</span>}
+          {frTypo(event.title)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Vue Mois : pastille (masquée par CSS quand FullCalendar affiche un bloc), heure, titre et mention.
+ * La pastille reprend la couleur de l'événement, comme le rendu par défaut.
+ */
+function DayGridEventContent({ event, timeText, borderColor, backgroundColor }: EventContentArg) {
+  const prefix = eventPrefix(event.extendedProps as Ext);
+  return (
+    <span className="ev-frame">
+      <span aria-hidden className="fc-daygrid-event-dot" style={{ borderColor: borderColor || backgroundColor || undefined }} />
+      {timeText && <span className="fc-event-time">{timeText}</span>}
+      <span className="fc-event-title">
+        {prefix && <span className="font-semibold">{prefix}</span>}
+        {frTypo(event.title)}
+      </span>
     </span>
   );
 }
+
+const FEMININE = /semaine|année/i;
+/** Libellés d'accessibilité de FullCalendar (la locale « fr » ne les fournit pas). */
+const A11Y_HINTS = {
+  buttonHints: {
+    prev: (unit: string) => `${unit} ${FEMININE.test(unit) ? "précédente" : "précédent"}`,
+    next: (unit: string) => `${unit} ${FEMININE.test(unit) ? "suivante" : "suivant"}`,
+    today: (unit: string) => (/jour/i.test(unit) ? "Aujourd'hui" : FEMININE.test(unit) ? `Cette ${unit.toLowerCase()}` : `Ce ${unit.toLowerCase()}`),
+  },
+  viewHint: (buttonText: string) => `Vue ${buttonText.toLowerCase()}`,
+  navLinkHint: "Voir le $0",
+  moreLinkHint: (n: number) => (n === 1 ? "Voir un autre événement" : `Voir ${n} autres événements`),
+  moreLinkText: (n: number) => (n === 1 ? "+1 autre" : `+${n} autres`),
+  closeHint: "Fermer",
+  timeHint: "Heure",
+  eventHint: "Événement",
+};
 
 /**
  * Agenda (FullCalendar). La source d'événements est stable : changer de calendrier affiché
@@ -124,12 +203,12 @@ export function CalendarView({ scope, timezone, onError, refreshKey = 0 }: { sco
           borderColor: e.hasConflict && !cancelled ? "var(--warning)" : (e.color ?? undefined),
           // Sans cela, le texte suit --primary-fg (presque noir en mode sombre), illisible sur une couleur de groupe foncée.
           textColor: cancelled ? "var(--muted)" : readableOn(e.color),
-          classNames: [e.hasConflict && !cancelled ? "ev-conflict" : "", cancelled ? "line-through" : "", e.myStatus === "invited" ? "opacity-70" : ""].filter(Boolean),
+          classNames: [e.hasConflict && !cancelled ? "ev-conflict" : "", cancelled ? "line-through" : "", e.myStatus === "invited" && !cancelled ? "ev-invited" : ""].filter(Boolean),
           extendedProps: ext,
         };
       });
     } catch (err) {
-      onErrorRef.current((err as Error).message);
+      onErrorRef.current(errorText(err, "Les événements n'ont pas pu être lus. Réessayez."));
       return [];
     }
   }, []);
@@ -148,8 +227,10 @@ export function CalendarView({ scope, timezone, onError, refreshKey = 0 }: { sco
     () => ({
       listMonth: { eventContent: ListEventContent },
       listDay: { eventContent: ListEventContent },
+      timeGridWeek: { eventContent: TimeGridEventContent },
+      timeGridDay: { eventContent: TimeGridEventContent },
       // Mois sur mobile : deux pastilles par jour au plus, « +n » ouvre la liste du jour.
-      dayGridMonth: mobile ? { dayMaxEvents: 2, eventDisplay: "list-item", moreLinkClick: "listDay" } : { dayMaxEvents: 3 },
+      dayGridMonth: { eventContent: DayGridEventContent, ...(mobile ? { dayMaxEvents: 2, eventDisplay: "list-item", moreLinkClick: "listDay" } : { dayMaxEvents: 3 }) },
     }),
     [mobile],
   );
@@ -182,6 +263,7 @@ export function CalendarView({ scope, timezone, onError, refreshKey = 0 }: { sco
         headerToolbar={mobile ? { left: "", center: "title", right: "prev,today,next" } : { left: "prev,next today", center: "title", right: "dayGridMonth,timeGridWeek,timeGridDay,listMonth" }}
         footerToolbar={mobile ? { center: "listMonth,timeGridDay,dayGridMonth" } : false}
         buttonText={{ today: "Aujourd'hui", month: "Mois", week: "Semaine", day: "Jour", list: "Liste" }}
+        {...A11Y_HINTS}
         views={views}
         eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
         slotLabelFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
@@ -195,6 +277,8 @@ export function CalendarView({ scope, timezone, onError, refreshKey = 0 }: { sco
         loading={setLoading}
         datesSet={onDatesSet}
         eventClick={(info) => {
+          // Vue liste : le lien de l'événement fait déjà la navigation.
+          if ((info.jsEvent.target as Element | null)?.closest?.("a[href]")) return;
           info.jsEvent.preventDefault();
           const x = info.event.extendedProps as Ext;
           router.push(eventHref(x, "agenda"));

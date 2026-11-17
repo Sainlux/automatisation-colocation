@@ -1,5 +1,5 @@
 import { api } from "@/lib/http/api";
-import { badRequest } from "@/lib/errors";
+import { AppError, badRequest } from "@/lib/errors";
 import { startExtraction, type IncomingItem } from "@/lib/agents/orchestrator";
 import { env } from "@/lib/env";
 
@@ -12,9 +12,12 @@ import { env } from "@/lib/env";
  */
 export const POST = api(
   async ({ req, ctx }) => {
-    const len = Number(req.headers.get("content-length") ?? 0);
+    // Taille annoncée obligatoire : on refuse avant de lire le corps (pas de flux sans limite).
+    const declared = req.headers.get("content-length");
+    const len = declared === null ? NaN : Number(declared);
+    if (!Number.isFinite(len) || len < 0) throw new AppError(411, "length_required", "La taille de l'envoi est inconnue. Rechargez la page, puis réessayez.");
     const max = env.uploads.maxPdfBytes * env.uploads.maxFilesPerAnalysis;
-    if (len > max) throw badRequest("Envoi trop volumineux.");
+    if (len > max) throw new AppError(413, "too_large", "Envoi trop volumineux. Envoyez moins de fichiers à la fois.");
     let form: FormData;
     try {
       form = await req.formData();

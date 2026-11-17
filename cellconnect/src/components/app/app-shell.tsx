@@ -19,15 +19,14 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { apiFetch, useApi } from "@/lib/client/api";
+import { apiFetch, clearApiCache } from "@/lib/client/api";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
-import { ErrorState, ListSkeleton, Skeleton } from "@/components/ui/states";
 import { LogoMark, Wordmark } from "./logo";
-import { plural } from "./format";
+import { plural } from "./text";
 import { isAdmin, MeContext, type Counters, type Me } from "./session";
 
 type CounterKey = keyof Counters;
@@ -104,12 +103,33 @@ function CountBadge({ n, tone, className }: { n: number; tone: "danger" | "warni
 const counterTone = (key: CounterKey) => (key === "conflicts" ? "warning" : "danger");
 
 const ZERO: Counters = { notifications: 0, conflicts: 0, invitations: 0 };
+const AGENDA_HREF = ITEMS.calendar.href;
+/** Précharge le code de l'agenda (FullCalendar) dès que l'on vise l'onglet, avant le clic. */
+const preloadAgenda = () => void import("@/components/app/calendar-view").catch(() => undefined);
+/** Propriétés à poser sur un lien de navigation : préchargement de l'agenda au toucher ou au focus. */
+const preloadProps = (href: string) => (href === AGENDA_HREF ? { onPointerDown: preloadAgenda, onFocus: preloadAgenda } : {});
 /** Délai minimal entre deux rafraîchissements des compteurs au retour sur l'application. */
 const WAKE_THROTTLE_MS = 60_000;
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+/**
+ * Cadre de l'application. Le profil (initialMe) est résolu par le layout serveur :
+ * les pages sont montées immédiatement, sans attendre /api/me.
+ */
+export function AppShell({ initialMe, children }: { initialMe: Me; children: React.ReactNode }) {
   const path = usePathname();
-  const { data: me, error, reload } = useApi<Me>("/api/me");
+  const [me, setMe] = useState<Me>(initialMe);
+  // Nouveau profil fourni par le serveur (router.refresh, changement d'église) : il remplace l'ancien.
+  const [seenInitial, setSeenInitial] = useState(initialMe);
+  if (seenInitial !== initialMe) {
+    setSeenInitial(initialMe);
+    setMe(initialMe);
+  }
+  // Relit le profil après un changement (paramètres) ; un échec garde le profil affiché.
+  const reload = useCallback(() => {
+    apiFetch<Me>("/api/me")
+      .then(setMe)
+      .catch(() => undefined);
+  }, []);
   const [counters, setCountersState] = useState<Counters>(ZERO);
   const [moreOpen, setMoreOpen] = useState(false);
   const focused = isFocusedFlow(path);
@@ -126,12 +146,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => undefined);
   }, []);
 
-  // Le chemin courant est lu au moment du chargement, sans relancer l'effet à chaque navigation.
-  const pathRef = useRef(path);
-  useEffect(() => {
-    pathRef.current = path;
-  }, [path]);
-
   const [tick, setTick] = useState(0);
   const refreshCounters = useCallback(() => setTick((n) => n + 1), []);
   const setCounters = useCallback((patch: Partial<Counters>) => setCountersState((prev) => ({ ...prev, ...patch })), []);
@@ -141,19 +155,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const loadCounters = useCallback(() => {
     const seq = ++loadSeq.current;
     lastLoad.current = Date.now();
-    // Sur l'accueil, la page charge déjà /api/dashboard et pousse ses chiffres via setCounters.
-    const onHome = pathRef.current === "/";
-    Promise.all([
-      onHome ? Promise.resolve(null) : apiFetch<{ openConflicts: number; pendingInvitations: number }>("/api/dashboard"),
-      apiFetch<{ unread: number }>("/api/notifications"),
-    ])
-      .then(([d, n]) => {
+    // Trois comptages côté serveur, aucune ligne transférée.
+    apiFetch<{ openConflicts: number; pendingInvitations: number; unread: number }>("/api/counters")
+      .then((c) => {
         if (seq !== loadSeq.current) return; // une réponse plus récente est déjà partie
-        setCountersState((prev) => ({
-          notifications: n.unread,
-          conflicts: d ? d.openConflicts : prev.conflicts,
-          invitations: d ? d.pendingInvitations : prev.invitations,
-        }));
+        setCountersState({ notifications: c.unread, conflicts: c.openConflicts, invitations: c.pendingInvitations });
       })
       .catch(() => undefined); // compteurs non bloquants
   }, []);
@@ -175,14 +181,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [loadCounters]);
 
-  const ctx = useMemo(() => (me ? { me, reload, counters, refreshCounters, setCounters } : null), [me, reload, counters, refreshCounters, setCounters]);
+  const ctx = useMemo(() => ({ me, reload, counters, refreshCounters, setCounters }), [me, reload, counters, refreshCounters, setCounters]);
 
   async function logout() {
     await apiFetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+    clearApiCache(); // aucune donnée du compte ne doit rester en mémoire
     window.location.href = "/connexion";
   }
 
-  const admin = me ? isAdmin(me.role) : false;
+  const admin = isAdmin(me.role);
   const closeMore = () => setMoreOpen(false);
   // L'onglet « Plus » est actif quand la page courante fait partie de la feuille.
   const moreActive = moreOpen || [...CHURCH, ...accountItems(admin)].some((i) => isActive(path, i.href));
@@ -192,17 +199,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     counters.invitations > 0 && plural(counters.invitations, "invitation en attente", "invitations en attente"),
   ].filter(Boolean);
   const bellLabel = `${t.nav.notifications} : ${bellParts.length ? bellParts.join(", ") : "rien de nouveau"}`;
-
-  const content = error && !me ? (
-    <ErrorState status={error.status} message={error.message} onRetry={reload} />
-  ) : ctx ? (
-    children
-  ) : (
-    <div aria-busy="true" className="space-y-5">
-      <Skeleton className="h-36 w-full rounded-2xl" />
-      <ListSkeleton rows={3} />
-    </div>
-  );
 
   const frame = (
     <>
@@ -230,6 +226,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         <li key={item.href}>
                           <Link
                             href={item.href}
+                            {...preloadProps(item.href)}
                             aria-current={active ? "page" : undefined}
                             className={cn(
                               "flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors duration-(--dur-fast)",
@@ -258,17 +255,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           </nav>
           <div className="border-t border-border p-3">
-            {me ? (
-              <>
-                <p className="truncate px-3 text-sm font-medium">{me.profile.display_name}</p>
-                <p className="truncate px-3 text-xs text-muted">{me.organization?.name}</p>
-              </>
-            ) : (
-              <div className="space-y-2 px-3 py-1">
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="h-3 w-1/2" />
-              </div>
-            )}
+            <p className="truncate px-3 text-sm font-medium">{me.profile.display_name}</p>
+            <p className="truncate px-3 text-xs text-muted">{me.organization?.name}</p>
             <button onClick={logout} className="mt-2 flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted hover:bg-subtle hover:text-fg">
               <LogOut className="h-4 w-4" aria-hidden /> Se déconnecter
             </button>
@@ -297,10 +285,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <main
             id="contenu"
-            aria-busy={!me && !error ? true : undefined}
             className={cn("mx-auto w-full max-w-5xl px-4 pt-5 sm:px-6 lg:pt-8 lg:pb-10", focused ? "pb-24" : "pb-[calc(var(--bottom-nav-h)+5rem)]")}
           >
-            {content}
+            {children}
           </main>
         </div>
       </div>
@@ -316,6 +303,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <li key={item.href} className="min-w-0">
                   <Link
                     href={item.href}
+                    {...preloadProps(item.href)}
                     aria-current={active ? "page" : undefined}
                     aria-label={item.counter && n > 0 ? `${item.label} (${counterText(item.counter, n)})` : undefined}
                     className={cn("flex h-full flex-col items-center justify-center gap-0.5 px-0.5 text-xs text-muted", active && "font-semibold text-primary")}
@@ -361,26 +349,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Button>
         }
       >
-        {me && (
-          <div className="flex items-center gap-3 rounded-xl bg-subtle p-3">
-            <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-fg">
-              {(me.profile.display_name.trim()[0] ?? "?").toUpperCase()}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate font-semibold">{me.profile.display_name}</p>
-              <p className="text-xs text-muted">
-                {[me.organization?.name, t.roles[me.role]].filter(Boolean).join(" · ")}
-              </p>
-            </div>
+        <div className="flex items-center gap-3 rounded-xl bg-subtle p-3">
+          <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-fg">
+            {(me.profile.display_name.trim()[0] ?? "?").toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-semibold">{me.profile.display_name}</p>
+            <p className="text-xs text-muted">
+              {[me.organization?.name, t.roles[me.role]].filter(Boolean).join(" · ")}
+            </p>
           </div>
-        )}
+        </div>
         <SheetSection title={t.moreSheet.church} items={CHURCH} path={path} counters={counters} onNavigate={closeMore} />
         <SheetSection title={t.moreSheet.account} items={accountItems(admin)} path={path} counters={counters} onNavigate={closeMore} />
       </Sheet>
     </>
   );
 
-  // Toujours le même arbre : le cadre n'est pas remonté quand le profil arrive.
   return <MeContext value={ctx}>{frame}</MeContext>;
 }
 

@@ -10,7 +10,8 @@ import {
   loadViewableEvent,
 } from "@/lib/auth/permissions";
 import type { EventInput, EventPatch } from "@/lib/schemas/event";
-import type { EventChange, EventRow, EventSource, ParticipantStatus } from "@/lib/types";
+import type { EventChange, EventOccurrence, EventRow, EventSource, ParticipantStatus } from "@/lib/types";
+import type { Filter, NewRow } from "@/lib/db/store";
 import { formatDateFr, formatRangeFr, formatTimeFr, utcToZoned, zonedToUtc } from "@/lib/time";
 import { expandOccurrences } from "./conflict-engine";
 import { ACTIVE_STATUSES, closeConflictsForEvent, detectForEventParticipants, detectForUserEvent, eventToSlot, withExceptions } from "./conflict-agent";
@@ -34,8 +35,54 @@ function toInstants(date: string, startTime: string, endTime: string, tz: string
   if (Date.parse(end) <= Date.parse(start)) {
     const next = new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
     end = zonedToUtc(next, endTime, tz).iso;
+    // Fin reportée au lendemain : au-delà de 12 h, il s'agit presque toujours d'une heure de fin
+    // saisie avant le début (et non d'une soirée qui déborde). Une longue journée (8 h – 21 h) reste acceptée.
+    if (Date.parse(end) - Date.parse(start) > 12 * 3600000) throw badRequest("La fin est avant le début : vérifiez les heures.");
   }
   return { start, end };
+}
+
+/** Décale d'un nombre de jours une date AAAA-MM-JJ. */
+function shiftDate(date: string, days: number) {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+}
+
+/**
+ * Après un changement d'horaire (ou de règle) d'une série : réaligne les
+ * exceptions (event_occurrences) sur les nouvelles occurrences.
+ *  - la clé starts_at (début d'origine) est recalculée : même date locale
+ *    (décalée comme le début de la série), nouvelle heure murale ;
+ *  - une date déplacée garde son nouvel horaire (overrides inchangés) ;
+ *  - une exception qui ne tombe plus sur la règle est supprimée.
+ */
+async function realignExceptions(ctx: Ctx, before: EventRow, after: EventRow) {
+  const rows = await ctx.store.select("event_occurrences", { where: [["event_id", "eq", before.id]] });
+  if (rows.length === 0) return;
+  const oldStart = utcToZoned(before.starts_at, before.timezone);
+  const newStart = utcToZoned(after.starts_at, after.timezone);
+  const dayShift = Math.round((Date.parse(`${newStart.date}T00:00:00Z`) - Date.parse(`${oldStart.date}T00:00:00Z`)) / 86400000);
+  const duration = Date.parse(after.ends_at) - Date.parse(after.starts_at);
+  const slot = { ...eventToSlot(after), exceptions: undefined };
+  const kept = new Map<string, NewRow<EventOccurrence>>();
+  for (const row of rows) {
+    const local = utcToZoned(row.starts_at, before.timezone);
+    const startsAt = zonedToUtc(shiftDate(local.date, dayShift), newStart.time, after.timezone).iso;
+    const ms = Date.parse(startsAt);
+    const onRule = Boolean(after.recurrence_rule) && expandOccurrences(slot, ms - 1000, ms + 1000).some((o) => o.originalStart === ms);
+    // Une exception qui ne tombe plus sur la série n'a plus d'objet.
+    if (!onRule || kept.has(startsAt)) continue;
+    kept.set(startsAt, {
+      event_id: row.event_id,
+      organization_id: row.organization_id,
+      starts_at: startsAt,
+      ends_at: new Date(ms + duration).toISOString(),
+      status: row.status,
+      overrides: row.overrides,
+    });
+  }
+  // Remplacement complet : évite toute collision temporaire sur l'unicité (event_id, starts_at).
+  await ctx.store.deleteWhere("event_occurrences", [["event_id", "eq", before.id]]);
+  if (kept.size) await ctx.store.insertMany("event_occurrences", [...kept.values()]);
 }
 
 async function logChange(ctx: Ctx, event: EventRow, type: EventChange["change_type"], before: unknown, after: unknown) {
@@ -153,6 +200,8 @@ export async function updateEvent(ctx: Ctx, eventId: string, patch: EventPatch) 
   await audit(ctx.store, { orgId: ctx.orgId, actorId: ctx.userId, action: rescheduled ? "event.rescheduled" : "event.updated", entityType: "event", entityId: event.id });
 
   if (rescheduled) {
+    // Les dates annulées ou déplacées doivent suivre la série, sinon elles réapparaîtraient au nouvel horaire.
+    if (event.recurrence_rule || updated.recurrence_rule) await realignExceptions(ctx, event, updated);
     await rescheduleEvent(ctx.store, updated, ctx.now());
     await detectForEventParticipants(ctx.store, ctx.mailer, updated.id, ctx.now());
   }
@@ -227,6 +276,8 @@ export async function modifyOccurrence(
   if (!occ) throw badRequest("Cette date ne fait pas partie de la récurrence.");
 
   const [existing] = await ctx.store.select("event_occurrences", { where: [["event_id", "eq", event.id], ["starts_at", "eq", origIso]] });
+  // Rien à rétablir : aucune écriture, aucune notification.
+  if (input.action === "restore" && !existing) return { event, notified: 0, unchanged: true as const };
   let before: { start: string; end: string } = { start: origIso, end: new Date(occ.end).toISOString() };
   if (existing?.overrides.starts_at && existing.overrides.ends_at) before = { start: existing.overrides.starts_at, end: existing.overrides.ends_at };
 
@@ -376,38 +427,59 @@ export interface CalendarItem {
   hasConflict: boolean;
 }
 
+/** Séries récurrentes : recurrence_rule non nulle. */
+const RECURRING_FILTER: Filter<EventRow> = ["recurrence_rule", "not_is", null];
+
 export async function listCalendar(ctx: Ctx, from: string, to: string, scope: string = "me", includeCancelled = false): Promise<CalendarItem[]> {
   const fromMs = Date.parse(from);
   const toMs = Date.parse(to);
   if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) throw badRequest("Période invalide.");
   if (toMs - fromMs > 400 * 86400000) throw badRequest("Période trop longue (400 jours maximum).");
 
+  const fromIso = new Date(fromMs).toISOString();
+  const toIso = new Date(toMs).toISOString();
+
   const myParts = await ctx.store.select("event_participants", { where: [["user_id", "eq", ctx.userId]] });
   const myStatus = new Map(myParts.map((p) => [p.event_id, p.status]));
-  let events: EventRow[];
+  let base: Filter<EventRow>[];
+  let visible: (e: EventRow) => boolean;
   if (scope === "me") {
     const ids = myParts.filter((p) => ACTIVE_STATUSES.includes(p.status)).map((p) => p.event_id);
-    events = ids.length ? await ctx.store.select("events", { where: [["id", "in", ids], ["organization_id", "eq", ctx.orgId]] }) : [];
+    if (ids.length === 0) return [];
+    base = [["id", "in", ids], ["organization_id", "eq", ctx.orgId]];
+    visible = () => true;
   } else if (scope.startsWith("group:")) {
     const group = await loadGroupInOrg(ctx, scope.slice(6));
     if (!isOrgAdmin(ctx) && !(await groupRole(ctx, group.id))) throw forbidden("Vous n'êtes pas membre de ce groupe.");
-    events = await ctx.store.select("events", { where: [["group_id", "eq", group.id]] });
+    base = [["group_id", "eq", group.id], ["organization_id", "eq", ctx.orgId]];
+    // Même règle que canViewEvent : un événement privé du groupe reste réservé à son créateur et à ses participants.
+    visible = (e) => e.visibility !== "private" || e.created_by === ctx.userId || myStatus.has(e.id);
   } else if (scope === "org") {
-    const all = await ctx.store.select("events", { where: [["organization_id", "eq", ctx.orgId]] });
+    base = [["organization_id", "eq", ctx.orgId]];
     const myGroups = new Set((await ctx.store.select("group_members", { where: [["user_id", "eq", ctx.userId]] })).map((g) => g.group_id));
-    events = all.filter(
-      (e) => isOrgAdmin(ctx) || e.visibility === "organization" || (e.visibility === "group" && e.group_id && myGroups.has(e.group_id)) || myStatus.has(e.id),
-    );
-    if (isOrgAdmin(ctx)) events = events.filter((e) => e.visibility !== "private" || myStatus.has(e.id));
+    visible = (e) =>
+      isOrgAdmin(ctx)
+        ? e.visibility !== "private" || myStatus.has(e.id)
+        : e.visibility === "organization" || (e.visibility === "group" && Boolean(e.group_id && myGroups.has(e.group_id))) || myStatus.has(e.id);
   } else {
     throw badRequest("Portée inconnue.");
   }
-  if (!includeCancelled) events = events.filter((e) => e.status !== "cancelled");
+
+  // Deux requêtes ciblées : événements ponctuels qui chevauchent la période, et séries récurrentes.
+  const [single, recurring] = await Promise.all([
+    ctx.store.select("events", { where: [...base, ["recurrence_rule", "is", null], ["starts_at", "lte", toIso], ["ends_at", "gte", fromIso]] }),
+    ctx.store.select("events", { where: [...base, RECURRING_FILTER] }),
+  ]);
+  let events = [...single, ...recurring.filter((e) => e.recurrence_rule)].filter(visible);
+  // Un événement annulé n'est montré que s'il chevauche la période demandée.
+  events = events.filter((e) => (e.status === "cancelled" ? includeCancelled && Date.parse(e.starts_at) < toMs && Date.parse(e.ends_at) > fromMs : true));
   const withEx = await withExceptions(ctx.store, events);
 
-  const groups = await ctx.store.select("groups", { where: [["organization_id", "eq", ctx.orgId]] });
+  const [groups, conflicts] = await Promise.all([
+    ctx.store.select("groups", { where: [["organization_id", "eq", ctx.orgId]] }),
+    ctx.store.select("calendar_conflicts", { where: [["user_id", "eq", ctx.userId], ["status", "eq", "open"]] }),
+  ]);
   const groupById = new Map(groups.map((g) => [g.id, g]));
-  const conflicts = await ctx.store.select("calendar_conflicts", { where: [["user_id", "eq", ctx.userId], ["status", "eq", "open"]] });
   const conflictKeys = new Set(conflicts.flatMap((c) => [`${c.event_a_id}:${c.occurrence_a_start}`, `${c.event_b_id}:${c.occurrence_b_start}`]));
 
   return withEx
@@ -443,7 +515,42 @@ export async function listCalendar(ctx: Ctx, from: string, to: string, scope: st
     .sort((a, b) => a.start.localeCompare(b.start));
 }
 
-export async function getEventDetails(ctx: Ctx, eventId: string) {
+export interface OccurrenceDetails {
+  /** Début d'origine selon la règle (clé de la date). */
+  originalStart: string;
+  start: string;
+  end: string;
+  status: "scheduled" | "moved" | "cancelled";
+}
+
+/** État d'UNE date d'un événement (récurrent ou non) ; null si cette date ne fait pas partie de l'événement. */
+async function occurrenceDetails(ctx: Ctx, event: EventRow, occurrence: string): Promise<OccurrenceDetails | null> {
+  const orig = Date.parse(occurrence);
+  if (!Number.isFinite(orig)) throw badRequest("Date d'occurrence invalide.");
+  const originalStart = new Date(orig).toISOString();
+  const duration = Date.parse(event.ends_at) - Date.parse(event.starts_at);
+  if (!event.recurrence_rule) {
+    if (orig !== Date.parse(event.starts_at)) return null;
+    return { originalStart, start: event.starts_at, end: event.ends_at, status: event.status === "cancelled" ? "cancelled" : "scheduled" };
+  }
+  const onRule = expandOccurrences({ ...eventToSlot(event), exceptions: undefined }, orig - 1000, orig + 1000).some((o) => o.originalStart === orig);
+  if (!onRule) return null;
+  const [row] = await ctx.store.select("event_occurrences", { where: [["event_id", "eq", event.id], ["starts_at", "eq", originalStart]] });
+  const scheduled = { originalStart, start: originalStart, end: new Date(orig + duration).toISOString() };
+  if (event.status === "cancelled" || row?.status === "cancelled") return { ...scheduled, status: "cancelled" };
+  if (row?.overrides.starts_at && row.overrides.ends_at) {
+    const moved = row.overrides.starts_at !== originalStart || row.overrides.ends_at !== scheduled.end;
+    return { originalStart, start: row.overrides.starts_at, end: row.overrides.ends_at, status: moved ? "moved" : "scheduled" };
+  }
+  return { ...scheduled, status: "scheduled" };
+}
+
+/**
+ * Détail d'un événement. Avec `occurrence` (début d'origine ISO d'une date),
+ * renvoie aussi l'état de cette date : horaire effectif et statut
+ * (prévue, déplacée ou annulée).
+ */
+export async function getEventDetails(ctx: Ctx, eventId: string, occurrence?: string | null) {
   const event = await loadViewableEvent(ctx, eventId);
   const parts = await ctx.store.select("event_participants", { where: [["event_id", "eq", event.id]] });
   const profiles = parts.length ? await ctx.store.select("profiles", { where: [["id", "in", parts.map((p) => p.user_id)]] }) : [];
@@ -466,6 +573,7 @@ export async function getEventDetails(ctx: Ctx, eventId: string) {
     changes,
     reminders: reminders.sort((a, b) => a.remind_at.localeCompare(b.remind_at)).slice(0, 10),
     defaultWithdrawMessage: defaultWithdrawMessage(event),
+    occurrence: occurrence ? await occurrenceDetails(ctx, event, occurrence) : null,
   };
 }
 

@@ -1,7 +1,8 @@
 import type { Ctx } from "@/lib/context";
 import { audit } from "@/lib/audit";
 import { badRequest, forbidden, notFound } from "@/lib/errors";
-import { groupRole, isOrgAdmin, loadEditableEvent, loadGroupInOrg } from "@/lib/auth/permissions";
+import { canManageGroup, groupRole, hasOrgRole, isOrgAdmin, loadEditableEvent, loadGroupInOrg } from "@/lib/auth/permissions";
+import { UniqueViolationError } from "@/lib/db/store";
 import type { OrgRole } from "@/lib/types";
 import { randomToken, sha256Hex } from "@/lib/auth/crypto";
 import { formatRangeFr } from "@/lib/time";
@@ -28,43 +29,62 @@ export async function inviteToEvent(ctx: Ctx, eventId: string, target: { userIds
   }
   invitees.delete(ctx.userId);
   if (invitees.size === 0) throw badRequest("Aucun invité.");
+  const ids = [...invitees];
 
-  const members = await ctx.store.select("organization_members", { where: [["organization_id", "eq", ctx.orgId], ["user_id", "in", [...invitees]]] });
+  // Chargements groupés (une requête par table, quel que soit le nombre d'invités).
+  const [members, existingRows, profiles, inviter] = await Promise.all([
+    ctx.store.select("organization_members", { where: [["organization_id", "eq", ctx.orgId], ["user_id", "in", ids]] }),
+    ctx.store.select("event_participants", { where: [["event_id", "eq", event.id], ["user_id", "in", ids]] }),
+    ctx.store.select("profiles", { where: [["id", "in", ids]] }),
+    ctx.store.get("profiles", ctx.userId),
+  ]);
   const allowed = new Set(members.map((m) => m.user_id));
-  const outsiders = [...invitees].filter((u) => !allowed.has(u));
-  if (outsiders.length) throw forbidden("Certains invités n'appartiennent pas à l'organisation.");
+  if (ids.some((u) => !allowed.has(u))) throw forbidden("Certains invités n'appartiennent pas à l'organisation.");
+  const existing = new Map(existingRows.map((p) => [p.user_id, p]));
+  const profileOf = new Map(profiles.map((p) => [p.id, p]));
 
-  const inviter = await ctx.store.get("profiles", ctx.userId);
   const results: { userId: string; status: "invited" | "already" }[] = [];
-  for (const userId of invitees) {
-    const [existing] = await ctx.store.select("event_participants", { where: [["event_id", "eq", event.id], ["user_id", "eq", userId]] });
-    if (existing && ["accepted", "tentative", "invited"].includes(existing.status)) {
-      results.push({ userId, status: "already" });
-      continue;
+  const toInvite: string[] = [];
+  for (const userId of ids) {
+    const p = existing.get(userId);
+    if (p && ["accepted", "tentative", "invited"].includes(p.status)) results.push({ userId, status: "already" });
+    else {
+      toInvite.push(userId);
+      results.push({ userId, status: "invited" });
     }
-    if (existing) await ctx.store.update("event_participants", existing.id, { status: "invited", responded_at: null });
-    else
-      await ctx.store.insert("event_participants", {
-        event_id: event.id,
-        organization_id: event.organization_id,
-        user_id: userId,
-        role: "participant",
-        status: "invited",
-        responded_at: null,
-      });
-    const invitation = await ctx.store.insert("invitations", {
+  }
+
+  // Participants : réactivation des anciens (refus), création groupée des nouveaux.
+  for (const userId of toInvite) {
+    const p = existing.get(userId);
+    if (p) await ctx.store.update("event_participants", p.id, { status: "invited", responded_at: null });
+  }
+  await ctx.store.insertMany(
+    "event_participants",
+    toInvite
+      .filter((u) => !existing.has(u))
+      .map((userId) => ({ event_id: event.id, organization_id: event.organization_id, user_id: userId, role: "participant" as const, status: "invited" as const, responded_at: null })),
+  );
+  const invitations = await ctx.store.insertMany(
+    "invitations",
+    toInvite.map((userId) => ({
       event_id: event.id,
       organization_id: event.organization_id,
       invited_by: ctx.userId,
       invitee_user_id: userId,
       invitee_email: null,
       group_id: target.groupId ?? null,
-      status: "pending",
+      status: "pending" as const,
       token_hash: sha256Hex(randomToken()),
       responded_at: null,
-    });
-    const profile = await ctx.store.get("profiles", userId);
-    await scheduleForParticipant(ctx.store, event, userId, profile?.reminder_offsets ?? DEFAULT_REMINDER_OFFSETS, ctx.now());
+    })),
+  );
+  const invitationOf = new Map(invitations.map((i) => [i.invitee_user_id, i]));
+
+  const when = formatRangeFr(event.starts_at, event.ends_at, event.timezone);
+  for (const userId of toInvite) {
+    const invitation = invitationOf.get(userId)!;
+    await scheduleForParticipant(ctx.store, event, userId, profileOf.get(userId)?.reminder_offsets ?? DEFAULT_REMINDER_OFFSETS, ctx.now());
     await detectForUserEvent(ctx.store, ctx.mailer, userId, event.id, ctx.now());
     await notify(
       ctx.store,
@@ -73,7 +93,7 @@ export async function inviteToEvent(ctx: Ctx, eventId: string, target: { userIds
         orgId: event.organization_id,
         type: "invitation",
         title: `Invitation : ${event.title}`,
-        body: `${inviter?.display_name ?? "Un organisateur"} vous invite à « ${event.title} » — ${formatRangeFr(event.starts_at, event.ends_at, event.timezone)}.${event.meeting_url ? `\nLien : ${event.meeting_url}` : ""}\nRépondez dans CellConnect (Invitations).`,
+        body: `${inviter?.display_name ?? "Un organisateur"} vous invite à « ${event.title} » — ${when}.${event.meeting_url ? `\nLien : ${event.meeting_url}` : ""}\nRépondez dans CellConnect (Invitations).`,
         data: { eventId: event.id, invitationId: invitation.id },
         dedupeKey: `invitation:${invitation.id}`,
         email: true,
@@ -81,7 +101,6 @@ export async function inviteToEvent(ctx: Ctx, eventId: string, target: { userIds
       ctx.mailer,
       ctx.now(),
     );
-    results.push({ userId, status: "invited" });
   }
   await ctx.store.insert("event_changes", {
     event_id: event.id,
@@ -89,7 +108,7 @@ export async function inviteToEvent(ctx: Ctx, eventId: string, target: { userIds
     changed_by: ctx.userId,
     change_type: "participants_invited",
     before: null,
-    after: { invited: results.filter((r) => r.status === "invited").map((r) => r.userId), groupId: target.groupId ?? null },
+    after: { invited: toInvite, groupId: target.groupId ?? null },
   });
   await audit(ctx.store, { orgId: ctx.orgId, actorId: ctx.userId, action: "invitation.sent", entityType: "event", entityId: event.id, metadata: { count: results.length } });
   return results;
@@ -169,10 +188,13 @@ export const INVITATION_TTL_DAYS = 30;
  * à usage unique (30 jours) est envoyé : la personne crée son compte (ou se
  * connecte) puis rejoint l'organisation en tant qu'invitée et l'événement.
  * Seule l'empreinte SHA-256 du jeton est stockée.
+ *
+ * Avec `groupId` (groupe que l'inviteur gère), la personne rejoint aussi ce
+ * groupe en acceptant (ou tout de suite si elle est déjà membre de l'église).
  */
 export async function inviteByEmail(
   ctx: Ctx,
-  input: { emails: string[]; eventId?: string | null; orgRole?: OrgRole | null },
+  input: { emails: string[]; eventId?: string | null; orgRole?: OrgRole | null; groupId?: string | null },
   appUrl: string,
 ) {
   const emails = [...new Set(input.emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
@@ -189,6 +211,12 @@ export async function inviteByEmail(
     if (!isOrgAdmin(ctx)) throw forbidden("Seuls les administrateurs peuvent inviter dans l'organisation.");
     if (input.orgRole === "super_admin") throw forbidden("Rôle non attribuable.");
   }
+  let groupId: string | null = null;
+  if (input.groupId) {
+    const group = await loadGroupInOrg(ctx, input.groupId);
+    if (!(await canManageGroup(ctx, group))) throw forbidden("Seuls les responsables du groupe peuvent y inviter.");
+    groupId = group.id;
+  }
   const org = await ctx.store.get("organizations", ctx.orgId);
   const inviter = await ctx.store.get("profiles", ctx.userId);
   const results: { email: string; status: "invited_member" | "email_sent" | "email_failed" | "email_skipped" | "already_member"; error?: string; link?: string }[] = [];
@@ -197,6 +225,7 @@ export async function inviteByEmail(
     const [profile] = await ctx.store.select("profiles", { where: [["email", "eq", email]] });
     const [membership] = profile ? await ctx.store.select("organization_members", { where: [["organization_id", "eq", ctx.orgId], ["user_id", "eq", profile.id]] }) : [];
     if (membership) {
+      if (groupId) await addToGroupIfMissing(ctx.store, groupId, ctx.orgId, profile.id);
       if (input.eventId) {
         await inviteToEvent(ctx, input.eventId, { userIds: [profile.id] });
         results.push({ email, status: "invited_member" });
@@ -210,7 +239,7 @@ export async function inviteByEmail(
       invited_by: ctx.userId,
       invitee_user_id: null,
       invitee_email: email,
-      group_id: null,
+      group_id: groupId,
       status: "pending",
       token_hash: sha256Hex(token),
       responded_at: null,
@@ -247,10 +276,54 @@ export async function inviteByEmail(
       }
     }
     await ctx.store.update("invitations", inv.id, { email_status: status, email_error: error });
-    results.push({ email, status: status === "sent" ? "email_sent" : status === "failed" ? "email_failed" : "email_skipped", error: error ?? undefined, ...(status !== "sent" ? { link } : {}) });
+    results.push({ email, status: status === "sent" ? "email_sent" : status === "failed" ? "email_failed" : "email_skipped", ...(status !== "sent" ? { link } : {}) });
   }
-  await audit(ctx.store, { orgId: ctx.orgId, actorId: ctx.userId, action: "invitation.email_sent", entityType: input.eventId ? "event" : "organization", entityId: input.eventId ?? ctx.orgId, metadata: { count: emails.length } });
+  const count = (st: (typeof results)[number]["status"]) => results.filter((r) => r.status === st).length;
+  await audit(ctx.store, {
+    orgId: ctx.orgId,
+    actorId: ctx.userId,
+    action: "invitation.created",
+    entityType: input.eventId ? "event" : "organization",
+    entityId: input.eventId ?? ctx.orgId,
+    metadata: { sent: count("email_sent"), skipped: count("email_skipped"), failed: count("email_failed"), groupId },
+  });
   return results;
+}
+
+async function addToGroupIfMissing(store: Ctx["store"], groupId: string, orgId: string, userId: string) {
+  const [already] = await store.select("group_members", { where: [["group_id", "eq", groupId], ["user_id", "eq", userId]] });
+  if (already) return;
+  try {
+    await store.insert("group_members", { group_id: groupId, organization_id: orgId, user_id: userId, role: "member" });
+  } catch (e) {
+    if (!(e instanceof UniqueViolationError)) throw e;
+  }
+}
+
+/**
+ * Vérifie qu'une invitation est cohérente avant d'ouvrir l'accès à une église.
+ * Les invitations ne sont écrites que par le serveur, mais on ne fait pas
+ * confiance à la ligne : événement, groupe et inviteur doivent appartenir à la
+ * même organisation, et l'inviteur doit avoir le droit d'attribuer le rôle.
+ */
+async function assertInvitationConsistent(store: Ctx["store"], inv: Awaited<ReturnType<typeof findByToken>>["inv"]) {
+  const invalid = () => notFound("Invitation introuvable.");
+  if (inv.event_id) {
+    const event = await store.get("events", inv.event_id);
+    if (!event || event.organization_id !== inv.organization_id) throw invalid();
+  }
+  if (inv.group_id) {
+    const group = await store.get("groups", inv.group_id);
+    if (!group || group.organization_id !== inv.organization_id) throw invalid();
+  }
+  const [inviter] = await store.select("organization_members", { where: [["organization_id", "eq", inv.organization_id], ["user_id", "eq", inv.invited_by]] });
+  if (!inviter) throw invalid();
+  const granted: OrgRole = inv.org_role ?? "guest";
+  if (granted === "super_admin" && inviter.role !== "super_admin") throw invalid();
+  if (granted === "org_admin" && !hasOrgRole(inviter.role, "org_admin")) throw invalid();
+  // Hors administrateurs, on ne peut faire entrer quelqu'un que comme invité.
+  if (granted !== "guest" && !hasOrgRole(inviter.role, "org_admin")) throw invalid();
+  if (!inv.event_id && !hasOrgRole(inviter.role, "org_admin")) throw invalid();
 }
 
 async function findByToken(store: Ctx["store"], token: string, now: Date) {
@@ -288,18 +361,38 @@ export async function acceptInvitationToken(
   const { inv, expired } = await findByToken(base.store, token, base.now());
   if (inv.status !== "pending") throw badRequest("Cette invitation a déjà été utilisée.");
   if (expired) throw badRequest("Cette invitation a expiré. Demandez-en une nouvelle.");
+  await assertInvitationConsistent(base.store, inv);
   const now = base.now().toISOString();
-  let [membership] = await base.store.select("organization_members", { where: [["organization_id", "eq", inv.organization_id], ["user_id", "eq", base.userId]] });
-  if (!membership && response !== "declined") {
-    membership = await base.store.insert("organization_members", { organization_id: inv.organization_id, user_id: base.userId, role: inv.org_role ?? "guest" });
-  }
-  await base.store.update("invitations", inv.id, { invitee_user_id: base.userId, status: inv.event_id ? response : response === "declined" ? "declined" : "accepted", responded_at: now });
-  if (inv.event_id && membership) {
-    const ctx: Ctx = { ...base, orgId: inv.organization_id, orgRole: membership.role };
-    const [p] = await base.store.select("event_participants", { where: [["event_id", "eq", inv.event_id], ["user_id", "eq", base.userId]] });
-    if (!p)
-      await base.store.insert("event_participants", { event_id: inv.event_id, organization_id: inv.organization_id, user_id: base.userId, role: "participant", status: "invited", responded_at: null });
-    await respondToEvent(ctx, inv.event_id, response);
+  // Réservation atomique du jeton (usage unique, même en cas de double clic).
+  const finalStatus = inv.event_id ? response : response === "declined" ? "declined" : "accepted";
+  const claimed = await base.store.updateWhere("invitations", [["id", "eq", inv.id], ["status", "eq", "pending"]], { invitee_user_id: base.userId, status: finalStatus, responded_at: now });
+  if (claimed.length === 0) throw badRequest("Cette invitation a déjà été utilisée.");
+  let membership;
+  try {
+    const [existing] = await base.store.select("organization_members", { where: [["organization_id", "eq", inv.organization_id], ["user_id", "eq", base.userId]] });
+    const joins = !existing && response !== "declined";
+    // Réponse à l'événement d'abord : si elle échoue (événement annulé…), personne n'entre dans l'église.
+    if (inv.event_id && (existing || joins)) {
+      const ctx: Ctx = { ...base, orgId: inv.organization_id, orgRole: existing?.role ?? "guest" };
+      const [p] = await base.store.select("event_participants", { where: [["event_id", "eq", inv.event_id], ["user_id", "eq", base.userId]] });
+      if (!p)
+        await base.store.insert("event_participants", { event_id: inv.event_id, organization_id: inv.organization_id, user_id: base.userId, role: "participant", status: "invited", responded_at: null });
+      await respondToEvent(ctx, inv.event_id, response);
+    }
+    membership = existing;
+    if (joins) {
+      try {
+        membership = await base.store.insert("organization_members", { organization_id: inv.organization_id, user_id: base.userId, role: inv.org_role ?? "guest" });
+      } catch (e) {
+        if (!(e instanceof UniqueViolationError)) throw e;
+        [membership] = await base.store.select("organization_members", { where: [["organization_id", "eq", inv.organization_id], ["user_id", "eq", base.userId]] });
+      }
+    }
+    if (membership && inv.group_id && response !== "declined") await addToGroupIfMissing(base.store, inv.group_id, inv.organization_id, base.userId);
+  } catch (e) {
+    // Échec : le lien redevient utilisable.
+    await base.store.update("invitations", inv.id, { invitee_user_id: null, status: "pending", responded_at: null }).catch(() => undefined);
+    throw e;
   }
   const me = await base.store.get("profiles", base.userId);
   const event = inv.event_id ? await base.store.get("events", inv.event_id) : null;

@@ -27,10 +27,14 @@ export interface CalItem {
 /** Page d'où l'on ouvre une fiche : la fiche affiche le bon lien « retour ». */
 export type EventFrom = "accueil" | "agenda" | "conflits" | "import";
 
-/** Lien vers la fiche d'un événement (occurrence d'un événement récurrent comprise). */
-export function eventHref(item: Pick<CalItem, "eventId" | "recurring" | "occurrenceStart">, from?: EventFrom) {
+/**
+ * Lien vers la fiche d'un événement (occurrence d'un événement récurrent comprise).
+ * Une date déplacée porte aussi son nouvel horaire (`start`) : la fiche l'affiche dès l'ouverture.
+ */
+export function eventHref(item: Pick<CalItem, "eventId" | "recurring" | "occurrenceStart"> & Partial<Pick<CalItem, "moved" | "start">>, from?: EventFrom) {
   const q = new URLSearchParams();
   if (item.recurring) q.set("occurrence", item.occurrenceStart);
+  if (item.recurring && item.moved && item.start) q.set("start", item.start);
   if (from) q.set("from", from);
   const s = q.toString();
   return `/evenements/${item.eventId}${s ? `?${s}` : ""}`;

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type Ref, type SetStateAction } from "react";
 import { Check, ChevronLeft, LoaderCircle, MessageSquareText, Pencil, RotateCw, Trash2 } from "lucide-react";
-import { apiFetch, ApiError, newIdempotencyKey, useApi } from "@/lib/client/api";
+import { apiFetch, ApiError, errorText, newIdempotencyKey, useApi } from "@/lib/client/api";
 import { useMe } from "@/components/app/session";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -14,14 +14,17 @@ import { EmptyState, ErrorState, PageHeader, Skeleton, StaleBanner } from "@/com
 import { frTypo, plural } from "@/components/app/format";
 import { ApplyToAll, DraftCard } from "@/components/app/review/draft-card";
 import { ConflictCard } from "@/components/app/review/conflict-card";
-import { RecapSummary, type RecapData } from "@/components/app/review/recap-summary";
+import { RecapSummary } from "@/components/app/review/recap-summary";
 import { DonePanel } from "@/components/app/review/done-panel";
 import {
+  buildDecisions,
+  buildRecap,
   commonTitleOf,
   conflictId,
   draftStatus,
   groupedIssues,
   hasErrors,
+  includedByDefault,
   isBlocking,
   liveErrors,
   needsConfirm,
@@ -36,6 +39,8 @@ import {
 import { t } from "@/i18n";
 
 interface JobData {
+  /** Organisation de l'import (peut différer de l'organisation active). */
+  organizationId?: string;
   job: { id: string; status: string; step: keyof typeof t.steps; error: string | null; warnings: string[]; context_notes: string | null; provider: string | null; canRetry: boolean };
   drafts: Draft[];
   uploads: { id: string; kind: string; deleted: boolean; name: string | null }[];
@@ -58,21 +63,85 @@ const POLL_MAX_DELAY = 4000;
 const POLL_PATIENCE_MS = 90_000;
 
 const isRunning = (status: string) => status === "pending" || status === "processing";
+
+/** Étape gardée dans l'adresse (?etape=…) : un rechargement ou un retour arrière ne fait pas tout perdre. */
+const STEP_PARAM: Partial<Record<Phase, string>> = { conflicts: "conflits", recap: "recap" };
+const PHASE_OF_PARAM: Record<string, Phase> = { conflits: "conflicts", recap: "recap" };
+
+/** Choix faits pendant la vérification, gardés pour cet onglet (sessionStorage), par import. */
+interface StoredChoices {
+  choices: Record<string, Choice>;
+  notify: Record<string, boolean>;
+  messages: Record<string, string>;
+}
+const storageKey = (jobId: string) => `cc-review-${jobId}`;
+function readStored(jobId: string): StoredChoices | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const raw = window.sessionStorage.getItem(storageKey(jobId));
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Partial<StoredChoices>;
+    return { choices: v.choices ?? {}, notify: v.notify ?? {}, messages: v.messages ?? {} };
+  } catch {
+    return null;
+  }
+}
+function writeStored(jobId: string, v: StoredChoices | null) {
+  try {
+    if (v) window.sessionStorage.setItem(storageKey(jobId), JSON.stringify(v));
+    else window.sessionStorage.removeItem(storageKey(jobId));
+  } catch {
+    // Navigation privée ou stockage plein : les choix restent seulement en mémoire.
+  }
+}
+function readFlag(key: string): boolean {
+  try {
+    return window.sessionStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeFlag(key: string, on: boolean) {
+  try {
+    if (on) window.sessionStorage.setItem(key, "1");
+    else window.sessionStorage.removeItem(key);
+  } catch {
+    // Stockage indisponible : sans conséquence.
+  }
+}
+function writeStepParam(phase: Phase) {
+  try {
+    const url = new URL(window.location.href);
+    const value = STEP_PARAM[phase];
+    if (value) url.searchParams.set("etape", value);
+    else url.searchParams.delete("etape");
+    if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url);
+  } catch {
+    // Sans conséquence : l'étape n'est simplement pas gardée dans l'adresse.
+  }
+}
+
+/** Le serveur ajoute parfois « Vous pouvez relancer l'analyse. » : le bouton « Relancer » le dit déjà. */
+const cleanJobError = (msg: string | null) => (msg ? msg.replace(/\s*Vous pouvez relancer l'analyse\.\s*$/, "").trim() || null : null);
+
+const SAVE_FAILED = "Rien n'a été enregistré. Vérifiez votre connexion puis touchez Ajouter à nouveau.";
 /** Seuls les brouillons encore en attente sont enregistrés (comme avant). */
 const savePayload = (list: Draft[]) => ({ drafts: list.filter((d) => d.status === "pending" || !d.status).map(stripClient) });
 
 export default function ReviewPage({ params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = use(params);
   const { me, refreshCounters } = useMe();
+  // Lu une seule fois, au montage (null côté serveur : ces choix ne sont pas affichés avant le chargement).
+  const [stored] = useState(() => readStored(jobId));
   const { data, error, loading, reload } = useApi<JobData>(`/api/extract-events/${jobId}`);
   const groups = useApi<{ groups: GroupOption[] }>("/api/groups");
   const [edited, setEdited] = useState<Draft[] | null>(null);
   const [includeOverrides, setInclude] = useState<Record<string, boolean>>({});
   const [phase, setPhase] = useState<Phase>("edit");
   const [conflicts, setConflicts] = useState<DraftConflict[]>([]);
-  const [choices, setChoices] = useState<Record<string, Choice>>({});
-  const [notify, setNotify] = useState<Record<string, boolean>>({});
-  const [messages, setMessages] = useState<Record<string, string>>({});
+  const [choices, setChoices] = useState<Record<string, Choice>>(stored?.choices ?? {});
+  const [notify, setNotify] = useState<Record<string, boolean>>(stored?.notify ?? {});
+  const [messages, setMessages] = useState<Record<string, string>>(stored?.messages ?? {});
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -81,6 +150,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   const [reveal, setReveal] = useState<{ key: string; n: number } | null>(null);
   const [slow, setSlow] = useState(false);
   const idemKey = useRef(newIdempotencyKey());
+  const committing = useRef(false);
   const tz = me.profile.timezone;
   const groupList = groups.data?.groups ?? NO_GROUPS;
 
@@ -130,7 +200,8 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     draftsRef.current = drafts;
   }, [drafts]);
 
-  const include: Record<string, boolean> = Object.fromEntries(drafts.map((d) => [d.key, includeOverrides[d.key] ?? d.status !== "rejected"]));
+  // Coché par défaut, sauf les dates refusées ou déjà passées (avertissement du serveur affiché sur la carte).
+  const include: Record<string, boolean> = Object.fromEntries(drafts.map((d) => [d.key, includeOverrides[d.key] ?? includedByDefault(d)]));
 
   const saveUrl = `/api/extract-events/${jobId}/drafts`;
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -222,8 +293,15 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     setReveal(null);
     focusHeading.current = true;
     setPhase(next);
+    writeStepParam(next);
     window.scrollTo({ top: 0, behavior: scrollBehavior() });
   }, []);
+
+  // Les choix faits pour les conflits survivent à un rechargement de l'onglet.
+  useEffect(() => {
+    if (phase === "done") return;
+    writeStored(jobId, { choices, notify, messages });
+  }, [jobId, phase, choices, notify, messages]);
 
   useEffect(() => {
     if (!focusHeading.current) return;
@@ -241,7 +319,11 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
 
   /* ───────────── Appels API (inchangés) ───────────── */
 
-  async function checkConflicts() {
+  /**
+   * Vérifie l'agenda pour les dates sélectionnées.
+   * `target` : étape demandée par l'adresse au rechargement (on n'y va que si elle a encore un sens).
+   */
+  async function checkConflicts(target?: Phase) {
     setActionError(null);
     setBusy(true);
     try {
@@ -249,35 +331,28 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
         method: "POST",
         json: { drafts: selected.map(stripClient) },
       });
-      if (r.errors.length) throw new Error(r.errors.map((e) => e.messages.join(" ")).join(" "));
+      if (r.errors.length) {
+        setActionError(r.errors.map((e) => e.messages.join(" ")).join(" "));
+        if (target) writeStepParam("edit");
+        return;
+      }
       setConflicts(r.conflicts);
-      goTo(r.conflicts.length ? "conflicts" : "recap");
+      const allChosen = r.conflicts.every((c, i) => Boolean(choices[conflictId(c, i)]));
+      goTo(r.conflicts.length && !(target === "recap" && allChosen) ? "conflicts" : "recap");
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Vérification impossible.");
+      setActionError(errorText(e, "Vérification de l'agenda impossible. Vérifiez votre connexion, puis réessayez."));
+      if (target) writeStepParam("edit");
     } finally {
       setBusy(false);
     }
   }
 
-  const decisions = (() => {
-    const byKey = new Map<string, { key: string; action: "create" | "skip"; withdrawFrom: string[]; notifyOrganizers: boolean; withdrawMessage: string | null }>();
-    for (const d of selected) byKey.set(d.key, { key: d.key, action: "create", withdrawFrom: [], notifyOrganizers: false, withdrawMessage: null });
-    conflicts.forEach((c, i) => {
-      const id = conflictId(c, i);
-      const choice = choices[id] ?? "keep_both";
-      const dec = byKey.get(c.draftKey);
-      if (!dec) return;
-      if (choice === "skip_new") dec.action = "skip";
-      if (choice === "withdraw_existing" && c.existing) {
-        dec.withdrawFrom.push(c.existing.id);
-        dec.notifyOrganizers = dec.notifyOrganizers || Boolean(notify[id]);
-        if (messages[id]?.trim()) dec.withdrawMessage = messages[id].trim();
-      }
-    });
-    return [...byKey.values()];
-  })();
+  const decisions = buildDecisions(selected, conflicts, choices, notify, messages);
 
   async function commit() {
+    // Double appui : un seul envoi (le serveur protège aussi par la clé d'idempotence).
+    if (committing.current) return;
+    committing.current = true;
     setActionError(null);
     setBusy(true);
     try {
@@ -292,11 +367,14 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
         },
       });
       setSummary(s);
+      writeStored(jobId, null);
       goTo("done");
       refreshCounters();
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "Enregistrement impossible.");
+      const unreachable = !(e instanceof ApiError) || e.status === 0 || e.status >= 500;
+      setActionError(unreachable ? SAVE_FAILED : `${errorText(e, "Enregistrement impossible.")} Rien n'a été enregistré.`);
     } finally {
+      committing.current = false;
       setBusy(false);
     }
   }
@@ -318,7 +396,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   }
 
   async function retry() {
-    await apiFetch(`/api/extract-events/${jobId}/retry`, { method: "POST" }).catch((e) => setActionError(e.message));
+    await apiFetch(`/api/extract-events/${jobId}/retry`, { method: "POST" }).catch((e) => setActionError(errorText(e, "Relance impossible. Réessayez dans un instant.")));
     restartPolling();
   }
 
@@ -329,11 +407,59 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
       await apiFetch(`/api/extract-events/${jobId}/sources`, { method: "DELETE" });
       reload();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Suppression impossible pour le moment.");
+      setActionError(errorText(e, "Suppression impossible pour le moment."));
     } finally {
       setDeleting(false);
     }
   }
+
+  /* ───────────── Import d'une autre organisation ───────────── */
+
+  // Lien ouvert alors qu'une autre église est active : on bascule sur celle de l'import, puis on recharge.
+  const switching = useRef(false);
+  const activeOrgId = me.organization?.id ?? null;
+  const jobOrgId = data?.organizationId ?? null;
+  const wrongOrg = Boolean(jobOrgId && activeOrgId && jobOrgId !== activeOrgId);
+  useEffect(() => {
+    const flag = `cc-org-switch-${jobId}`;
+    if (!wrongOrg) {
+      // Bonne église : on oublie la tentative de bascule précédente.
+      if (jobOrgId) writeFlag(flag, false);
+      return;
+    }
+    if (!jobOrgId || switching.current) return;
+    switching.current = true;
+    // Une seule tentative par onglet : si la bascule n'a pas pris effet, on ne recharge pas en boucle.
+    if (readFlag(flag)) {
+      writeFlag(flag, false);
+      void Promise.resolve().then(() =>
+        setActionError("Cet import appartient à une autre église. Choisissez-la dans le menu, puis rouvrez cet import."),
+      );
+      return;
+    }
+    writeFlag(flag, true);
+    apiFetch("/api/orgs/switch", { method: "POST", json: { orgId: jobOrgId } })
+      .then(() => window.location.reload())
+      .catch((e) => {
+        switching.current = false;
+        setActionError(errorText(e, "Impossible d'ouvrir l'église de cet import. Réessayez."));
+      });
+  }, [wrongOrg, jobOrgId, jobId]);
+
+  /* ───────────── Reprise de l'étape indiquée dans l'adresse ───────────── */
+
+  const resumed = useRef(false);
+  const readyToResume = Boolean(data && !running && !wrongOrg && pending.length > 0);
+  useEffect(() => {
+    if (resumed.current || !readyToResume) return;
+    resumed.current = true;
+    const target = PHASE_OF_PARAM[new URLSearchParams(window.location.search).get("etape") ?? ""];
+    if (!target) return;
+    // La vérification de l'agenda est refaite : elle seule dit s'il reste des chevauchements.
+    if (selected.length > 0 && blocking.length === 0) void Promise.resolve().then(() => checkConflicts(target));
+    else writeStepParam("edit");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyToResume]);
 
   /* ───────────── Rendu ───────────── */
 
@@ -346,7 +472,8 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     );
 
   const job = data?.job;
-  const analysing = !data || running;
+  // Pendant la bascule vers l'église de l'import, rien d'autre n'est affiché.
+  const analysing = !data || running || (wrongOrg && !actionError);
   const failed = job?.status === "failed";
   const errorAlert = actionError && <ActionError message={actionError} />;
 
@@ -377,7 +504,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
               ) : undefined
             }
           >
-            {job.error ?? "Le message n'a pas pu être lu."}
+            {cleanJobError(job.error) ?? "Le message n'a pas pu être lu."}
           </Alert>
           <Link href="/capture" className="inline-flex min-h-11 items-center text-sm font-medium text-accent underline underline-offset-2">
             Essayer un autre message
@@ -470,7 +597,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
             ) : blocking.length > 0 ? (
               <Button onClick={showNextBlocking}>Voir la suivante ({blocking.length})</Button>
             ) : (
-              <Button onClick={checkConflicts} loading={busy}>
+              <Button onClick={() => void checkConflicts()} loading={busy}>
                 Vérifier mon agenda
               </Button>
             )}
@@ -498,15 +625,20 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
 
       {!analysing && phase === "recap" && (
         <section key="recap" className="animate-step-in space-y-4">
-          <RecapSummary headingRef={headingRef} data={recapData()} commonTitle={commonTitle} reminderOffsets={me.profile.reminder_offsets} tz={tz} />
+          <RecapSummary
+            headingRef={headingRef}
+            data={buildRecap({ drafts, selected, excluded: pending.filter((d) => !include[d.key]), conflicts, choices, notify, decisions })}
+            commonTitle={commonTitle} reminderOffsets={me.profile.reminder_offsets} tz={tz} />
           {errorAlert}
           <ActionBarSpacer />
           <ActionBar
-            status={
-              <Button variant="ghost" onClick={() => goTo(conflicts.length ? "conflicts" : "edit")}>
+            leading={
+              <Button variant="ghost" onClick={() => goTo(conflicts.length ? "conflicts" : "edit")} disabled={busy}>
                 <Pencil className="h-4 w-4" aria-hidden /> <span className="sr-only sm:not-sr-only">Modifier</span>
               </Button>
             }
+            status={busy ? "Enregistrement…" : actionError ? "Rien n'a été enregistré." : undefined}
+            tone={actionError && !busy ? "danger" : "default"}
           >
             <Button onClick={commit} loading={busy}>
               <CommitLabel n={decisions.filter((d) => d.action === "create").length} />
@@ -533,34 +665,6 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
       )}
     </div>
   );
-
-  /** Listes du récapitulatif, calculées à partir des décisions (logique inchangée). */
-  function recapData(): RecapData {
-    const byKey = new Map(drafts.map((d) => [d.key, d]));
-    const skippedFor = new Map<string, string>();
-    conflicts.forEach((c, i) => {
-      if (choices[conflictId(c, i)] === "skip_new") skippedFor.set(c.draftKey, c.existing?.title ?? byKey.get(c.otherDraftKey ?? "")?.title ?? "");
-    });
-    const selectedKeys = new Set(selected.map((d) => d.key));
-    // Après « Réessayer ces dates », les conflits des dates déjà créées ne concernent plus ce récapitulatif.
-    const pairs = conflicts.map((c, i) => ({ c, id: conflictId(c, i) })).filter(({ c }) => selectedKeys.has(c.draftKey));
-    return {
-      added: decisions.filter((d) => d.action === "create").flatMap((d) => byKey.get(d.key) ?? []),
-      notAdded: [...decisions.filter((d) => d.action === "skip").map((d) => d.key), ...pending.filter((d) => !include[d.key]).map((d) => d.key)].flatMap((k) => {
-        const draft = byKey.get(k);
-        return draft ? [{ draft, conflictWith: skippedFor.get(k) || null }] : [];
-      }),
-      withdrawn: pairs
-        .filter(({ c, id }) => choices[id] === "withdraw_existing" && c.existing)
-        .map(({ c, id }) => ({ id, title: c.existing!.title, start: c.existing!.start, end: c.existing!.end, notify: Boolean(notify[id]) })),
-      kept: pairs
-        .filter(({ id }) => (choices[id] ?? "keep_both") === "keep_both")
-        .flatMap(({ c, id }) => {
-          const draft = byKey.get(c.draftKey);
-          return draft ? [{ id, draft, otherTitle: c.existing?.title ?? byKey.get(c.otherDraftKey ?? "")?.title ?? "" }] : [];
-        }),
-    };
-  }
 }
 
 /** Ensemble de natures de problèmes, stable tant que son contenu ne change pas (pour DraftCard mémoïsée). */
@@ -576,7 +680,7 @@ function Analysing({ initial, step, slow, onRestart }: { initial: boolean; step?
   const found = step === "extracted" || step === "review" || step === "ready";
   const text = initial ? t.states.loading : found ? "Dates trouvées, préparation…" : "Lecture du message…";
   return (
-    <section className="space-y-3" aria-busy={!slow}>
+    <section className="space-y-3">
       <div aria-live="polite" className="text-sm text-muted">
         {slow ? (
           <div className="space-y-2">
@@ -776,11 +880,12 @@ function ConflictsPhase({
       {errorAlert}
       <ActionBarSpacer />
       <ActionBar
-        status={
+        leading={
           <Button variant="ghost" onClick={onBack}>
             <ChevronLeft className="h-4 w-4" aria-hidden /> <span className="sr-only sm:not-sr-only">Retour</span>
           </Button>
         }
+        status={missing.length > 0 ? `${plural(missing.length, "choix à faire", "choix à faire")}` : "Tous les choix sont faits"}
       >
         {missing.length > 0 ? (
           <Button onClick={showNextMissing}>

@@ -113,9 +113,15 @@ export async function pullEvents(store: Store, c: CalendarConnection, now = new 
     });
   }
   let imported = 0;
-  for (const x of external) if (await importExternalEvent(store, c, x, "google")) imported++;
-  await store.update("calendar_connections", c.id, { last_synced_at: new Date().toISOString(), last_error: null, status: "active" });
-  return { imported, seen: items.length };
+  const changedEventIds: string[] = [];
+  for (const x of external) {
+    const r = await importExternalEvent(store, c, x, "google", now);
+    if (!r) continue;
+    changedEventIds.push(r.eventId);
+    if (r.created) imported++;
+  }
+  await store.update("calendar_connections", c.id, { last_synced_at: now.toISOString(), last_error: null, status: "active" });
+  return { imported, seen: items.length, changedEventIds };
 }
 
 /** Ouvre (ou renouvelle) un canal de notifications push Google pour ce calendrier. */

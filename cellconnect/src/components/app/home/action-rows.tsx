@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { CalendarX, ChevronRight, CircleCheck, ClipboardCheck, Mail, RefreshCwOff, type LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Disclosure } from "@/components/ui/disclosure";
-import { plural, relative } from "@/components/app/format";
+import { relative } from "@/components/app/format";
+import { plural } from "@/components/app/text";
 import { cn } from "@/lib/utils";
 
 /**
@@ -19,7 +19,8 @@ export function ActionRows({
   invitations: number;
   /** Analyses à vérifier, de la plus récente à la plus ancienne. */
   review: { id: string; created_at: string }[];
-  failures: { id: string; error: string | null }[];
+  /** Synchronisations échouées ; `type` vaut « sync.<fournisseur>.<opération> ». */
+  failures: { id: string; type?: string; error: string | null }[];
 }) {
   const latest = review[0];
   const empty = !conflicts && !invitations && !review.length && !failures.length;
@@ -65,32 +66,33 @@ export function ActionRows({
                 hint={latest && (review.length > 1 ? `La plus récente : analysée ${relative(latest.created_at)}` : `Analysée ${relative(latest.created_at)}`)}
               />
             )}
-            {failures.length > 0 && (
-              <li>
-                <Row
-                  as="div"
-                  href="/parametres/calendriers"
-                  icon={RefreshCwOff}
-                  tone="danger"
-                  label={failures.length > 1 ? `${failures.length} synchronisations d'agenda ont échoué` : "Une synchronisation d'agenda a échoué"}
-                  hint="Vérifiez la connexion de votre agenda."
-                />
-                <Disclosure summary="Détail technique" className="mx-1 mt-1">
-                  <ul className="space-y-1 text-xs text-muted">
-                    {failures.map((f) => (
-                      <li key={f.id} className="wrap-anywhere">
-                        {f.error ?? "Erreur inconnue"}
-                      </li>
-                    ))}
-                  </ul>
-                </Disclosure>
-              </li>
-            )}
+            {failuresByProvider(failures).map(([provider, n]) => (
+              <Row
+                key={provider}
+                href="/parametres/calendriers"
+                icon={RefreshCwOff}
+                tone="danger"
+                label={`Votre agenda ${PROVIDER_LABEL[provider] ?? ""}`.trimEnd() + ` n'a pas reçu ${plural(n, "changement", "changements")}`}
+                hint="Ouvrez la page des agendas reliés pour relancer l'envoi ou reconnecter votre compte."
+              />
+            ))}
           </ul>
         )}
       </CardContent>
     </Card>
   );
+}
+
+const PROVIDER_LABEL: Record<string, string> = { google: "Google", outlook: "Outlook", zoom: "Zoom" };
+
+/** Échecs regroupés par fournisseur (le détail technique n'est jamais montré ici). */
+function failuresByProvider(failures: { type?: string }[]): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const f of failures) {
+    const provider = /^sync\.([a-z]+)\./.exec(f.type ?? "")?.[1] ?? "";
+    counts.set(provider, (counts.get(provider) ?? 0) + 1);
+  }
+  return [...counts];
 }
 
 const TONES = {
@@ -99,24 +101,9 @@ const TONES = {
   danger: "bg-danger-bg text-danger",
 };
 
-function Row({
-  href,
-  icon: Icon,
-  label,
-  hint,
-  tone = "default",
-  as = "li",
-}: {
-  href: string;
-  icon: LucideIcon;
-  label: string;
-  hint?: string;
-  tone?: keyof typeof TONES;
-  as?: "li" | "div";
-}) {
-  const Wrapper = as;
+function Row({ href, icon: Icon, label, hint, tone = "default" }: { href: string; icon: LucideIcon; label: string; hint?: string; tone?: keyof typeof TONES }) {
   return (
-    <Wrapper>
+    <li>
       <Link href={href} className="flex min-h-12 items-center gap-3 rounded-xl px-1 py-2 hover:bg-subtle">
         <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", TONES[tone])}>
           <Icon className="h-5 w-5" aria-hidden />
@@ -127,6 +114,6 @@ function Row({
         </span>
         <ChevronRight className="h-5 w-5 shrink-0 text-muted" aria-hidden />
       </Link>
-    </Wrapper>
+    </li>
   );
 }

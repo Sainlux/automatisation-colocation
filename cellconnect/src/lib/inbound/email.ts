@@ -7,7 +7,7 @@ import { env } from "@/lib/env";
 import { audit, log } from "@/lib/audit";
 import { safeEqual } from "@/lib/auth/crypto";
 import { detectFileType } from "@/lib/storage";
-import { analyse, ctxForUser, inboundAllowed, ingest, notifyOutcome } from "./common";
+import { analyse, ctxForUser, inboundAllowed, ingest } from "./common";
 
 /**
  * Réception par e-mail : chaque utilisateur a une adresse personnelle signée,
@@ -145,7 +145,8 @@ export function emailToItems(mail: InboundEmail): IncomingItem[] {
   const subject = mail.subject.replace(/^\s*((re|tr|fwd?|wg)\s*:\s*)+/i, "").trim();
   const body = mail.text.trim();
   const text = [subject, body].filter(Boolean).join("\n\n").slice(0, env.uploads.maxTextChars);
-  if (body) items.unshift({ type: "text", text });
+  // Un objet seul (« Réunion lundi 16 novembre 20h ») est aussi analysé.
+  if (text) items.unshift({ type: "text", text });
   return items;
 }
 
@@ -160,7 +161,7 @@ export async function handleInboundEmail(store: Store, mailer: ChannelSender, ma
   if (!(await inboundAllowed("email", userId))) return { accepted: false, reason: "rate_limited" };
   const items = emailToItems(mail);
   if (items.length === 0) return { accepted: false, reason: "empty" };
-  const r = await ingest(ctx, items);
+  const r = await ingest(ctx, items, { channel: "email", ref: null });
   if ("error" in r) {
     log("info", "inbound_email_rejected", { reason: r.error });
     return { accepted: false, reason: r.error };
@@ -170,6 +171,9 @@ export async function handleInboundEmail(store: Store, mailer: ChannelSender, ma
     accepted: true,
     jobId: r.jobId,
     // Réponse par e-mail à l'adresse du COMPTE (jamais à l'expéditeur, qui pourrait être usurpé).
-    finish: async () => notifyOutcome(ctx, r.jobId, await analyse(store, r.jobId), "e-mail", true),
+    // La notification (app + e-mail) est envoyée par l'analyse elle-même, y compris si le worker la reprend.
+    finish: async () => {
+      await analyse(store, r.jobId, mailer);
+    },
   };
 }

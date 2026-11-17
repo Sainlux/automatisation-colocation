@@ -33,6 +33,10 @@ export const smtpSender: ChannelSender = {
       port: env.smtp.port,
       secure: env.smtp.port === 465,
       auth: env.smtp.user ? { user: env.smtp.user, pass: env.smtp.pass } : undefined,
+      // Délais bornés : un serveur SMTP lent ne doit pas bloquer le worker ni une requête.
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
     });
     await transport.sendMail({ from: env.smtp.from, to: msg.to, subject: msg.subject, text: msg.text });
   },

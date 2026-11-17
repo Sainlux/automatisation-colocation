@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
 import {
   Bell,
@@ -15,16 +15,18 @@ import {
   Mail,
   MailCheck,
   MessageSquare,
+  Inbox,
   UserMinus,
   type LucideIcon,
 } from "lucide-react";
-import { apiFetch, ApiError, useApi } from "@/lib/client/api";
+import { apiFetch, errorText, useApi } from "@/lib/client/api";
 import { useMe } from "@/components/app/session";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/ui/alert";
 import { EmptyState, ErrorState, ListSkeleton, PageHeader, StaleBanner } from "@/components/ui/states";
 import { dayBucket, plural, relative } from "@/components/app/format";
+import { notificationHref, stripTrailingUrl, type NotificationData } from "@/components/app/event/logic";
 import { t } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +35,7 @@ interface N {
   type: string;
   title: string;
   body: string;
-  data: { eventId?: string; conflictId?: string; invitationId?: string };
+  data: NotificationData;
   read_at: string | null;
   created_at: string;
   deliveries: { channel: keyof typeof t.channel; status: keyof typeof t.delivery; attempts: number; error: string | null }[];
@@ -51,6 +53,8 @@ const ICONS: Record<string, { icon: LucideIcon; cls: string }> = {
   conflict_detected: { icon: CalendarX, cls: "bg-warning-bg text-warning" },
   change_requested: { icon: MessageSquare, cls: "bg-info-bg text-accent" },
   slot_proposed: { icon: CalendarPlus, cls: "bg-info-bg text-accent" },
+  /** Message reçu (e-mail transféré, Telegram) : des dates à vérifier. */
+  system: { icon: Inbox, cls: "bg-warm-bg text-warm-text" },
 };
 const FALLBACK_ICON = { icon: Info, cls: "bg-subtle text-muted" };
 
@@ -77,7 +81,7 @@ function groupLabel(iso: string, tz: string, yesterday: DateTime) {
 }
 
 export default function NotificationsPage() {
-  const { me, counters, refreshCounters } = useMe();
+  const { me, counters, setCounters } = useMe();
   const tz = me.profile.timezone;
   const { data, error, loading, reload, setData } = useApi<{ notifications: N[]; unread: number }>("/api/notifications");
   const hasInvitations = Boolean(data?.notifications.some((n) => n.type === "invitation" && n.data?.invitationId));
@@ -98,17 +102,19 @@ export default function NotificationsPage() {
       setData({ notifications, unread: notifications.filter((n) => !n.read_at).length });
     }
     await apiFetch("/api/notifications/read", { method: "POST", json: { ids: [id] } }).catch(() => undefined);
-    refreshCounters();
   }
 
   async function markAll() {
     setErr(null);
     try {
       await apiFetch("/api/notifications/read", { method: "POST", json: { all: true } });
-      refreshCounters();
+      if (data) {
+        const readAt = new Date().toISOString();
+        setData({ notifications: data.notifications.map((n) => (n.read_at ? n : { ...n, read_at: readAt })), unread: 0 });
+      }
       reload();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Impossible de tout marquer comme lu. Réessayez.");
+      setErr(errorText(e, "Impossible de tout marquer comme lu. Vérifiez votre connexion internet, puis réessayez."));
     }
   }
 
@@ -118,9 +124,10 @@ export default function NotificationsPage() {
     try {
       await apiFetch(`/api/invitations/${invitationId}/respond`, { method: "POST", json: { response } });
       setAnswered((a) => ({ ...a, [invitationId]: response }));
+      setCounters({ invitations: Math.max(0, counters.invitations - 1) });
       await markOne(n.id);
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "La réponse n'a pas pu être envoyée. Réessayez.");
+      setErr(errorText(e, "La réponse n'a pas pu être envoyée. Vérifiez votre connexion internet, puis réessayez."));
     } finally {
       setBusy(null);
     }
@@ -128,6 +135,12 @@ export default function NotificationsPage() {
 
   const all = data?.notifications ?? [];
   const unread = all.filter((n) => !n.read_at).length;
+  const loaded = Boolean(data);
+
+  // Le nombre de non lues est déjà connu ici : on le donne au shell (pastille de la cloche) sans nouvel appel.
+  useEffect(() => {
+    if (loaded) setCounters({ notifications: unread });
+  }, [loaded, unread, setCounters]);
   const visible = filter === "unread" ? all.filter((n) => !n.read_at || touched.has(n.id)) : all;
   const yesterday = DateTime.now().minus({ days: 1 });
   const groups: { label: string; items: N[] }[] = [];
@@ -264,10 +277,10 @@ function NotificationCard({
   onRead: () => void;
   onRespond: (r: Answer) => void;
 }) {
-  const href = n.data?.conflictId ? "/conflits" : n.data?.eventId ? `/evenements/${n.data.eventId}` : null;
+  const href = notificationHref(n.data);
   const { icon: Icon, cls } = ICONS[n.type] ?? FALLBACK_ICON;
   const unread = !n.read_at;
-  const body = n.body.replace(INVITE_HINT, "").trim();
+  const body = stripTrailingUrl(n.body.replace(INVITE_HINT, ""));
   const deliveries = n.deliveries.filter(
     (d): d is N["deliveries"][number] & { channel: "email" | "push"; status: "sent" | "pending" | "failed" } => d.channel !== "in_app" && d.status !== "skipped",
   );

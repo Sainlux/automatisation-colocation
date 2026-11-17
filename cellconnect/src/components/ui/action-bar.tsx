@@ -9,12 +9,28 @@ import { cn } from "@/lib/utils";
  * Le statut (à gauche) est annoncé poliment aux lecteurs d'écran.
  * Comme elle est sticky, elle reste dans le flux : en fin de page, elle ne masque rien.
  *
+ * - `leading` : contenu placé avant le statut (ex. bouton « Retour »), hors de la région
+ *   annoncée : il n'est donc pas relu à chaque changement du statut.
+ * - `tone="danger"` : statut en rouge (ex. « 2 dates à corriger ») ; le texte doit rester explicite.
+ *
  * Exemple :
  *   <ActionBar status="3 dates sur 5 vérifiées">
  *     <Button onClick={next}>Vérifier mon agenda</Button>
  *   </ActionBar>
  */
-export function ActionBar({ status, children, className }: { status?: ReactNode; children: ReactNode; className?: string }) {
+export function ActionBar({
+  status,
+  leading,
+  tone = "default",
+  children,
+  className,
+}: {
+  status?: ReactNode;
+  leading?: ReactNode;
+  tone?: "default" | "danger";
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div
       className={cn(
@@ -23,8 +39,9 @@ export function ActionBar({ status, children, className }: { status?: ReactNode;
         className,
       )}
     >
+      {leading && <div className="flex shrink-0 items-center">{leading}</div>}
       {/* Toujours rendue : une région live insérée en même temps que son texte n'est pas annoncée. */}
-      <div aria-live="polite" className="min-w-0 flex-1 text-xs text-muted">
+      <div aria-live="polite" className={cn("min-w-0 flex-1 text-xs", tone === "danger" ? "font-medium text-danger" : "text-muted")}>
         {status}
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">{children}</div>

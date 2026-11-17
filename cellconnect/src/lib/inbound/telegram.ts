@@ -9,7 +9,7 @@ import { audit, log } from "@/lib/audit";
 import { safeEqual } from "@/lib/auth/crypto";
 import { httpFetch } from "@/lib/integrations/http";
 import { UniqueViolationError } from "@/lib/db/store";
-import { analyse, ctxForUser, inboundAllowed, ingest, notifyOutcome, outcomeText } from "./common";
+import { analyse, ctxForUser, inboundAllowed, ingest } from "./common";
 
 /**
  * Bot Telegram (API officielle Bot API, webhook).
@@ -187,8 +187,9 @@ async function processContent(
       }
     }
   } catch (e) {
+    // Le détail technique reste dans les journaux ; l'utilisateur reçoit une consigne simple.
     log("warn", "telegram_download_failed", { error: (e as Error).message });
-    await reply(`Je n'ai pas pu récupérer ce fichier (${(e as Error).message}). Réessayez ou envoyez une capture d'écran.`);
+    await reply("Je n'ai pas pu récupérer ce fichier. Réessayez ou envoyez une capture d'écran.");
     return {};
   }
   const body = (msg.text ?? msg.caption ?? "").trim();
@@ -198,18 +199,26 @@ async function processContent(
     return {};
   }
 
-  const r = await ingest(ctx, items);
+  let r: Awaited<ReturnType<typeof ingest>>;
+  try {
+    r = await ingest(ctx, items, { channel: "telegram", ref: String(msg.chat.id) });
+  } catch (e) {
+    log("error", "telegram_ingest_failed", { error: (e as Error).message });
+    await reply("Problème technique, renvoyez le message dans un instant.");
+    return {};
+  }
   if ("error" in r) {
     await reply(`Ce message n'a pas pu être importé : ${r.error}`);
     return {};
   }
   await audit(store, { orgId: ctx.orgId, actorId: ctx.userId, action: "inbound.telegram", entityType: "extraction_job", entityId: r.jobId, metadata: { items: items.length } });
   await reply("Reçu, je lis le message…");
+  const jobId = r.jobId;
   return {
+    // La réponse finale (dates trouvées, lien) est envoyée par l'analyse elle-même : elle part aussi
+    // quand l'analyse est reprise par le worker en dehors de cette requête.
     followUp: async () => {
-      const outcome = await analyse(store, r.jobId);
-      await reply(outcomeText(outcome), outcome.url);
-      await notifyOutcome(ctx, r.jobId, outcome, "Telegram", false);
+      await analyse(store, jobId, mailer);
     },
   };
 }

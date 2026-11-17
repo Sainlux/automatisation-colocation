@@ -1,6 +1,6 @@
 import type { Ctx } from "@/lib/context";
 import { forbidden, notFound } from "@/lib/errors";
-import type { EventRow, Group, OrgRole } from "@/lib/types";
+import type { EventRow, Group, GroupMember, OrgRole } from "@/lib/types";
 
 /**
  * Règles d'autorisation centralisées. Appliquées par tous les agents avant
@@ -41,6 +41,18 @@ export async function canManageGroup(ctx: Ctx, group: Group): Promise<boolean> {
 
 export async function assertCanManageGroup(ctx: Ctx, group: Group) {
   if (!(await canManageGroup(ctx, group))) throw forbidden("Seuls les responsables du groupe peuvent effectuer cette action.");
+}
+
+/**
+ * Variante synchrone de canEditEvent, pour les listes : les rôles de
+ * l'utilisateur dans ses groupes (groupId → rôle) sont chargés une seule fois.
+ */
+export function canEditEventWith(ctx: Ctx, event: EventRow, myGroupRoles: ReadonlyMap<string, GroupMember["role"]>): boolean {
+  if (event.organization_id !== ctx.orgId) return false;
+  if (event.created_by === ctx.userId) return true;
+  if (isOrgAdmin(ctx)) return true;
+  if (event.group_id) return myGroupRoles.get(event.group_id) === "leader";
+  return false;
 }
 
 /** Peut modifier / déplacer / annuler l'événement collectif. */

@@ -1,4 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+/** Même valeur que TEST_NOW dans playwright.config.ts (horloge figée du serveur en mode local). */
+const TEST_NOW = "2026-11-10T12:00:00Z";
 
 const CAPTURE = `Voici aussi les dates pour les formations de leaders par ZOOM :
 Formation Cellules « Zoom »
@@ -10,6 +13,34 @@ Formation Cellules « Zoom »
 (⚠️vacances)
 5. Lundi 15 mars 20h30 - 22h`;
 
+// Chaque test simule un visiteur distinct : la limite de 10 inscriptions par minute et par adresse IP
+// s'applique sinon à toute la suite, qui tourne depuis la même machine.
+test.beforeEach(async ({ page }, info) => {
+  let h = 0;
+  for (const c of info.testId) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  await page.setExtraHTTPHeaders({ "x-real-ip": `10.${(h >>> 16) & 255}.${(h >>> 8) & 255}.${h & 255}` });
+});
+
+/** Crée un compte et attend l'accueil (le titre « Bonjour … » de la page d'accueil). */
+async function signup(page: Page, name: string, email: string, password = "motdepasse-solide") {
+  await page.goto("/inscription");
+  await page.fill("#name", name);
+  await page.fill("#email", email);
+  await page.fill("#password", password);
+  await page.click("button[type=submit]");
+  await expect(page.getByRole("heading", { level: 1, name: /Bonjour/ })).toBeVisible();
+}
+
+/** Colle le message, lance la lecture et attend la liste des dates trouvées. */
+async function importMessage(page: Page, text: string, expected: string) {
+  await page.goto("/capture");
+  await page.getByRole("tab", { name: /Texte/ }).click();
+  await page.fill("#paste", text);
+  await page.getByRole("button", { name: "Trouver les dates" }).click();
+  await expect(page).toHaveURL(/\/capture\/.+/);
+  await expect(page.getByText(expected)).toBeVisible({ timeout: 20000 });
+}
+
 test("un visiteur non connecté est redirigé et l'API refuse l'accès", async ({ page, request }) => {
   await page.goto("/calendrier");
   await expect(page).toHaveURL(/\/connexion/);
@@ -19,12 +50,7 @@ test("un visiteur non connecté est redirigé et l'API refuse l'accès", async (
 
 test("parcours complet : inscription → capture → validation → conflit → calendrier → résolution", async ({ page }, info) => {
   const email = `e2e-${info.project.name}-${Date.now()}@exemple.ch`;
-  await page.goto("/inscription");
-  await page.fill("#name", "Daniel E2E");
-  await page.fill("#email", email);
-  await page.fill("#password", "motdepasse-solide");
-  await page.click("button[type=submit]");
-  await expect(page.getByText("Analyser une capture")).toBeVisible();
+  await signup(page, "Daniel E2E", email);
 
   // Événement déjà présent qui chevauchera la formation du 20 janvier.
   const created = await page.evaluate(async () => {
@@ -33,12 +59,7 @@ test("parcours complet : inscription → capture → validation → conflit → 
   });
   expect(created).toBe(200);
 
-  await page.goto("/capture");
-  await page.getByRole("tab", { name: /Texte/ }).click();
-  await page.fill("#paste", CAPTURE);
-  await page.getByRole("button", { name: "Analyser" }).click();
-  await expect(page).toHaveURL(/\/capture\/.+/);
-  await expect(page.getByText("5 dates trouvées dans le message")).toBeVisible({ timeout: 20000 });
+  await importMessage(page, CAPTURE, "5 dates trouvées dans le message");
   await expect(page.getByText(/tombe un mercredi en 2027/).first()).toBeVisible();
 
   // Sans confirmation, le bouton principal mène à la prochaine date à relire (jamais de bouton grisé muet).
@@ -82,12 +103,7 @@ test("parcours complet : inscription → capture → validation → conflit → 
 
 test("invitation par e-mail : une personne sans compte s'inscrit via le lien et rejoint l'événement", async ({ page, browser }, info) => {
   const stamp = `${info.project.name}-${Date.now()}`;
-  await page.goto("/inscription");
-  await page.fill("#name", "Organisateur");
-  await page.fill("#email", `orga-${stamp}@exemple.ch`);
-  await page.fill("#password", "motdepasse-solide");
-  await page.click("button[type=submit]");
-  await expect(page.getByText("Analyser une capture")).toBeVisible();
+  await signup(page, "Organisateur", `orga-${stamp}@exemple.ch`);
   const link: string = await page.evaluate(async () => {
     const e = await (await fetch("/api/events", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "Soirée de prière", date: "2027-02-10", startTime: "20:00", endTime: "21:30", timezone: "Europe/Zurich" }) })).json();
     const r = await (await fetch("/api/invitations/email", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ emails: [`invite-${Date.now()}@exemple.ch`], eventId: e.event.id }) })).json();
@@ -100,6 +116,9 @@ test("invitation par e-mail : une personne sans compte s'inscrit via le lien et 
   await guest.goto(new URL(link).pathname);
   await expect(guest.getByText("Soirée de prière")).toBeVisible();
   await guest.getByRole("link", { name: "Créer mon compte pour répondre" }).click();
+  // Inscription depuis une invitation : pas de champ « église », on rejoint celle qui invite.
+  await expect(guest.getByText("Créez votre compte pour rejoindre votre église et répondre à l'invitation.")).toBeVisible();
+  await expect(guest.locator("#organizationName")).toHaveCount(0);
   await guest.fill("#name", "Invitée");
   await guest.fill("#email", `invitee-${stamp}@exemple.ch`);
   await guest.fill("#password", "motdepasse-solide");
@@ -113,12 +132,7 @@ test("invitation par e-mail : une personne sans compte s'inscrit via le lien et 
 });
 
 test("partage d'une capture depuis une autre application (Web Share Target via service worker)", async ({ page }, info) => {
-  await page.goto("/inscription");
-  await page.fill("#name", "Partage");
-  await page.fill("#email", `share-${info.project.name}-${Date.now()}@exemple.ch`);
-  await page.fill("#password", "motdepasse-solide");
-  await page.click("button[type=submit]");
-  await expect(page.getByText("Analyser une capture")).toBeVisible();
+  await signup(page, "Partage", `share-${info.project.name}-${Date.now()}@exemple.ch`);
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
   });
@@ -143,4 +157,117 @@ test("partage d'une capture depuis une autre application (Web Share Target via s
   await page.evaluate(() => (document.querySelector("#share-input")!.closest("form") as HTMLFormElement).submit());
   await expect(page).toHaveURL(/\/capture\?partage=1/);
   await expect(page.getByRole("list", { name: "Fichiers sélectionnés" }).getByRole("listitem")).toHaveCount(1);
+});
+
+test("suppression du compte : un mot faux ne supprime rien, SUPPRIMER efface le compte", async ({ page }, info) => {
+  const email = `delete-${info.project.name}-${Date.now()}@exemple.ch`;
+  await signup(page, "Compte à supprimer", email);
+  await page.goto("/parametres");
+  await page.getByText("Supprimer mon compte").click();
+  const confirmField = page.locator("#delete-confirm");
+  const remove = page.getByRole("button", { name: "Supprimer définitivement" });
+
+  // Mot faux : le bouton reste inactif, et l'API refuse aussi.
+  await confirmField.fill("SUPPRIME");
+  await expect(remove).toBeDisabled();
+  const refused = await page.evaluate(async () => {
+    const r = await fetch("/api/account", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirm: "OUI" }) });
+    return r.status;
+  });
+  expect(refused).toBe(400);
+  expect(await page.evaluate(async () => (await fetch("/api/me")).status)).toBe(200);
+
+  // Mot exact : le compte est effacé et la personne quitte l'espace connecté.
+  await confirmField.fill("SUPPRIMER");
+  await expect(remove).toBeEnabled();
+  await remove.click();
+  // Attendu par le lot « paramètres » : /connexion (l'ancienne version renvoyait vers /inscription).
+  await expect(page).toHaveURL(/\/(connexion|inscription)/);
+  expect(await page.evaluate(async () => (await fetch("/api/me")).status)).toBe(401);
+  const login = await page.evaluate(
+    async (e) => (await fetch("/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: e, password: "motdepasse-solide" }) })).status,
+    email,
+  );
+  expect(login).toBeGreaterThanOrEqual(400);
+});
+
+test("date déplacée d'une série : la fiche montre le nouvel horaire", async ({ page }, info) => {
+  await signup(page, "Responsable", `move-${info.project.name}-${Date.now()}@exemple.ch`);
+  const { id, status } = await page.evaluate(async () => {
+    const r = await fetch("/api/events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Groupe de maison", date: "2026-11-19", startTime: "19:00", endTime: "20:30", timezone: "Europe/Zurich", recurrenceRule: "FREQ=WEEKLY;COUNT=4" }),
+    });
+    const j = await r.json();
+    return { id: j.event?.id as string, status: r.status };
+  });
+  expect(status).toBe(200);
+  // Jeudi 26 novembre 19h00 (heure d'hiver, UTC+1) déplacé au vendredi 27 novembre 20h15 – 21h45.
+  const original = "2026-11-26T18:00:00.000Z";
+  const moved = await page.evaluate(
+    async ({ id, original }) =>
+      (
+        await fetch(`/api/events/${id}/occurrences`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ occurrenceStart: original, action: "move", date: "2026-11-27", startTime: "20:15", endTime: "21:45" }),
+        })
+      ).status,
+    { id, original },
+  );
+  expect(moved).toBe(200);
+
+  await page.goto(`/evenements/${id}?occurrence=${encodeURIComponent(original)}`);
+  await expect(page.getByRole("heading", { name: "Groupe de maison" })).toBeVisible();
+  await expect(page.getByText(/Date déplacée/)).toBeVisible();
+  await expect(page.getByText(/^\s*20h15\s*–\s*21h45\s*$/)).toBeVisible();
+});
+
+test("agenda en liste : Tab atteint un événement et Entrée ouvre sa fiche", async ({ page }, info) => {
+  // Le navigateur vit à la même date que le serveur : l'agenda s'ouvre sur novembre 2026.
+  await page.clock.setFixedTime(new Date(TEST_NOW));
+  await signup(page, "Clavier", `clavier-${info.project.name}-${Date.now()}@exemple.ch`);
+  const created = await page.evaluate(async () => {
+    const r = await fetch("/api/events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Répétition chorale", date: "2026-11-20", startTime: "18:30", endTime: "20:00", timezone: "Europe/Zurich" }),
+    });
+    return r.status;
+  });
+  expect(created).toBe(200);
+
+  await page.goto("/calendrier");
+  await expect(page.locator(".fc")).toBeVisible();
+  await page.getByRole("button", { name: "Liste" }).first().click();
+  const link = page.locator(".fc-list").getByRole("link", { name: /Répétition chorale/ });
+  await expect(link).toBeVisible();
+
+  // Navigation au clavier seulement : Tab jusqu'au lien de l'événement, puis Entrée.
+  await page.locator(".fc").focus().catch(() => undefined);
+  let reached = false;
+  for (let i = 0; i < 60 && !reached; i++) {
+    await page.keyboard.press("Tab");
+    reached = await link.evaluate((el) => el === document.activeElement);
+  }
+  expect(reached).toBe(true);
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/evenements\//);
+  await expect(page.getByRole("heading", { name: "Répétition chorale" })).toBeVisible();
+});
+
+test("double appui sur Ajouter : un seul jeu d'événements", async ({ page }, info) => {
+  await signup(page, "Double appui", `double-${info.project.name}-${Date.now()}@exemple.ch`);
+  await importMessage(page, CAPTURE, "5 dates trouvées dans le message");
+  await page.getByRole("button", { name: "Ces 5 dates sont justes" }).click();
+  await page.getByRole("button", { name: "Vérifier mon agenda" }).click();
+  // Agenda vide : pas de chevauchement, on arrive directement au récapitulatif.
+  await expect(page.getByText(/Seront ajoutées/)).toBeVisible();
+  await expect(page).toHaveURL(/etape=recap/);
+  await page.getByRole("button", { name: /Ajouter les 5 dates/ }).dblclick();
+  await expect(page.getByRole("heading", { name: "5 dates ajoutées à votre agenda" })).toBeVisible();
+
+  const titles = await page.evaluate(async () => (await (await fetch("/api/events?from=2026-11-01T00:00:00Z&to=2027-04-01T00:00:00Z")).json()).items.map((i: { title: string }) => i.title));
+  expect(titles.filter((t: string) => t.startsWith("Formation"))).toHaveLength(5);
 });

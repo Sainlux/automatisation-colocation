@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { Users } from "lucide-react";
-import { apiFetch, ApiError } from "@/lib/client/api";
+import { apiFetch, ApiError, errorText } from "@/lib/client/api";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Alert } from "@/components/ui/alert";
+import { Alert, LiveRegion } from "@/components/ui/alert";
 import { ErrorState, ListSkeleton } from "@/components/ui/states";
 import { DateTile } from "@/components/app/date-tile";
 import { fmtDay, fmtTimeRange } from "@/components/app/format";
@@ -58,7 +58,7 @@ export default function InvitationPage({ params }: { params: Promise<{ token: st
       if (response === "declined") setDone("Réponse enregistrée. Merci de l'avoir signalé !");
       else window.location.href = r.eventId ? `/evenements/${r.eventId}` : "/";
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Réponse impossible. Vérifiez votre connexion internet, puis réessayez.");
+      setError(errorText(e, "Réponse impossible. Vérifiez votre connexion internet, puis réessayez."));
     } finally {
       setBusy(false);
     }
@@ -80,9 +80,11 @@ export default function InvitationPage({ params }: { params: Promise<{ token: st
 
   return (
     <Card>
+      {/* Montée avec la page : la confirmation de réponse y est annoncée de façon fiable. */}
+      <LiveRegion>{done ?? ""}</LiveRegion>
       <CardContent className="space-y-4 pt-5 sm:pt-6">
         <div>
-          <h1 className="text-2xl leading-tight font-bold tracking-tight">Vous êtes invité·e</h1>
+          <h1 className="text-2xl leading-tight font-bold tracking-tight">Une invitation pour vous</h1>
           <p className="mt-1 text-sm text-pretty text-muted">
             {data.invitedBy ?? "Un responsable"} vous invite {ev ? "à une rencontre de" : "à rejoindre"} <strong className="text-fg">{org}</strong>.
           </p>
@@ -109,9 +111,7 @@ export default function InvitationPage({ params }: { params: Promise<{ token: st
         </p>
 
         {done ? (
-          <Alert tone="success" live>
-            {done}
-          </Alert>
+          <Alert tone="success">{done}</Alert>
         ) : data.status !== "pending" ? (
           <Alert tone={data.status === "expired" || data.status === "cancelled" ? "warning" : "info"}>{CLOSED[data.status]}</Alert>
         ) : !loggedIn ? (

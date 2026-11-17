@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Bell, CalendarDays, CalendarX, Check, ChevronRight, ClipboardCheck, ClipboardPaste, Mail, MessageSquarePlus, Users, Video, type LucideIcon } from "lucide-react";
-import { useApi } from "@/lib/client/api";
-import { canLead, isAdmin, useMe, type Me } from "@/components/app/session";
+import { apiFetch, useApi } from "@/lib/client/api";
+import { canLead, useMe, type Me } from "@/components/app/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState, ErrorState, ListSkeleton, Skeleton, StaleBanner } from "@/components/ui/states";
 import { Badge } from "@/components/ui/badge";
 import { EventList, type CalItem } from "@/components/app/event-list";
@@ -28,6 +28,8 @@ interface Dashboard {
   jobs: { id: string; status: JobStatus; step: keyof typeof t.steps; created_at: string; error: string | null }[];
   pendingReview: number;
   failures: { id: string; type: string; error: string | null }[];
+  /** Au moins un événement enregistré par l'utilisateur (absent sur un serveur plus ancien). */
+  firstEventSaved?: boolean;
 }
 
 /** Analyses pas encore terminées (affichées dans « Captures en cours »). */
@@ -41,7 +43,8 @@ const isRunning = (s: JobStatus) => s === "pending" || s === "processing";
 /** Phrase ajoutée côté serveur aux invitations ; inutile ici, on répond directement dans l'application. */
 const INVITE_HINT = /\n?Répondez dans CellConnect[^\n]*/g;
 
-const POLL_MS = 3000;
+/** Délais croissants entre deux vérifications d'une analyse en cours (le dernier est répété). */
+const POLL_DELAYS_MS = [2000, 3000, 5000, 8000, 13000, 20000];
 const WAKE_THROTTLE_MS = 60_000;
 
 export default function HomePage() {
@@ -54,14 +57,36 @@ export default function HomePage() {
     if (data) setCounters({ conflicts: data.openConflicts, invitations: data.pendingInvitations });
   }, [data, setCounters]);
 
-  // Une analyse tourne : rechargement toutes les 3 s, en pause quand l'onglet est caché.
+  // Une analyse tourne : on interroge seulement la liste courte des analyses, de plus en plus
+  // espacé (en pause quand l'onglet est caché), puis l'accueil est rechargé une seule fois.
   const running = Boolean(data?.jobs.some((j) => isRunning(j.status)));
   useEffect(() => {
     if (!running) return;
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") reload();
-    }, POLL_MS);
-    return () => clearInterval(id);
+    let cancelled = false;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      timer = setTimeout(tick, POLL_DELAYS_MS[Math.min(attempt, POLL_DELAYS_MS.length - 1)]);
+      attempt += 1;
+    };
+    const tick = async () => {
+      if (cancelled) return;
+      if (document.visibilityState === "visible") {
+        try {
+          const { jobs } = await apiFetch<{ jobs: { status: JobStatus }[] }>("/api/extract-events?limit=5");
+          if (cancelled) return;
+          if (!jobs.some((j) => isRunning(j.status))) return reload();
+        } catch {
+          // réseau indisponible : nouvel essai au prochain délai
+        }
+      }
+      if (!cancelled) schedule();
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [running, reload]);
 
   // Retour sur l'application (ex. le matin) : données rafraîchies, au plus une fois par minute.
@@ -102,11 +127,11 @@ export default function HomePage() {
           {error && <StaleBanner onRetry={reload} />}
           {isNew ? (
             <>
-              <FirstSteps me={me} hasJobs={data.jobs.length > 0} hasGroups={data.groups.length > 0} />
+              <FirstSteps me={me} firstEventSaved={data.firstEventSaved ?? data.upcoming.length > 0} hasGroups={data.groups.length > 0} />
               <InstallCard pushAvailable={me.integrations.push.available} />
             </>
           ) : (
-            <Overview data={data} tz={tz} pushAvailable={me.integrations.push.available} />
+            <Overview data={data} me={me} tz={tz} />
           )}
         </>
       ) : null}
@@ -114,7 +139,7 @@ export default function HomePage() {
   );
 }
 
-/** Haut de page : salutation et action principale. */
+/** Haut de page : salutation, ce que fait l'application (aussi sur mobile) et action principale. */
 function Hero({ me }: { me: Me }) {
   const firstName = me.profile.display_name.trim().split(/\s+/)[0];
   const ai = me.integrations.ai.available;
@@ -122,34 +147,52 @@ function Hero({ me }: { me: Me }) {
   return (
     <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
       <h1 className="text-2xl leading-tight font-bold tracking-tight text-warm">{firstName ? `Bonjour ${firstName}` : "Bonjour"}</h1>
-      <p className="mt-1 hidden text-sm text-muted sm:block">Collez ou importez un message reçu : les dates sont trouvées, vérifiées, puis ajoutées à votre agenda.</p>
+      <p className="mt-1 text-sm text-muted">Collez un message reçu (WhatsApp, e-mail…)&nbsp;: CellConnect trouve les dates, vous vérifiez, c&apos;est ajouté à votre agenda.</p>
       <Link href="/capture" className={cn(buttonVariants({ size: "lg" }), "mt-4 w-full")}>
         <Icon className="h-5 w-5" aria-hidden /> {ai ? t.nav.capture : "Coller un message"}
       </Link>
-      {!ai && isAdmin(me.role) && (
-        <p className="mt-3 text-sm text-muted">
-          Les captures d&apos;écran ne sont pas encore lues : ajoutez une clé OpenAI dans{" "}
-          <Link href="/admin" className="font-medium text-accent underline underline-offset-2">
-            {t.nav.admin}
-          </Link>
-          .
-        </p>
-      )}
     </section>
   );
 }
 
-/** Nouveau compte : trois premiers pas, cochés d'après les données. */
-function FirstSteps({ me, hasJobs, hasGroups }: { me: Me; hasJobs: boolean; hasGroups: boolean }) {
+const FIRST_STEPS_KEY = "cc-first-steps-hidden";
+const noSubscribe = () => () => undefined;
+function readFirstStepsHidden() {
+  try {
+    return localStorage.getItem(FIRST_STEPS_KEY) === "1";
+  } catch {
+    return false; // stockage indisponible : la carte reste affichée
+  }
+}
+
+/**
+ * Premiers pas, cochés d'après les données. La carte reste affichée tant qu'une étape
+ * n'est pas faite ; une fois tout fait, un bouton « Masquer » la retire de cet appareil.
+ * - 1 : au moins une date enregistrée ;
+ * - 2 : au moins un groupe ;
+ * - 3 : un agenda relié (étape considérée comme faite si aucun fournisseur n'est disponible).
+ */
+function FirstSteps({ me, firstEventSaved, hasGroups }: { me: Me; firstEventSaved: boolean; hasGroups: boolean }) {
   const providers = [me.integrations.google.available && "Google", me.integrations.outlook.available && "Outlook"].filter((p): p is string => Boolean(p));
-  const { data: cal } = useApi<{ connections: { id: string }[] }>(providers.length ? "/api/calendar/connections" : null);
+  const { data: cal } = useApi<{ connections: { id: string; status?: string }[] }>(providers.length ? "/api/calendar/connections" : null);
+  const storedHidden = useSyncExternalStore(noSubscribe, readFirstStepsHidden, () => false);
+  const [hiddenNow, setHiddenNow] = useState(false);
+  const hide = useCallback(() => {
+    setHiddenNow(true);
+    try {
+      localStorage.setItem(FIRST_STEPS_KEY, "1");
+    } catch {
+      // stockage indisponible : masquée pour cette visite seulement
+    }
+  }, []);
   const lead = canLead(me.role);
+  const calendarLinked = Boolean(cal?.connections.some((c) => c.status !== "revoked"));
   const steps = [
     {
       href: "/capture?exemple=1",
-      title: "Essayer avec un exemple",
-      hint: "Découvrez comment analyser une capture avec un message type. Rien n'est ajouté sans votre accord.",
-      done: hasJobs,
+      title: "Ajouter une première date",
+      hint: "Essayez avec un message type. Rien n'est ajouté sans votre accord.",
+      done: firstEventSaved,
     },
     {
       href: "/groupes",
@@ -163,16 +206,27 @@ function FirstSteps({ me, hasJobs, hasGroups }: { me: Me; hasJobs: boolean; hasG
             href: "/parametres/calendriers",
             title: `Relier mon agenda ${providers.join(" ou ")}`,
             hint: "Vos rencontres y apparaissent toutes seules.",
-            done: Boolean(cal?.connections.length),
+            done: calendarLinked,
           },
         ]
       : []),
   ];
+  const calendarPending = providers.length > 0 && !cal;
+  const allDone = steps.every((s) => s.done) && !calendarPending;
+  // Carte masquée : elle ne réapparaît que si une étape est vraiment à refaire (pas pendant le chargement de l'agenda).
+  if ((storedHidden || hiddenNow) && (allDone || calendarPending)) return null;
+  // Seul l'agenda reste à vérifier : on attend sa réponse plutôt que d'afficher une étape peut-être déjà faite.
+  if (calendarPending && steps.slice(0, 2).every((s) => s.done)) return null;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Premiers pas</CardTitle>
+        <CardTitle>{allDone ? "Premiers pas terminés" : "Premiers pas"}</CardTitle>
+        {allDone && (
+          <Button variant="ghost" size="sm" onClick={hide}>
+            Masquer
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         <ol className="-mx-1 space-y-1">
@@ -205,7 +259,7 @@ function FirstSteps({ me, hasJobs, hasGroups }: { me: Me; hasJobs: boolean; hasG
   );
 }
 
-function Overview({ data, tz, pushAvailable }: { data: Dashboard; tz: string; pushAvailable: boolean }) {
+function Overview({ data, me, tz }: { data: Dashboard; me: Me; tz: string }) {
   const todayIds = new Set(data.today.map((e) => e.id));
   const upcoming = data.upcoming.filter((e) => !todayIds.has(e.id));
   const next = upcoming[0];
@@ -216,7 +270,8 @@ function Overview({ data, tz, pushAvailable }: { data: Dashboard; tz: string; pu
   return (
     <>
       <ActionRows conflicts={data.openConflicts} invitations={data.pendingInvitations} review={review} failures={data.failures} />
-      <InstallCard pushAvailable={pushAvailable} />
+      <FirstSteps me={me} firstEventSaved={data.firstEventSaved ?? data.upcoming.length > 0} hasGroups={data.groups.length > 0} />
+      <InstallCard pushAvailable={me.integrations.push.available} />
 
       <div className="hidden gap-3 lg:grid lg:grid-cols-4">
         <Stat href="/conflits" icon={CalendarX} label={t.nav.conflicts} value={data.openConflicts} warn />

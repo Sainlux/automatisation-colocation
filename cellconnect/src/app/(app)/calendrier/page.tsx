@@ -30,7 +30,11 @@ function CalendarSkeleton() {
   );
 }
 
-const CalendarView = dynamic(() => import("@/components/app/calendar-view").then((m) => m.CalendarView), { ssr: false, loading: () => <CalendarSkeleton /> });
+/* Le code de l'agenda (FullCalendar, lourd) est demandé dès le chargement de cette page, en parallèle des données. */
+const loadCalendarView = () => import("@/components/app/calendar-view");
+if (typeof window !== "undefined") void loadCalendarView().catch(() => undefined);
+
+const CalendarView = dynamic(() => loadCalendarView().then((m) => m.CalendarView), { ssr: false, loading: () => <CalendarSkeleton /> });
 
 /** ?vue= : « me », « org » ou « group:<id> » ; toute autre valeur revient à « me ». */
 const parseScope = (v: string | null) => (v === "org" || (v && /^group:[\w-]+$/.test(v)) ? v : "me");
@@ -122,7 +126,7 @@ function Agenda() {
         </CardContent>
       </Card>
       <p className="text-xs text-muted">
-        Heures affichées dans votre fuseau : {me.profile.timezone}. Les événements en conflit portent la mention «&nbsp;Conflit&nbsp;».
+        Heures affichées dans votre fuseau horaire ({me.profile.timezone}). Un chevauchement porte la mention «&nbsp;Conflit&nbsp;», une invitation sans réponse la mention «&nbsp;Invitation&nbsp;» (avec des hachures).
       </p>
       <a href="/api/calendar/export" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-accent underline-offset-2 hover:underline">
         <Download className="h-4 w-4" aria-hidden /> Ajouter à Apple/Google Calendar (.ics)

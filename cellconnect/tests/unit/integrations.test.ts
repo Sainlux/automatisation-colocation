@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { FakeMailer, joinOrg, makeUser, memoryStore } from "./helpers";
+import { FakeMailer, joinOrg, makeUser, memoryStore, NOW } from "./helpers";
 import { setHttpFetch } from "@/lib/integrations/http";
 import { buildAuthUrl, exchangeCode, verifyState, accessToken, channelToken } from "@/lib/integrations/oauth";
 import * as google from "@/lib/integrations/google-calendar";
@@ -25,7 +25,14 @@ const KEY = Buffer.alloc(32, 9).toString("base64");
 const tz = "Europe/Zurich";
 const idToken = (email: string) => `x.${Buffer.from(JSON.stringify({ email })).toString("base64url")}.y`;
 
+/**
+ * Horloge figée sur NOW (seul Date est simulé) : les dates des scénarios
+ * (janvier 2027) restent dans le futur quelle que soit la date réelle
+ * d'exécution, y compris pour le code qui lit l'heure courante (worker,
+ * synchronisation, jetons OAuth).
+ */
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"], now: NOW, shouldAdvanceTime: true });
   Object.assign(process.env, {
     GOOGLE_CLIENT_ID: "gid", GOOGLE_CLIENT_SECRET: "gsecret", MS_CLIENT_ID: "mid", MS_CLIENT_SECRET: "msecret",
     ZOOM_CLIENT_ID: "zid", ZOOM_CLIENT_SECRET: "zsecret", TOKEN_ENCRYPTION_KEY: KEY, APP_URL: "https://cellconnect.test",
@@ -45,7 +52,10 @@ beforeEach(() => {
     return new Response(out.json === undefined ? null : JSON.stringify(out.json), { status: out.status ?? 200, headers: { "content-type": "application/json" } });
   });
 });
-afterEach(() => setHttpFetch(null));
+afterEach(() => {
+  setHttpFetch(null);
+  vi.useRealTimers();
+});
 
 const tokenRoutes = () => {
   route("POST", /oauth2\.googleapis\.com\/token/, () => ({ json: { access_token: "g-access", refresh_token: "g-refresh", expires_in: 3600, scope: "calendar.events", id_token: idToken("daniel@gmail.com") } }));

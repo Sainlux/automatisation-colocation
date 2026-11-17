@@ -1,3 +1,4 @@
+import { hkdfSync } from "node:crypto";
 import { env } from "@/lib/env";
 import type { Store } from "@/lib/db/store";
 import { decryptSecret, encryptSecret, hmac, randomToken, safeEqual } from "@/lib/auth/crypto";
@@ -72,12 +73,30 @@ function requireConfig(p: Provider) {
   return { ...c, key: env.encryptionKey! };
 }
 
+/**
+ * Clé dérivée par usage (HKDF-SHA256) à partir de SESSION_SECRET : un état OAuth
+ * ne peut jamais servir de cookie de session ni de jeton de canal, et inversement.
+ */
+const derivedKeys = new Map<string, string>();
+export function purposeKey(purpose: "oauth-state" | "watch-channel"): string {
+  const secret = env.sessionSecret;
+  const cacheKey = `${purpose}:${secret}`;
+  let k = derivedKeys.get(cacheKey);
+  if (!k) {
+    k = Buffer.from(hkdfSync("sha256", secret, "cellconnect", purpose, 32)).toString("base64url");
+    // Un secret qui change (tests) ne doit pas faire grossir le cache indéfiniment.
+    if (derivedKeys.size >= 8) derivedKeys.clear();
+    derivedKeys.set(cacheKey, k);
+  }
+  return k;
+}
+
 export const redirectUri = (p: Provider) => `${env.appUrl}/api/calendar/${p}/callback`;
 
 export function buildAuthUrl(p: Provider, userId: string, orgId: string) {
   const c = requireConfig(p);
   const payload = Buffer.from(JSON.stringify({ u: userId, o: orgId, p, n: randomToken(16), t: Date.now() })).toString("base64url");
-  const state = `${payload}.${hmac(env.sessionSecret, payload)}`;
+  const state = `${payload}.${hmac(purposeKey("oauth-state"), payload)}`;
   const url = new URL(c.authUrl);
   url.search = new URLSearchParams({
     client_id: c.clientId!,
@@ -92,7 +111,7 @@ export function buildAuthUrl(p: Provider, userId: string, orgId: string) {
 
 export function verifyState(state: string, userId: string, p: Provider, now = Date.now()): { orgId: string } | null {
   const [payload, sig] = state.split(".");
-  if (!payload || !sig || !safeEqual(sig, hmac(env.sessionSecret, payload))) return null;
+  if (!payload || !sig || !safeEqual(sig, hmac(purposeKey("oauth-state"), payload))) return null;
   try {
     const s = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { u: string; o: string; p: string; t: number };
     if (s.u !== userId || s.p !== p || now - s.t > 15 * 60000) return null;
@@ -196,4 +215,4 @@ export async function authedFetch(store: Store, c: CalendarConnection, url: stri
 }
 
 /** Jeton secret d'un canal de notification (vérifié à chaque appel de webhook). */
-export const channelToken = (connectionId: string) => hmac(env.sessionSecret, `watch:${connectionId}`);
+export const channelToken = (connectionId: string) => hmac(purposeKey("watch-channel"), `watch:${connectionId}`);

@@ -16,7 +16,14 @@ export async function createOnlineMeeting(ctx: Ctx, eventId: string, provider: "
   if (event.meeting_url && !opts.replace) throw badRequest("Cet événement a déjà un lien de réunion.");
   const needed = provider === "zoom" ? "zoom" : "google";
   const [conn] = await ctx.store.select("calendar_connections", { where: [["user_id", "eq", ctx.userId], ["provider", "eq", needed], ["status", "eq", "active"]] });
-  if (!conn) throw badRequest(provider === "zoom" ? "Connectez d'abord votre compte Zoom (Paramètres → Connexions)." : "Connectez d'abord Google Calendar (Paramètres → Connexions).");
+  if (!conn) {
+    throw badRequest(
+      provider === "zoom"
+        ? "Connectez d'abord votre compte Zoom (Plus › Paramètres › Calendriers connectés)."
+        : "Connectez d'abord Google Agenda (Plus › Paramètres › Calendriers connectés).",
+      { href: "/parametres/calendriers" },
+    );
+  }
   const { isConfigured } = await import("@/lib/integrations");
   if (!isConfigured(conn)) throw badRequest("Ce service n'est pas configuré sur le serveur.");
 

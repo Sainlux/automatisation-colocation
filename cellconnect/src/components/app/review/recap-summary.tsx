@@ -3,14 +3,9 @@ import { Bell } from "lucide-react";
 import { DateTile } from "@/components/app/date-tile";
 import { fmtOffsets, fmtShortDate, fmtTimeRange, frTypo, plural } from "@/components/app/format";
 import { cn } from "@/lib/utils";
-import { isValidDate, timeLabel, type Draft } from "./draft-utils";
+import { isValidDate, timeLabel, type Draft, type RecapData } from "./draft-utils";
 
-export interface RecapData {
-  added: Draft[];
-  notAdded: { draft: Draft; conflictWith: string | null }[];
-  withdrawn: { id: string; title: string; start: string; end: string; notify: boolean }[];
-  kept: { id: string; draft: Draft; otherTitle: string }[];
-}
+export type { RecapData };
 
 /** Récapitulatif avant enregistrement, en listes groupées (une section par conséquence). */
 export function RecapSummary({
@@ -37,7 +32,7 @@ export function RecapSummary({
       </h2>
 
       {n > 0 && (
-        <Section title="Ajoutées à votre agenda" count={n} intro={commonTitle ? <p className="font-medium">{frTypo(commonTitle)}</p> : null}>
+        <Section title="Seront ajoutées" count={n} intro={commonTitle ? <p className="font-medium">{frTypo(commonTitle)}</p> : null}>
           {data.added.map((d) => (
             <DateRow key={d.key} date={d.date} tone="warm" primary={dateText(d.date)} secondary={timeLabel(d)} extra={titleOf(d)} />
           ))}
@@ -45,7 +40,7 @@ export function RecapSummary({
       )}
 
       {data.notAdded.length > 0 && (
-        <Section title="Non ajoutées" count={data.notAdded.length}>
+        <Section title="Ne seront pas ajoutées" count={data.notAdded.length}>
           {data.notAdded.map(({ draft: d, conflictWith }) => (
             <DateRow
               key={d.key}

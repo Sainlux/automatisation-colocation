@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
-import { BellRing, CalendarSync, ChevronRight, CircleCheck, Download, Monitor, Moon, Sun } from "lucide-react";
-import { apiFetch, ApiError } from "@/lib/client/api";
+import { BellRing, CalendarSync, ChevronRight, CircleCheck, Download, Monitor, Moon, Share, Smartphone, Sun } from "lucide-react";
+import { apiFetch, errorText } from "@/lib/client/api";
 import { isAdmin, useMe } from "@/components/app/session";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,9 +11,11 @@ import { Field, Input, Select, Switch } from "@/components/ui/form";
 import { ActionBar } from "@/components/ui/action-bar";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Badge } from "@/components/ui/badge";
+import { Dialog } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/ui/states";
 import { InboundSection } from "@/components/app/inbound-section";
-import { fmtMinutes, fmtOffsets } from "@/components/app/format";
+import { fmtOffset, fmtOffsets, REMINDER_PRESETS } from "@/components/app/format";
+import { REMINDER_LIMITS } from "@/lib/schemas/reminder";
 import { t } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -29,15 +31,6 @@ const ZONES: Record<string, string> = {
   UTC: "Temps universel (UTC)",
 };
 
-/** Rappels proposés (minutes avant le début). Le serveur accepte au plus 6 rappels, de 5 min à 4 semaines. */
-const REMINDERS: { value: number; label: string }[] = [
-  { value: 10080, label: "1 semaine" },
-  { value: 1440, label: "1 jour" },
-  { value: 120, label: "2 h" },
-  { value: 60, label: "1 h" },
-  { value: 30, label: "30 min" },
-  { value: 15, label: "15 min" },
-];
 
 const BUFFERS = [0, 15, 30, 45, 60];
 
@@ -122,7 +115,7 @@ export default function SettingsPage() {
       setSaveState({ tone: "success", text: "Paramètres enregistrés." });
       reload();
     } catch (e) {
-      setSaveState({ tone: "danger", text: e instanceof ApiError ? e.message : "Enregistrement impossible. Vérifiez votre connexion internet." });
+      setSaveState({ tone: "danger", text: errorText(e, "Enregistrement impossible. Vérifiez votre connexion internet, puis réessayez.") });
     } finally {
       setBusy(false);
     }
@@ -132,11 +125,12 @@ export default function SettingsPage() {
     set("reminder_offsets", form.reminder_offsets.includes(o) ? form.reminder_offsets.filter((x) => x !== o) : [...form.reminder_offsets, o].sort((a, b) => b - a));
 
   const zoneOptions = [...new Set([form.timezone, ...Object.keys(ZONES)])];
-  // Un rappel enregistré hors de la liste proposée reste visible (et peut être retiré).
+  // Mêmes puces que la fiche événement ; un rappel enregistré hors de la liste reste visible (et peut être retiré).
   const reminderOptions = [
-    ...REMINDERS,
-    ...saved.reminder_offsets.filter((o) => !REMINDERS.some((r) => r.value === o)).map((o) => ({ value: o, label: fmtMinutes(o) })),
+    ...REMINDER_PRESETS,
+    ...saved.reminder_offsets.filter((o) => !REMINDER_PRESETS.some((r) => r.value === o)).map((o) => ({ value: o, label: fmtOffset(o) })),
   ].sort((a, b) => b.value - a.value);
+  const reminderFull = form.reminder_offsets.length >= REMINDER_LIMITS.count;
 
   return (
     <div className="space-y-5">
@@ -210,13 +204,22 @@ export default function SettingsPage() {
           <legend className="mb-1 text-sm font-medium">Rappels par défaut</legend>
           <div className="flex flex-wrap gap-2">
             {reminderOptions.map((r) => (
-              <Button key={r.value} type="button" variant="outline" className={chip} pressed={form.reminder_offsets.includes(r.value)} onClick={() => toggleOffset(r.value)}>
+              <Button
+                key={r.value}
+                type="button"
+                variant="outline"
+                className={cn(chip, "first-letter:uppercase")}
+                pressed={form.reminder_offsets.includes(r.value)}
+                disabled={reminderFull && !form.reminder_offsets.includes(r.value)}
+                onClick={() => toggleOffset(r.value)}
+              >
                 {r.label}
               </Button>
             ))}
           </div>
           <p className="mt-1 text-xs text-muted">
             {form.reminder_offsets.length ? `Rappel ${fmtOffsets(form.reminder_offsets)}.` : "Aucun rappel."} S&apos;applique aux prochains événements ajoutés.
+            {reminderFull && ` ${REMINDER_LIMITS.count} rappels au plus.`}
           </p>
         </fieldset>
         <fieldset className="min-w-0">
@@ -232,21 +235,22 @@ export default function SettingsPage() {
             <li className="py-2">
               <Switch
                 label={t.channel.email}
-                hint={integ.email.available ? <span className="wrap-anywhere">À {p.email}</span> : "Non disponible pour le moment."}
+                hint={integ.email.available ? <span className="wrap-anywhere">À {p.email}</span> : "Les e-mails ne sont pas encore proposés sur ce service."}
                 checked={integ.email.available && form.notify_email}
                 disabled={!integ.email.available}
                 onChange={(e) => set("notify_email", e.target.checked)}
               />
             </li>
             <li className="py-2">
-              <PushControl available={integ.push.available} reason={admin ? integ.push.reason : undefined} />
+              <PushControl available={integ.push.available} />
             </li>
           </ul>
         </fieldset>
+        <InstallIphone />
       </Section>
 
       <Section id="messages" title="Recevoir des messages">
-        <InboundSection admin={admin} />
+        <InboundSection admin={me.role === "super_admin"} />
       </Section>
 
       <Section title="Apparence">
@@ -300,7 +304,7 @@ export default function SettingsPage() {
         <DeleteAccount />
       </Section>
 
-      {admin && <Services />}
+      {admin && <Services expert={me.role === "super_admin"} />}
 
       {(dirty || saveState) && (
         <ActionBar
@@ -342,9 +346,13 @@ function Section({ id, title, children }: { id?: string; title: string; children
 
 function Organizations() {
   const { me } = useMe();
+  const admin = isAdmin(me.role);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  /** Où afficher l'erreur : sous la liste (changement d'église) ou dans le formulaire de création. */
+  const [errorFor, setErrorFor] = useState<"create" | "switch">("switch");
 
   async function run(key: string, action: () => Promise<unknown>) {
     setBusy(key);
@@ -353,24 +361,28 @@ function Organizations() {
       await action();
       window.location.assign("/");
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Action impossible. Vérifiez votre connexion internet.");
+      setError(errorText(e, t.words.actionFailed));
+      setErrorFor(key === "create" ? "create" : "switch");
       setBusy(null);
+      setConfirming(false);
     }
   }
 
-  function create(e: FormEvent<HTMLFormElement>) {
+  function askCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (name.trim().length < 2) {
       setError("Indiquez un nom d'au moins 2 caractères.");
+      setErrorFor("create");
       return;
     }
-    void run("create", () => apiFetch("/api/orgs", { method: "POST", json: { name: name.trim() } }));
+    setError(null);
+    setConfirming(true);
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Églises et organisations</CardTitle>
+        <CardTitle>Mes églises</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <ul className="divide-y divide-border">
@@ -381,25 +393,56 @@ function Organizations() {
                 <span className="block text-xs text-muted">{t.roles[o.role]}</span>
               </span>
               {o.id === me.organization?.id ? (
-                <Badge tone="success">Active</Badge>
+                <Badge tone="success">Utilisée</Badge>
               ) : (
                 <Button size="sm" variant="outline" loading={busy === o.id} disabled={Boolean(busy)} onClick={() => run(o.id, () => apiFetch("/api/orgs/switch", { method: "POST", json: { orgId: o.id } }))}>
-                  Basculer
+                  {t.words.useChurch}
                 </Button>
               )}
             </li>
           ))}
         </ul>
-        <form onSubmit={create} noValidate>
-          <Field label="Créer une nouvelle organisation" htmlFor="new-org" error={error}>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Input id="new-org" placeholder="Ex. Église de Lausanne" enterKeyHint="done" value={name} onChange={(e) => setName(e.target.value)} />
-              <Button type="submit" variant="outline" loading={busy === "create"} disabled={Boolean(busy)}>
-                Créer
+        {error && errorFor === "switch" && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
+        {admin && (
+          <Disclosure summary={t.words.createChurch}>
+            <form onSubmit={askCreate} noValidate className="space-y-2">
+              <p className="text-sm text-pretty text-muted">
+                Pour une autre église ou une autre assemblée. Vous en serez l&apos;administrateur ; vos groupes et événements actuels restent dans l&apos;église actuelle.
+              </p>
+              <Field label="Nom de la nouvelle église" htmlFor="new-org" error={errorFor === "create" ? error : null}>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input id="new-org" placeholder="Ex. Église de Lausanne" enterKeyHint="done" value={name} onChange={(e) => setName(e.target.value)} />
+                  <Button type="submit" variant="outline" disabled={Boolean(busy)}>
+                    Créer
+                  </Button>
+                </div>
+              </Field>
+            </form>
+          </Disclosure>
+        )}
+        <Dialog
+          open={confirming}
+          onClose={() => setConfirming(false)}
+          title={`Créer « ${name.trim()} » ?`}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setConfirming(false)}>
+                Retour
               </Button>
-            </div>
-          </Field>
-        </form>
+              <Button loading={busy === "create"} onClick={() => run("create", () => apiFetch("/api/orgs", { method: "POST", json: { name: name.trim() } }))}>
+                Créer l&apos;église
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-pretty">
+            Une nouvelle église vide sera créée et deviendra celle que vous utilisez. Vous pourrez revenir à « {me.organization?.name ?? "l'église actuelle"} » depuis cette page.
+          </p>
+        </Dialog>
       </CardContent>
     </Card>
   );
@@ -416,9 +459,9 @@ function DeleteAccount() {
     setError(null);
     try {
       await apiFetch("/api/account", { method: "DELETE", json: { confirm: "SUPPRIMER" } });
-      window.location.assign("/inscription");
+      window.location.assign("/connexion");
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Suppression impossible. Vérifiez votre connexion internet.");
+      setError(errorText(e, "Suppression impossible. Vérifiez votre connexion internet, puis réessayez."));
       setBusy(false);
     }
   }
@@ -438,25 +481,34 @@ function DeleteAccount() {
   );
 }
 
-function Services() {
+/**
+ * État des services. Les détails techniques (Supabase, SMTP, VAPID…) ne sont montrés qu'au super administrateur ;
+ * les autres administrateurs voient seulement « Disponible » ou « Non activé ».
+ */
+function Services({ expert }: { expert: boolean }) {
   const { me } = useMe();
   const integ = me.integrations;
+  const rows: { name: string; ok: boolean; detail: string }[] = [
+    { name: "Stockage des données", ok: true, detail: integ.dataBackend === "supabase" ? "Supabase (PostgreSQL)" : "Mode démonstration" },
+    { name: "Lecture des photos (IA)", ok: integ.ai.available, detail: integ.ai.available ? `${integ.ai.provider} · ${integ.ai.model}` : "Clé OpenAI non configurée" },
+    { name: "Lecture des messages", ok: true, detail: "Sans IA" },
+    { name: "E-mails", ok: integ.email.available, detail: integ.email.available ? "SMTP configuré" : "SMTP non configuré" },
+    { name: "Google Agenda", ok: integ.google.available, detail: integ.google.available ? "Identifiants configurés" : "Identifiants non configurés" },
+    { name: "Outlook", ok: integ.outlook.available, detail: integ.outlook.available ? "Identifiants configurés" : (integ.outlook.reason ?? "Non configuré") },
+    { name: "Zoom", ok: integ.zoom.available, detail: integ.zoom.available ? "Identifiants configurés" : (integ.zoom.reason ?? "Non configuré") },
+    { name: t.words.pushOnPhone, ok: integ.push.available, detail: integ.push.available ? "Clés VAPID configurées" : (integ.push.reason ?? "Non configuré") },
+  ];
   return (
     <Card>
       <CardHeader>
         <CardTitle>État des services</CardTitle>
-        <Badge>Administrateur</Badge>
+        <Badge>{expert ? t.roles.super_admin : t.roles.org_admin}</Badge>
       </CardHeader>
       <CardContent>
         <ul className="divide-y divide-border text-sm">
-          <Service name="Stockage des données" ok detail={integ.dataBackend === "supabase" ? "Supabase (PostgreSQL)" : "Mode démonstration"} />
-          <Service name="Lecture des photos (IA)" ok={integ.ai.available} detail={integ.ai.available ? `${integ.ai.provider} · ${integ.ai.model}` : "Clé OpenAI non configurée"} />
-          <Service name="Lecture des messages" ok detail="Sans IA" />
-          <Service name="E-mails" ok={integ.email.available} detail={integ.email.available ? "SMTP configuré" : "SMTP non configuré"} />
-          <Service name="Google Agenda" ok={integ.google.available} detail={integ.google.available ? "Disponible" : "Identifiants non configurés"} />
-          <Service name="Outlook" ok={integ.outlook.available} detail={integ.outlook.available ? "Disponible" : (integ.outlook.reason ?? "Non configuré")} />
-          <Service name="Zoom" ok={integ.zoom.available} detail={integ.zoom.available ? "Disponible" : (integ.zoom.reason ?? "Non configuré")} />
-          <Service name="Notifications push" ok={integ.push.available} detail={integ.push.available ? "Clés VAPID configurées" : (integ.push.reason ?? "Non configuré")} />
+          {rows.map((r) => (
+            <Service key={r.name} name={r.name} ok={r.ok} detail={expert ? r.detail : r.ok ? t.words.available : t.words.notEnabled} />
+          ))}
         </ul>
       </CardContent>
     </Card>
@@ -472,6 +524,28 @@ function Service({ name, ok, detail }: { name: string; ok: boolean; detail: stri
   );
 }
 
+/** Lien permanent : comment installer CellConnect sur l'iPhone (écran d'accueil). */
+function InstallIphone() {
+  return (
+    <Disclosure
+      summary={
+        <span className="inline-flex items-center gap-2">
+          <Smartphone className="h-4 w-4 shrink-0" aria-hidden /> {t.words.installIphone}
+        </span>
+      }
+    >
+      <ol id="installer" className="list-decimal space-y-1 pl-5 text-sm text-pretty">
+        <li>Ouvrez CellConnect dans Safari.</li>
+        <li>
+          Touchez <Share className="inline h-4 w-4 align-text-bottom" aria-label="Partager" /> Partager, en bas de l&apos;écran.
+        </li>
+        <li>Choisissez « Sur l&apos;écran d&apos;accueil », puis « Ajouter ».</li>
+        <li>Ouvrez CellConnect depuis sa nouvelle icône, puis activez les notifications ci-dessus.</li>
+      </ol>
+    </Disclosure>
+  );
+}
+
 function urlBase64ToUint8Array(base64: string) {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
   const raw = atob((base64 + padding).replace(/-/g, "+").replace(/_/g, "/"));
@@ -484,7 +558,7 @@ const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.
 type PushState = "checking" | "on" | "off" | "denied";
 
 /** Push sur cet appareil : détecte l'abonnement existant et n'affiche qu'un seul bouton. */
-function PushControl({ available, reason }: { available: boolean; reason?: string }) {
+function PushControl({ available }: { available: boolean }) {
   const supported = useSyncExternalStore(
     noopSubscribe,
     () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window,
@@ -516,21 +590,25 @@ function PushControl({ available, reason }: { available: boolean; reason?: strin
     setMsg(null);
     try {
       const { publicKey } = await apiFetch<{ publicKey: string | null }>("/api/push");
-      if (!publicKey) throw new Error("Les notifications push ne sont pas disponibles pour le moment.");
+      if (!publicKey) throw new Error("indisponible");
       const perm = await Notification.requestPermission();
       if (perm === "denied") {
         setState("denied");
         return;
       }
-      if (perm !== "granted") throw new Error("Autorisation non accordée. Touchez de nouveau « Activer » et choisissez « Autoriser ».");
+      if (perm !== "granted") {
+        setMsg({ tone: "muted", text: "Autorisation non accordée. Touchez de nouveau « Activer » et choisissez « Autoriser »." });
+        return;
+      }
       const reg = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
       await apiFetch("/api/push", { method: "POST", json: sub.toJSON() });
       setState("on");
-      setMsg({ tone: "success", text: "Notifications activées sur cet appareil." });
+      setMsg({ tone: "success", text: "Notifications activées sur ce téléphone." });
     } catch (e) {
-      setMsg({ tone: "danger", text: e instanceof Error ? e.message : "Activation impossible." });
+      // Message fixe : les erreurs du navigateur (souvent en anglais) ne sont jamais affichées.
+      setMsg({ tone: "danger", text: e instanceof Error && e.message === "indisponible" ? t.words.pushNotOffered : t.words.pushFailed });
     } finally {
       setBusy(false);
     }
@@ -545,9 +623,9 @@ function PushControl({ available, reason }: { available: boolean; reason?: strin
       await apiFetch("/api/push", { method: "DELETE", json: { endpoint: sub?.endpoint ?? null } });
       await sub?.unsubscribe();
       setState("off");
-      setMsg({ tone: "muted", text: "Notifications désactivées sur cet appareil." });
+      setMsg({ tone: "muted", text: "Notifications désactivées sur ce téléphone." });
     } catch (e) {
-      setMsg({ tone: "danger", text: e instanceof ApiError ? e.message : "Désactivation impossible. Vérifiez votre connexion internet." });
+      setMsg({ tone: "danger", text: errorText(e, "Désactivation impossible. Vérifiez votre connexion internet, puis réessayez.") });
     } finally {
       setBusy(false);
     }
@@ -555,7 +633,7 @@ function PushControl({ available, reason }: { available: boolean; reason?: strin
 
   let hint: ReactNode;
   let action: ReactNode = null;
-  if (!available) hint = reason ? `Non disponible : ${reason}` : "Non disponible pour le moment.";
+  if (!available) hint = t.words.pushNotOffered;
   else if (!supported)
     hint = ios
       ? "Sur iPhone, ajoutez d'abord CellConnect à l'écran d'accueil (Partager → Sur l'écran d'accueil), puis ouvrez-le depuis l'icône."
@@ -582,7 +660,7 @@ function PushControl({ available, reason }: { available: boolean; reason?: strin
     <div className="text-sm">
       <div className="flex min-h-11 items-center justify-between gap-3">
         <span className="min-w-0">
-          <span className="block">Push sur cet appareil</span>
+          <span className="block">{t.words.pushOnPhone}</span>
           <span className="mt-0.5 block text-xs text-pretty text-muted">{hint}</span>
         </span>
         {action}

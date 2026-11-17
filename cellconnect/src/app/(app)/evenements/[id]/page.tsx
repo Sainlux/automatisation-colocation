@@ -4,57 +4,31 @@ import Link from "next/link";
 import { use, useEffect, useRef, useState, type ReactNode } from "react";
 import { BellRing, CalendarPlus, CalendarX, Ellipsis, MapPin, Pencil, Repeat, Share2, Undo2, UserMinus, UserPlus, Users, Video } from "lucide-react";
 import { DateTime } from "luxon";
-import { apiFetch, ApiError, useApi } from "@/lib/client/api";
+import { apiFetch, errorText, useApi } from "@/lib/client/api";
 import { useMe } from "@/components/app/session";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Dialog } from "@/components/ui/dialog";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Sheet } from "@/components/ui/sheet";
 import { ErrorState, ListSkeleton, PageHeader } from "@/components/ui/states";
 import { DateTile } from "@/components/app/date-tile";
 import { EventForm, toPayload } from "@/components/app/event-form";
-import { fmtDateTime, fmtOffset, fmtRange, fmtRecurrence, fmtShortDate, fmtTimeRange, frTypo, plural, relative } from "@/components/app/format";
+import { fmtDateTime, fmtLongDate, fmtOffset, fmtRange, fmtRecurrence, fmtShortDate, fmtTimeRange, frTypo, plural, relative } from "@/components/app/format";
+import { scrollBehavior } from "@/components/app/motion";
+import { CancelDialog, EditScopeDialog, InviteDialog, RemindersDialog, WithdrawDialog, type EditScope } from "@/components/app/event/dialogs";
+import { OccurrencePanel, type OccurrenceMode } from "@/components/app/event/occurrence-panel";
+import { MeetingItems, SheetItem, sheetItemClass } from "@/components/app/event/sheet-items";
+import { LiveRegion, useScrollIntoView } from "@/components/app/event/live-region";
+import { effectiveTimes } from "@/components/app/event/logic";
+import type { ActionResult, Done, EventDetails } from "@/components/app/event/types";
 import { t } from "@/i18n";
 import { cn } from "@/lib/utils";
-import type { EventRow } from "@/lib/types";
 
-interface Details {
-  event: EventRow;
-  group: { id: string; name: string; color: string } | null;
-  participants: {
-    userId: string;
-    name: string;
-    role: "organizer" | "participant";
-    status: keyof typeof t.participant;
-  }[];
-  me: { status: keyof typeof t.participant; role: string } | null;
-  canEdit: boolean;
-  changes: { id: string; change_type: string; created_at: string }[];
-  reminders: { id: string; remind_at: string; offset_minutes: number }[];
-  defaultWithdrawMessage: string;
-}
-type Delivery = {
-  channel: keyof typeof t.channel;
-  status: keyof typeof t.delivery;
-  error: string | null;
-};
-type Result = {
-  tone: "success" | "warning" | "danger";
-  text: string;
-  deliveries?: Delivery[];
-};
-type Done = (r: Result) => void;
-type ConflictSide = {
-  id: string;
-  title: string;
-  start: string;
-  end: string;
-} | null;
+type ConflictSide = { id: string; title: string; start: string; end: string } | null;
 type ConflictLite = { id: string; a: ConflictSide; b: ConflictSide };
+type DialogName = null | "cancel" | "withdraw" | "invite" | "reminders" | "scope";
 
 const CHANGE_LABEL: Record<string, string> = {
   created: "Créé",
@@ -74,99 +48,100 @@ function backFor(from: string | undefined, jobId: string | null) {
   return { href: "/calendrier", label: t.nav.calendar };
 }
 
-const zoned = (iso: string, tz: string) => DateTime.fromISO(iso, { zone: "utc" }).setZone(tz).setLocale("fr-CH");
-
-/** « lundi 16 novembre », avec l'année seulement si elle diffère de l'année en cours. */
-function fmtDayWithYear(iso: string, tz: string) {
-  const d = zoned(iso, tz);
-  return d.toFormat(d.year === DateTime.now().setZone(tz).year ? "cccc d LLLL" : "cccc d LLLL yyyy");
-}
-
 /** « dans 6 jours », « demain », « en cours », « il y a 3 jours »… */
 function fmtWhen(startIso: string, endIso: string, tz: string) {
   const now = DateTime.now().setZone(tz);
-  const s = zoned(startIso, tz);
-  if (now >= s && now < zoned(endIso, tz)) return "En cours";
+  const s = DateTime.fromISO(startIso, { zone: "utc" }).setZone(tz);
+  const e = DateTime.fromISO(endIso, { zone: "utc" }).setZone(tz);
+  if (now >= s && now < e) return "En cours";
   const days = Math.abs(s.diff(now, "days").days);
-  return (
-    s.toRelativeCalendar({
-      base: now,
-      locale: "fr",
-      ...(days < 14 ? { unit: "days" as const } : {}),
-    }) ?? ""
-  );
+  return s.toRelativeCalendar({ base: now, locale: "fr", ...(days < 14 ? { unit: "days" as const } : {}) }) ?? "";
 }
 
-export default function EventPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ occurrence?: string; from?: string }> }) {
+const validIso = (v: string | undefined) => Boolean(v && !Number.isNaN(Date.parse(v)));
+
+export default function EventPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ occurrence?: string; from?: string; start?: string }> }) {
   const { id } = use(params);
-  const { occurrence, from } = use(searchParams);
+  const { occurrence, from, start } = use(searchParams);
+  const occParam = validIso(occurrence) ? occurrence : undefined;
   const { me, refreshCounters } = useMe();
-  const { data, error, reload } = useApi<Details>(`/api/events/${id}`);
+  const { data, error, reload } = useApi<EventDetails>(`/api/events/${id}${occParam ? `?occurrence=${encodeURIComponent(occParam)}` : ""}`);
   const conflicts = useApi<{ conflicts: ConflictLite[] }>("/api/conflicts");
   const [editing, setEditing] = useState(false);
   const [more, setMore] = useState(false);
-  const [dialog, setDialog] = useState<null | "cancel" | "withdraw" | "invite" | "reminders">(null);
-  const [result, setResult] = useState<Result | null>(null);
+  const [dialog, setDialog] = useState<DialogName>(null);
+  const [result, setResult] = useState<ActionResult | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [occMode, setOccMode] = useState<OccurrenceMode>(null);
+  /** Incrémenté pour amener le panneau « Cette date uniquement » dans la vue. */
+  const [occFocus, setOccFocus] = useState(0);
   const editRef = useRef<HTMLDivElement>(null);
+  const occRef = useRef<HTMLDivElement>(null);
+  const resultRef = useScrollIntoView<HTMLDivElement>(result);
   const tz = me.profile.timezone;
+  const title = data?.event.title;
 
   useEffect(() => {
-    if (!editing) return;
-    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    editRef.current?.scrollIntoView({
-      behavior: reduce ? "auto" : "smooth",
-      block: "start",
-    });
+    if (editing) editRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   }, [editing]);
+  useEffect(() => {
+    if (occFocus) occRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
+  }, [occFocus]);
+  // Titre de l'onglet (et de l'historique du navigateur) : le titre de l'événement.
+  useEffect(() => {
+    if (!title) return;
+    const previous = document.title;
+    document.title = `${title} · ${t.app.name}`;
+    return () => {
+      document.title = previous;
+    };
+  }, [title]);
 
   if (error) return <ErrorState status={error.status} message={error.message} onRetry={reload} back={backFor(from, null)} />;
   if (!data) {
-    const back = backFor(from, null);
     return (
       <div className="space-y-4">
-        <PageHeader title={t.states.loading} back={back} />
+        <PageHeader title={t.states.loading} back={backFor(from, null)} />
         <ListSkeleton rows={2} />
       </div>
     );
   }
 
   const e = data.event;
+  const occ = data.occurrence ?? null;
   const cancelled = e.status === "cancelled";
+  /** Une seule date d'une série annulée (l'événement, lui, continue). */
+  const dateCancelled = !cancelled && Boolean(e.recurrence_rule) && occ?.status === "cancelled";
+  const moved = !cancelled && occ?.status === "moved";
+  const off = cancelled || dateCancelled;
   const active = Boolean(data.me && ["accepted", "tentative", "invited"].includes(data.me.status));
   const stepBack = data.me && (data.me.status === "withdrawn" || data.me.status === "declined") && !cancelled;
   const local = (iso: string) => DateTime.fromISO(iso, { zone: "utc" }).setZone(e.timezone);
-  // Occurrence demandée (événement récurrent) : on affiche cette date, avec la même durée.
-  const durationMs = Date.parse(e.ends_at) - Date.parse(e.starts_at);
-  const startIso = occurrence && !Number.isNaN(Date.parse(occurrence)) ? new Date(occurrence).toISOString() : e.starts_at;
-  const endIso = new Date(Date.parse(startIso) + durationMs).toISOString();
+  // Horaire effectif : celui de la date demandée (déplacée comprise), sinon celui de l'événement.
+  const { startIso, endIso } = effectiveTimes(e, occ, { occurrence: occParam, start });
   const share = `${e.title}\n${fmtRange(startIso, endIso, e.timezone)}${e.location ? `\n📍 ${e.location}` : ""}${e.meeting_url ? `\n🔗 ${e.meeting_url}` : ""}`;
-  // Conflit de cette occurrence de préférence, sinon le premier conflit de l'événement.
+  // Conflit de cette date de préférence, sinon le premier conflit de l'événement.
   const startMs = Date.parse(startIso);
-  const mine = cancelled || !active ? [] : (conflicts.data?.conflicts.filter((c) => c.a?.id === id || c.b?.id === id) ?? []);
+  const mine = off || !active ? [] : (conflicts.data?.conflicts.filter((c) => c.a?.id === id || c.b?.id === id) ?? []);
   const conflict = mine.find((c) => Date.parse((c.a?.id === id ? c.a : c.b)?.start ?? "") === startMs) ?? mine[0];
   const other = conflict ? (conflict.a?.id === id ? conflict.b : conflict.a) : null;
   const isOrganizer = e.created_by === me.profile.id;
   const others = data.participants.filter((p) => p.userId !== me.profile.id && ["accepted", "tentative", "invited"].includes(p.status)).length;
+  const seriesDate = Boolean(e.recurrence_rule && occ);
+
+  const refresh = () => {
+    refreshCounters();
+    reload();
+    conflicts.reload();
+  };
 
   async function respond(status: "accepted" | "declined" | "tentative") {
     try {
-      await apiFetch(`/api/events/${id}/respond`, {
-        method: "POST",
-        json: { status },
-      });
-      setResult({
-        tone: "success",
-        text: status === "accepted" ? "C'est noté : vous participez." : "Réponse enregistrée.",
-      });
-      refreshCounters();
-      reload();
-      conflicts.reload();
+      await apiFetch(`/api/events/${id}/respond`, { method: "POST", json: { status } });
+      setResult({ tone: "success", text: status === "accepted" ? "C'est noté : vous participez." : "Réponse enregistrée." });
+      refresh();
     } catch (err) {
-      setResult({
-        tone: "danger",
-        text: err instanceof ApiError ? err.message : "Réponse impossible pour le moment.",
-      });
+      setResult({ tone: "danger", text: errorText(err, "Réponse impossible pour le moment. Vérifiez votre connexion internet, puis réessayez.") });
     }
   }
 
@@ -174,52 +149,76 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
     setResult(r);
     setDialog(null);
     setMore(false);
-    refreshCounters();
-    reload();
-    conflicts.reload();
+    refresh();
   };
 
-  const actions: ReactNode[] = [
-    active && !cancelled && (
-      <Button key="rem" variant="outline" className="h-auto min-h-12 py-2" onClick={() => setDialog("reminders")}>
-        <BellRing className="h-4 w-4 shrink-0" aria-hidden /> Rappels
-      </Button>
-    ),
-    <a
-      key="wa"
-      href={`https://wa.me/?text=${encodeURIComponent(share)}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={cn(buttonVariants({ variant: "outline" }), "h-auto min-h-12 py-2 text-center")}
-    >
-      <Share2 className="h-4 w-4 shrink-0" aria-hidden /> Partager sur WhatsApp
-    </a>,
-    data.canEdit && !cancelled && (
-      <Button key="edit" variant="outline" className="h-auto min-h-12 py-2" pressed={editing} onClick={() => setEditing(!editing)}>
-        <Pencil className="h-4 w-4 shrink-0" aria-hidden /> Modifier
-      </Button>
-    ),
-    <Button key="more" variant="outline" className="h-auto min-h-12 py-2" onClick={() => setMore(true)}>
-      <Ellipsis className="h-4 w-4 shrink-0" aria-hidden /> Plus d&apos;actions
-    </Button>,
-  ].filter(Boolean);
+  function startEditing() {
+    if (editing) return setEditing(false);
+    // Série ouverte sur une date précise : d'abord choisir « cette date » ou « toutes les dates ».
+    if (seriesDate) return setDialog("scope");
+    setEditing(true);
+  }
+
+  function chooseScope(scope: EditScope) {
+    setDialog(null);
+    if (scope === "all") return setEditing(true);
+    setEditing(false);
+    setOccMode("move");
+    setOccFocus((n) => n + 1);
+  }
+
+  const actions: ReactNode[] = off
+    ? []
+    : [
+        active && (
+          <Button key="rem" variant="outline" className="h-auto min-h-12 py-2" onClick={() => setDialog("reminders")}>
+            <BellRing className="h-4 w-4 shrink-0" aria-hidden /> Rappels
+          </Button>
+        ),
+        <a
+          key="wa"
+          href={`https://wa.me/?text=${encodeURIComponent(share)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(buttonVariants({ variant: "outline" }), "h-auto min-h-12 py-2 text-center")}
+        >
+          <Share2 className="h-4 w-4 shrink-0" aria-hidden /> Partager sur WhatsApp
+          <span className="sr-only"> (nouvel onglet)</span>
+        </a>,
+        data.canEdit && (
+          <Button key="edit" variant="outline" className="h-auto min-h-12 py-2" pressed={editing} onClick={startEditing}>
+            <Pencil className="h-4 w-4 shrink-0" aria-hidden /> Modifier
+          </Button>
+        ),
+        <Button key="more" variant="outline" className="h-auto min-h-12 py-2" onClick={() => setMore(true)}>
+          <Ellipsis className="h-4 w-4 shrink-0" aria-hidden /> Plus d&apos;actions
+        </Button>,
+      ].filter(Boolean);
 
   return (
     <div className="space-y-4">
       <PageHeader title={frTypo(e.title)} back={backFor(from, e.source_job_id)} />
+      <LiveRegion message={result?.text} assertive={result?.tone === "danger"} />
 
       {result && (
-        <Alert tone={result.tone} title={result.text} live size={other ? "compact" : "default"}>
-          {result.deliveries && result.deliveries.length > 0 && (
-            <ul className="mt-1 space-y-0.5 text-xs">
-              {result.deliveries.map((d, i) => (
-                <li key={i}>
-                  {t.channel[d.channel]} : {t.delivery[d.status]}
-                  {d.error ? ` (${d.error})` : ""}
-                </li>
-              ))}
-            </ul>
-          )}
+        <div ref={resultRef} className="scroll-mt-20">
+          <Alert tone={result.tone} title={result.text} size={other || dateCancelled ? "compact" : "default"}>
+            {result.deliveries && result.deliveries.length > 0 && (
+              <ul className="mt-1 space-y-0.5 text-xs">
+                {result.deliveries.map((d, i) => (
+                  <li key={i}>
+                    {t.channel[d.channel]} : {t.delivery[d.status]}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Alert>
+        </div>
+      )}
+
+      {dateCancelled && (
+        <Alert tone="danger" title={t.words.dateCancelled}>
+          Les autres dates de la série sont maintenues.
         </Alert>
       )}
 
@@ -240,22 +239,28 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
         <CardContent className="space-y-4 pt-5">
           <div className="flex flex-wrap items-center gap-2">
             {e.status !== "confirmed" && <Badge tone={cancelled ? "danger" : "neutral"}>{t.eventStatus[e.status]}</Badge>}
+            {dateCancelled && <Badge tone="danger">Date annulée</Badge>}
+            {moved && occ && (
+              <Badge tone="warm" className="whitespace-normal">
+                Date déplacée (au lieu du {fmtLongDate(occ.originalStart, e.timezone)})
+              </Badge>
+            )}
             {data.group && (
               <Badge>
                 <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: data.group.color }} /> {data.group.name}
               </Badge>
             )}
             {data.me && <Badge tone={data.me.status === "invited" ? "warm" : data.me.status === "accepted" ? "success" : "neutral"}>Vous : {t.participant[data.me.status]}</Badge>}
-            {e.source === "capture" && <Badge>Importé d&apos;un message</Badge>}
-            {e.source === "google" && <Badge>Google Calendar</Badge>}
+            {e.source === "capture" && <Badge>{t.words.importedBadge}</Badge>}
+            {e.source === "google" && <Badge>Google Agenda</Badge>}
           </div>
 
           <div className="flex items-start gap-3">
             <DateTile date={startIso} tz={e.timezone} tone={other ? "warning" : "default"} />
             <div className="min-w-0">
-              <p className={cn("font-semibold first-letter:uppercase", cancelled && "text-muted line-through")}>{fmtDayWithYear(startIso, e.timezone)}</p>
-              <p className="tabular-nums">{fmtTimeRange(startIso, endIso, e.timezone)}</p>
-              {!cancelled && <p className="text-sm text-muted first-letter:uppercase">{fmtWhen(startIso, endIso, e.timezone)}</p>}
+              <p className={cn("font-semibold first-letter:uppercase", off && "text-muted line-through")}>{fmtLongDate(startIso, e.timezone)}</p>
+              <p className={cn("tabular-nums", off && "text-muted line-through")}>{fmtTimeRange(startIso, endIso, e.timezone)}</p>
+              {!off && <p className="text-sm text-muted first-letter:uppercase">{fmtWhen(startIso, endIso, e.timezone)}</p>}
             </div>
           </div>
           {e.timezone !== tz && (
@@ -275,7 +280,7 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
           )}
           {e.description && <p className="text-sm whitespace-pre-line text-muted wrap-anywhere">{e.description}</p>}
 
-          {data.me?.status === "invited" && !cancelled && (
+          {data.me?.status === "invited" && !off && (
             <div className="space-y-2 rounded-xl bg-warm-bg p-3">
               <p className="text-sm font-medium">Participerez-vous ?</p>
               <div className="flex flex-wrap gap-2">
@@ -291,7 +296,7 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
               </div>
             </div>
           )}
-          {stepBack && (
+          {stepBack && !dateCancelled && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-subtle p-3">
               <p className="min-w-0 flex-1 text-sm">Vous ne participez plus à cet événement.</p>
               <Button size="sm" variant="outline" onClick={() => respond("accepted")}>
@@ -300,29 +305,30 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
             </div>
           )}
 
-          <div className="space-y-2 pt-1">
-            {e.meeting_url && !cancelled && (
-              <a href={e.meeting_url} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ size: "lg" }), "w-full")}>
-                <Video className="h-5 w-5" aria-hidden /> Rejoindre la réunion
-                <span className="sr-only"> (nouvel onglet)</span>
-              </a>
-            )}
-            <div className="grid grid-cols-2 gap-2 [&>*:last-child:nth-child(odd)]:col-span-2">{actions}</div>
-          </div>
+          {(actions.length > 0 || (e.meeting_url && !off)) && (
+            <div className="space-y-2 pt-1">
+              {e.meeting_url && !off && (
+                <a href={e.meeting_url} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ size: "lg" }), "w-full")}>
+                  <Video className="h-5 w-5" aria-hidden /> Rejoindre la réunion
+                  <span className="sr-only"> (nouvel onglet)</span>
+                </a>
+              )}
+              <div className="grid grid-cols-2 gap-2 [&>*:last-child:nth-child(odd)]:col-span-2">{actions}</div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {e.recurrence_rule && occurrence && !cancelled && data.canEdit && (
+      {e.recurrence_rule && occ && !cancelled && data.canEdit && (
         <OccurrencePanel
+          key={`${occ.originalStart}:${occ.start}:${occ.status}`}
+          ref={occRef}
           eventId={id}
-          occurrenceStart={occurrence}
+          occurrence={occ}
           timezone={e.timezone}
-          durationMin={durationMs / 60000}
-          onDone={(r) => {
-            setResult(r);
-            refreshCounters();
-            reload();
-          }}
+          mode={occMode}
+          onModeChange={setOccMode}
+          onDone={done}
         />
       )}
 
@@ -330,10 +336,13 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
         <div ref={editRef} className="scroll-mt-20">
           <Card>
             <CardHeader>
-              <CardTitle>Modifier l&apos;événement</CardTitle>
+              <CardTitle>{e.recurrence_rule ? t.words.editAllDates : "Modifier l'événement"}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="mb-3 text-sm text-muted">Les participants seront prévenus d&apos;un changement d&apos;horaire et leurs rappels reprogrammés.</p>
+              <p className="mb-3 text-sm text-muted">
+                {e.recurrence_rule && <span className="block font-medium text-fg first-letter:uppercase">Commence le {fmtLongDate(e.starts_at, e.timezone)}</span>}
+                Les participants seront prévenus d&apos;un changement d&apos;horaire et leurs rappels reprogrammés.
+              </p>
               <EventForm
                 initial={{
                   title: e.title,
@@ -354,22 +363,16 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
                   try {
                     await apiFetch(`/api/events/${id}`, {
                       method: "PATCH",
-                      json: {
-                        ...toPayload(v),
-                        expectedVersion: e.version,
-                        notifyParticipants: true,
-                      },
+                      json: { ...toPayload(v), expectedVersion: e.version, notifyParticipants: true },
                     });
                     setEditing(false);
                     setResult({
                       tone: "success",
-                      text: "Événement mis à jour. Votre agenda a été revérifié.",
+                      text: e.recurrence_rule ? "Toutes les dates ont été mises à jour. Votre agenda a été revérifié." : "Événement mis à jour. Votre agenda a été revérifié.",
                     });
-                    refreshCounters();
-                    reload();
-                    conflicts.reload();
+                    refresh();
                   } catch (err) {
-                    setFormError(err instanceof ApiError ? err.message : "Modification impossible.");
+                    setFormError(errorText(err, "Modification impossible pour le moment. Vérifiez votre connexion internet, puis réessayez."));
                   }
                 }}
               />
@@ -401,7 +404,7 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
             </ul>
           </CardContent>
         </Card>
-        {active && !cancelled && (
+        {active && !off && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -443,7 +446,7 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
 
       <Sheet open={more} onClose={() => setMore(false)} title="Plus d'actions">
         <ul className="space-y-1 py-1">
-          {data.canEdit && !cancelled && (
+          {data.canEdit && !off && (
             <li>
               <SheetItem
                 icon={UserPlus}
@@ -456,13 +459,13 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
               </SheetItem>
             </li>
           )}
-          {data.canEdit && !cancelled && !e.meeting_url && <MeetingItems eventId={id} zoom={me.integrations.zoom.available} google={me.integrations.google.available} onDone={done} />}
+          {data.canEdit && !off && !e.meeting_url && <MeetingItems eventId={id} zoom={me.integrations.zoom.available} google={me.integrations.google.available} onDone={done} />}
           <li>
             <a href={`/api/events/${id}/ics`} className={sheetItemClass}>
               <CalendarPlus className="h-5 w-5 shrink-0 text-muted" aria-hidden /> Ajouter à un autre agenda (.ics)
             </a>
           </li>
-          {active && !cancelled && (
+          {active && !off && (
             <li>
               <SheetItem
                 icon={UserMinus}
@@ -476,7 +479,7 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
             </li>
           )}
         </ul>
-        {data.canEdit && !cancelled && (
+        {data.canEdit && !off && (
           <div className="mt-2 border-t border-border pt-3">
             <SheetItem
               icon={CalendarX}
@@ -486,7 +489,7 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
                 setDialog("cancel");
               }}
             >
-              Annuler l&apos;événement pour tous
+              {e.recurrence_rule ? "Annuler toutes les dates pour tous" : "Annuler l'événement pour tous"}
             </SheetItem>
           </div>
         )}
@@ -503,465 +506,21 @@ export default function EventPage({ params, searchParams }: { params: Promise<{ 
         personal={isOrganizer && others === 0}
         onDone={done}
       />
-      <InviteDialog open={dialog === "invite"} onClose={() => setDialog(null)} eventId={id} groupId={e.group_id} exclude={data.participants.map((p) => p.userId)} onDone={done} />
+      <InviteDialog
+        open={dialog === "invite"}
+        onClose={() => setDialog(null)}
+        eventId={id}
+        eventTitle={e.title}
+        groupId={e.group_id}
+        exclude={data.participants.map((p) => p.userId)}
+        onDone={done}
+        onChanged={refresh}
+      />
+      {occ && seriesDate && (
+        <EditScopeDialog open={dialog === "scope"} onClose={() => setDialog(null)} occurrenceStart={startIso} seriesStart={e.starts_at} timezone={e.timezone} onChoose={chooseScope} />
+      )}
       {/* Monté à chaque ouverture : la boîte repart des rappels réellement programmés. */}
       {dialog === "reminders" && <RemindersDialog open onClose={() => setDialog(null)} eventId={id} current={[...new Set(data.reminders.map((r) => r.offset_minutes))]} onDone={done} />}
     </div>
-  );
-}
-
-const sheetItemClass = "flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-base hover:bg-subtle disabled:text-disabled-fg";
-
-function SheetItem({ icon: Icon, children, onClick, danger, loading }: { icon: typeof UserPlus; children: ReactNode; onClick: () => void; danger?: boolean; loading?: boolean }) {
-  return (
-    <button type="button" onClick={onClick} disabled={loading} aria-busy={loading || undefined} className={cn(sheetItemClass, danger && "font-medium text-danger hover:bg-danger-bg")}>
-      <Icon className={cn("h-5 w-5 shrink-0", danger ? "text-danger" : "text-muted", loading && "animate-pulse")} aria-hidden /> {children}
-    </button>
-  );
-}
-
-function CancelDialog({ open, onClose, eventId, participants, onDone }: { open: boolean; onClose: () => void; eventId: string; participants: number; onDone: Done }) {
-  const [message, setMessage] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="Annuler l'événement pour tous ?"
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose}>
-            Retour
-          </Button>
-          <Button
-            variant="danger"
-            loading={busy}
-            onClick={async () => {
-              setBusy(true);
-              setErr(null);
-              try {
-                const r = await apiFetch<{
-                  notified: number;
-                  deliveries: Delivery[];
-                }>(`/api/events/${eventId}?confirm=true&message=${encodeURIComponent(message)}`, { method: "DELETE" });
-                onDone({
-                  tone: "success",
-                  text: `Événement annulé. ${r.notified ? `${plural(r.notified, "participant prévenu", "participants prévenus")}.` : "Personne d'autre n'était inscrit."}`,
-                  deliveries: r.deliveries,
-                });
-              } catch (e) {
-                setErr(e instanceof ApiError ? e.message : "Annulation impossible.");
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Oui, annuler pour tous
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-3">
-        <p className="text-sm">
-          L&apos;événement sera annulé pour <strong>tout le monde</strong>
-          {participants > 0 ? ` (${plural(participants, "autre participant", "autres participants")})` : ""}. Pour simplement ne pas y aller, choisissez plutôt « Me retirer ».
-        </p>
-        <Field label="Message aux participants (facultatif)" htmlFor="cancel-msg">
-          <Textarea id="cancel-msg" rows={3} value={message} onChange={(e) => setMessage(e.target.value)} />
-        </Field>
-        {err && (
-          <Alert tone="danger" live>
-            {err}
-          </Alert>
-        )}
-      </div>
-    </Dialog>
-  );
-}
-
-function WithdrawDialog({
-  open,
-  onClose,
-  eventId,
-  title,
-  defaultMessage,
-  isOrganizer,
-  personal,
-  onDone,
-}: {
-  open: boolean;
-  onClose: () => void;
-  eventId: string;
-  title: string;
-  defaultMessage: string;
-  isOrganizer: boolean;
-  personal: boolean;
-  onDone: Done;
-}) {
-  const [notify, setNotify] = useState(!isOrganizer);
-  const [message, setMessage] = useState(defaultMessage);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="Me retirer de cet événement"
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose}>
-            Retour
-          </Button>
-          <Button
-            loading={busy}
-            onClick={async () => {
-              setBusy(true);
-              setErr(null);
-              try {
-                const r = await apiFetch<{
-                  cancelledPersonalEvent: boolean;
-                  notified: boolean;
-                  deliveries: Delivery[];
-                }>(`/api/events/${eventId}/withdraw`, {
-                  method: "POST",
-                  json: { notifyOrganizer: notify, message },
-                });
-                onDone({
-                  tone: "success",
-                  text: r.cancelledPersonalEvent
-                    ? "Événement retiré de votre agenda."
-                    : `Vous ne participez plus. L'événement est maintenu pour les autres.${r.notified ? " L'organisateur a été prévenu." : ""}`,
-                  deliveries: r.deliveries,
-                });
-              } catch (e) {
-                setErr(e instanceof ApiError ? e.message : "Impossible de vous retirer pour le moment.");
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            {frTypo(`Me retirer de « ${title} »`)}
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-3">
-        <p className="text-sm text-muted">
-          {personal ? "Cet événement personnel sera retiré de votre agenda." : "Votre désistement retire votre participation et vos rappels. L'événement reste maintenu pour les autres participants."}
-        </p>
-        {!isOrganizer && <Checkbox checked={notify} onChange={(e) => setNotify(e.target.checked)} label="Prévenir l'organisateur" />}
-        {notify && !isOrganizer && (
-          <Field label="Message" htmlFor="wd-msg" hint="Ne mentionnez que ce que vous souhaitez partager.">
-            <Textarea id="wd-msg" rows={4} value={message} onChange={(e) => setMessage(e.target.value)} />
-          </Field>
-        )}
-        {err && (
-          <Alert tone="danger" live>
-            {err}
-          </Alert>
-        )}
-      </div>
-    </Dialog>
-  );
-}
-
-function InviteDialog({ open, onClose, eventId, groupId, exclude, onDone }: { open: boolean; onClose: () => void; eventId: string; groupId: string | null; exclude: string[]; onDone: Done }) {
-  const members = useApi<{ members: { userId: string; name: string }[] }>(open ? "/api/orgs/members" : null);
-  const groups = useApi<{
-    groups: { id: string; name: string; canManage: boolean }[];
-  }>(open ? "/api/groups" : null);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [emails, setEmails] = useState("");
-  const [group, setGroup] = useState(groupId ?? "");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const candidates = members.data?.members.filter((m) => !exclude.includes(m.userId)) ?? [];
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="Inviter"
-      footer={
-        <Button
-          loading={busy}
-          onClick={async () => {
-            const list = emails.split(/[\s,;]+/).filter(Boolean);
-            if (!selected.length && !group && !list.length) {
-              setErr("Choisissez un groupe, une personne ou saisissez une adresse e-mail.");
-              return;
-            }
-            setBusy(true);
-            setErr(null);
-            try {
-              const parts: string[] = [];
-              if (selected.length || group) {
-                const r = await apiFetch<{ results: { status: string }[] }>(`/api/events/${eventId}/invite`, {
-                  method: "POST",
-                  json: { userIds: selected, groupId: group || null },
-                });
-                parts.push(`${plural(r.results.filter((x) => x.status === "invited").length, "invitation envoyée", "invitations envoyées")}.`);
-              }
-              if (list.length) {
-                const r = await apiFetch<{
-                  results: {
-                    email: string;
-                    status: string;
-                    error?: string;
-                    link?: string;
-                  }[];
-                }>("/api/invitations/email", {
-                  method: "POST",
-                  json: { emails: list, eventId },
-                });
-                const sent = r.results.filter((x) => x.status === "email_sent" || x.status === "invited_member").length;
-                const notSent = r.results.filter((x) => x.link);
-                parts.push(`${plural(sent, "invitation", "invitations")} par e-mail.`);
-                if (notSent.length) parts.push(`Non envoyées (${notSent[0].error}) — liens à transmettre vous-même : ${notSent.map((x) => `${x.email} → ${x.link}`).join(" ; ")}`);
-              }
-              onDone({ tone: "success", text: parts.join(" ") });
-            } catch (e) {
-              setErr(e instanceof ApiError ? e.message : "Invitation impossible.");
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          Envoyer les invitations
-        </Button>
-      }
-    >
-      <div className="space-y-3">
-        <Field label="Inviter un groupe entier" htmlFor="inv-group">
-          <Select id="inv-group" value={group} onChange={(e) => setGroup(e.target.value)}>
-            <option value="">Aucun groupe</option>
-            {groups.data?.groups
-              .filter((g) => g.canManage)
-              .map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-          </Select>
-        </Field>
-        <p className="text-sm font-medium">Ou des personnes</p>
-        {candidates.length === 0 ? (
-          <p className="text-sm text-muted">Aucune autre personne dans l&apos;église.</p>
-        ) : (
-          <ul className="max-h-60 space-y-1 overflow-y-auto">
-            {candidates.map((m) => (
-              <li key={m.userId}>
-                <Checkbox checked={selected.includes(m.userId)} onChange={(e) => setSelected(e.target.checked ? [...selected, m.userId] : selected.filter((x) => x !== m.userId))} label={m.name} />
-              </li>
-            ))}
-          </ul>
-        )}
-        <Field label="Inviter par e-mail (personnes sans compte)" htmlFor="inv-emails" hint="Séparez les adresses par des virgules. Elles reçoivent un lien valable 30 jours.">
-          <Textarea id="inv-emails" rows={2} value={emails} onChange={(e) => setEmails(e.target.value)} placeholder="prenom@exemple.ch, autre@exemple.ch" />
-        </Field>
-        {err && (
-          <Alert tone="danger" live>
-            {err}
-          </Alert>
-        )}
-      </div>
-    </Dialog>
-  );
-}
-
-const PRESET_OFFSETS = [1440, 120, 30];
-
-function RemindersDialog({ open, onClose, eventId, current, onDone }: { open: boolean; onClose: () => void; eventId: string; current: number[]; onDone: Done }) {
-  const [offsets, setOffsets] = useState<number[]>(current);
-  const [custom, setCustom] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  // Les rappels déjà programmés hors des choix habituels restent visibles et décochables.
-  const choices = [...new Set([...PRESET_OFFSETS, ...current])].sort((a, b) => b - a);
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="Rappels pour cet événement"
-      footer={
-        <Button
-          loading={busy}
-          onClick={async () => {
-            setBusy(true);
-            setErr(null);
-            try {
-              const list = [...offsets, ...(custom ? [Number(custom)] : [])].filter((n) => Number.isFinite(n) && n >= 5);
-              await apiFetch("/api/reminders", {
-                method: "POST",
-                json: { eventId, offsets: [...new Set(list)] },
-              });
-              onDone({
-                tone: "success",
-                text: list.length ? "Rappels mis à jour." : "Plus aucun rappel pour cet événement.",
-              });
-            } catch (e) {
-              setErr(e instanceof ApiError ? e.message : "Enregistrement impossible.");
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          Enregistrer
-        </Button>
-      }
-    >
-      <div className="space-y-2">
-        {choices.map((p) => (
-          <Checkbox
-            key={p}
-            checked={offsets.includes(p)}
-            onChange={(e) => setOffsets(e.target.checked ? [...offsets, p] : offsets.filter((x) => x !== p))}
-            label={<span className="first-letter:uppercase">{fmtOffset(p)}</span>}
-          />
-        ))}
-        <Field label="Autre rappel (en minutes avant)" htmlFor="custom-rem">
-          <Input id="custom-rem" type="number" inputMode="numeric" min={5} max={40320} value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="ex. 60" />
-        </Field>
-        {err && (
-          <Alert tone="danger" live>
-            {err}
-          </Alert>
-        )}
-      </div>
-    </Dialog>
-  );
-}
-
-function OccurrencePanel({ eventId, occurrenceStart, timezone, durationMin, onDone }: { eventId: string; occurrenceStart: string; timezone: string; durationMin: number; onDone: Done }) {
-  const start = DateTime.fromISO(occurrenceStart, { zone: "utc" }).setZone(timezone);
-  const [mode, setMode] = useState<null | "move" | "cancel">(null);
-  const [date, setDate] = useState(start.toISODate()!);
-  const [startTime, setStartTime] = useState(start.toFormat("HH:mm"));
-  const [endTime, setEndTime] = useState(start.plus({ minutes: durationMin }).toFormat("HH:mm"));
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function send(action: "cancel" | "move" | "restore") {
-    setBusy(true);
-    setErr(null);
-    try {
-      const r = await apiFetch<{ notified: number }>(`/api/events/${eventId}/occurrences`, {
-        method: "POST",
-        json: {
-          occurrenceStart,
-          action,
-          ...(action === "move" ? { date, startTime, endTime } : {}),
-          message: message || null,
-        },
-      });
-      const what = action === "cancel" ? "Date annulée" : action === "move" ? "Date déplacée" : "Date rétablie";
-      onDone({
-        tone: "success",
-        text: `${what}. Les autres dates sont inchangées.${r.notified ? ` ${plural(r.notified, "participant prévenu", "participants prévenus")}.` : ""}`,
-      });
-      setMode(null);
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Action impossible.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          Cette date uniquement : <span className="tabular-nums">{fmtShortDate(occurrenceStart, timezone)}</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" pressed={mode === "move"} onClick={() => setMode("move")}>
-            Déplacer cette date
-          </Button>
-          <Button size="sm" variant="outline" pressed={mode === "cancel"} onClick={() => setMode("cancel")}>
-            Annuler cette date
-          </Button>
-          <Button size="sm" variant="ghost" loading={busy && mode === null} onClick={() => send("restore")}>
-            Rétablir l&apos;horaire d&apos;origine
-          </Button>
-        </div>
-        {mode === "move" && (
-          <div className="space-y-3">
-            <Field label="Date" htmlFor="occ-d">
-              <Input id="occ-d" type="date" value={date} onChange={(ev) => setDate(ev.target.value)} />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Début" htmlFor="occ-s">
-                <Input id="occ-s" type="time" value={startTime} onChange={(ev) => setStartTime(ev.target.value)} />
-              </Field>
-              <Field label="Fin" htmlFor="occ-e">
-                <Input id="occ-e" type="time" value={endTime} onChange={(ev) => setEndTime(ev.target.value)} />
-              </Field>
-            </div>
-          </div>
-        )}
-        {mode && (
-          <>
-            <Field label="Message aux participants (facultatif)" htmlFor="occ-m">
-              <Textarea id="occ-m" rows={2} value={message} onChange={(ev) => setMessage(ev.target.value)} />
-            </Field>
-            <Button variant={mode === "cancel" ? "danger" : "primary"} loading={busy} onClick={() => send(mode)}>
-              {mode === "cancel" ? "Confirmer l'annulation de cette date" : "Confirmer le déplacement"}
-            </Button>
-          </>
-        )}
-        {err && (
-          <Alert tone="danger" live>
-            {err}
-          </Alert>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Création d'une visio (Zoom / Google Meet), proposée dans la feuille « Plus d'actions ». */
-function MeetingItems({ eventId, zoom, google, onDone }: { eventId: string; zoom: boolean; google: boolean; onDone: Done }) {
-  const [busy, setBusy] = useState<string | null>(null);
-  if (!zoom && !google) return null;
-  async function create(provider: "zoom" | "google_meet") {
-    setBusy(provider);
-    try {
-      await apiFetch(`/api/events/${eventId}/meeting`, {
-        method: "POST",
-        json: { provider },
-      });
-      onDone({
-        tone: "success",
-        text: "Réunion en ligne créée. Les participants ont reçu le lien.",
-      });
-    } catch (err) {
-      onDone({
-        tone: "danger",
-        text: err instanceof ApiError ? err.message : "Création impossible.",
-      });
-    } finally {
-      setBusy(null);
-    }
-  }
-  return (
-    <>
-      {zoom && (
-        <li>
-          <SheetItem icon={Video} loading={busy === "zoom"} onClick={() => create("zoom")}>
-            Créer une réunion Zoom
-          </SheetItem>
-        </li>
-      )}
-      {google && (
-        <li>
-          <SheetItem icon={Video} loading={busy === "google_meet"} onClick={() => create("google_meet")}>
-            Créer un Google Meet
-          </SheetItem>
-        </li>
-      )}
-    </>
   );
 }

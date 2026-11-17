@@ -3,8 +3,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "CellConnect AI", template: "%s · CellConnect AI" },
-  description: "Transformez une capture d'écran en événements organisés, sans conflit d'agenda.",
+  description: "Vos messages deviennent des dates dans votre agenda.",
   applicationName: "CellConnect AI",
+  // iPhone : ouverte depuis l'écran d'accueil, l'application s'affiche sans la barre de Safari.
+  appleWebApp: { capable: true, title: "CellConnect", statusBarStyle: "default" },
   robots: { index: false, follow: false },
 };
 

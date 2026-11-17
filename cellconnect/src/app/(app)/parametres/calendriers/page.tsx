@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Download, RefreshCw, Upload } from "lucide-react";
-import { apiFetch, ApiError, useApi } from "@/lib/client/api";
+import { apiFetch, errorText, useApi } from "@/lib/client/api";
 import { isAdmin, useMe } from "@/components/app/session";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,7 +62,7 @@ function Calendars() {
     try {
       await action();
     } catch (e) {
-      setMsg({ tone: "danger", text: e instanceof ApiError ? e.message : "Action impossible. Vérifiez votre connexion internet." });
+      setMsg({ tone: "danger", text: errorText(e, "Action impossible pour le moment. Vérifiez votre connexion internet, puis réessayez.") });
     } finally {
       setBusy(null);
     }

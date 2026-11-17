@@ -260,6 +260,47 @@ li {
 .fc .ev-conflict {
   box-shadow: inset 4px 0 0 var(--warning);
 }
+/*
+ * Invitation sans réponse : hachures (et non une simple transparence, illisible) ;
+ * la mention « Invitation · » porte l'information sans la couleur.
+ */
+.fc .fc-event.ev-invited:not(.fc-list-event) {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 6px,
+    color-mix(in srgb, var(--card) 30%, transparent) 6px 10px
+  );
+  border-style: dashed;
+}
+.fc .ev-invited .fc-daygrid-event-dot,
+.fc .fc-list-event.ev-invited .fc-list-event-dot {
+  border-width: 2px;
+  width: 6px;
+  height: 6px;
+  background: var(--card);
+}
+/* Contenu personnalisé de la vue Mois : pastille seulement pour les événements affichés en ligne. */
+.fc .ev-frame {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  overflow: hidden;
+}
+.fc .ev-frame .fc-event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fc .fc-daygrid-block-event .ev-frame .fc-daygrid-event-dot {
+  display: none;
+}
+.fc .fc-daygrid-block-event .ev-frame {
+  padding: 1px 2px;
+}
+/* Vue liste : le lien de l'événement couvre la cellule ; anneau de focus bien visible. */
+.fc .fc-list-event-title a:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 @media (max-width: 640px) {
   /* Titre sur toute la largeur, puis les boutons sur une ligne. */
   .fc .fc-toolbar.fc-header-toolbar {

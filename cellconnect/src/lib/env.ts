@@ -23,20 +23,46 @@ export const env = {
   get dataDir(): string {
     return read("DATA_DIR") ?? ".data";
   },
+  /**
+   * Instance de démonstration locale : données en fichier JSON et URL publique
+   * absente ou sur localhost (ex. tests E2E avec `next start`). Seul cas où la
+   * production tolère un secret court et une URL en http.
+   */
+  get localDemo(): boolean {
+    if (this.dataBackend !== "local") return false;
+    const url = read("APP_URL");
+    if (!url) return true;
+    try {
+      return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname);
+    } catch {
+      return false;
+    }
+  },
   get sessionSecret(): string {
     const s = read("SESSION_SECRET");
-    if (s) return s;
-    if (process.env.NODE_ENV === "production" && this.dataBackend === "local") {
-      throw new Error("SESSION_SECRET est obligatoire en production (mode local).");
+    if (process.env.NODE_ENV === "production") {
+      if (!s) throw new Error("SESSION_SECRET est obligatoire en production.");
+      if (s.length < 32 && !this.localDemo) throw new Error("SESSION_SECRET doit contenir au moins 32 caractères en production.");
+      return s;
     }
     // Clé de développement uniquement — jamais utilisée en production.
-    return "dev-only-insecure-session-secret-change-me";
+    return s ?? "dev-only-insecure-session-secret-change-me";
   },
   get encryptionKey(): string | undefined {
     return read("TOKEN_ENCRYPTION_KEY");
   },
   get appUrl(): string {
-    return read("APP_URL") ?? "http://localhost:3000";
+    const url = read("APP_URL");
+    if (process.env.NODE_ENV === "production" && !this.localDemo) {
+      if (!url) throw new Error("APP_URL est obligatoire en production.");
+      if (!url.startsWith("https://")) throw new Error("APP_URL doit commencer par https:// en production.");
+    }
+    return (url ?? "http://localhost:3000").replace(/\/+$/, "");
+  },
+  /** Nombre de proxys de confiance devant l'application (lecture de X-Forwarded-For). */
+  get trustProxyHops(): number {
+    const n = Number(read("TRUST_PROXY_HOPS") ?? "1");
+    return Number.isInteger(n) && n >= 1 && n <= 10 ? n : 1;
   },
   get defaultTimezone(): string {
     return read("DEFAULT_TIMEZONE") ?? "Europe/Zurich";

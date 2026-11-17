@@ -94,6 +94,10 @@ export interface ExtractionJob {
   created_at: ISODateTime;
   updated_at: ISODateTime;
   completed_at: ISODateTime | null;
+  /** Canal d'arrivée d'un message transféré (null : import dans l'app). */
+  source_channel?: "telegram" | "email" | null;
+  /** Telegram : identifiant de la conversation à qui répondre. */
+  source_ref?: string | null;
 }
 
 export interface ExtractedEventRow {

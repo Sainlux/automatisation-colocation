@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Alert } from "@/components/ui/alert";
 import { Disclosure } from "@/components/ui/disclosure";
+import { t } from "@/i18n";
 import { fmtFullDate, RECURRENCES } from "./format";
+
+/** Au-delà de 12 h, une « fin avant le début » est presque toujours une erreur de saisie. */
+export const MAX_EVENT_MINUTES = 12 * 60;
 
 export interface EventFormValues {
   title: string;
@@ -60,10 +64,14 @@ export function EventForm({
 }) {
   const [v, setV] = useState(initial);
   const [busy, setBusy] = useState(false);
+  const [timeError, setTimeError] = useState<string | null>(null);
   // Les options sont repliées, sauf si l'une d'elles est déjà remplie.
   const [optionsOpen, setOptionsOpen] = useState(Boolean(initial.location || initial.meetingUrl || initial.groupId || initial.recurrenceRule || initial.description));
   const groups = useApi<{ groups: { id: string; name: string; canManage: boolean }[] }>("/api/groups");
-  const set = (p: Partial<EventFormValues>) => setV({ ...v, ...p });
+  const set = (p: Partial<EventFormValues>) => {
+    if (p.startTime !== undefined || p.endTime !== undefined) setTimeError(null);
+    setV({ ...v, ...p });
+  };
   const group = groups.data?.groups.find((g) => g.id === v.groupId);
   const recurrenceKnown = RECURRENCES.some((r) => r.value === v.recurrenceRule);
   const duration = durationOf(v.startTime, v.endTime);
@@ -76,6 +84,11 @@ export function EventForm({
       onInvalidCapture={() => setOptionsOpen(true)}
       onSubmit={async (e) => {
         e.preventDefault();
+        if (duration !== null && duration > MAX_EVENT_MINUTES) {
+          setTimeError(t.words.endBeforeStart);
+          document.getElementById("end")?.focus();
+          return;
+        }
         setBusy(true);
         try {
           await onSubmit(v);
@@ -104,7 +117,12 @@ export function EventForm({
             }}
           />
         </Field>
-        <Field label="Fin" htmlFor="end" hint={v.endTime && v.startTime && v.endTime <= v.startTime ? "Se termine le lendemain." : undefined}>
+        <Field
+          label="Fin"
+          htmlFor="end"
+          error={timeError}
+          hint={!timeError && v.endTime && v.startTime && v.endTime <= v.startTime && (duration ?? 0) <= MAX_EVENT_MINUTES ? "Se termine le lendemain." : undefined}
+        >
           <Input id="end" type="time" required value={v.endTime} onChange={(e) => set({ endTime: e.target.value })} />
         </Field>
       </div>

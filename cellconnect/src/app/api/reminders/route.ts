@@ -3,6 +3,7 @@ import { api, body } from "@/lib/http/api";
 import { loadViewableEvent } from "@/lib/auth/permissions";
 import { badRequest } from "@/lib/errors";
 import { cancelReminders, scheduleForParticipant } from "@/lib/agents/reminder-agent";
+import { reminderOffsetsSchema } from "@/lib/schemas/reminder";
 
 export const GET = api(async ({ ctx }) => {
   const reminders = await ctx.store.select("reminders", {
@@ -14,7 +15,7 @@ export const GET = api(async ({ ctx }) => {
 });
 
 /** Définit les rappels personnels d'un événement (remplace les rappels programmés). */
-const schema = z.object({ eventId: z.string().uuid(), offsets: z.array(z.number().int().min(5).max(40320)).max(6) });
+const schema = z.object({ eventId: z.string().uuid(), offsets: reminderOffsetsSchema });
 export const POST = api(async ({ req, ctx }) => {
   const { eventId, offsets } = await body(req, schema);
   const event = await loadViewableEvent(ctx, eventId);

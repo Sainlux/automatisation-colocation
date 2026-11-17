@@ -20,6 +20,7 @@ import {
   liveErrors,
   minutesBetween,
   needsConfirm,
+  pastIssue,
   replaceYear,
   timeLabel,
   yearOptions,
@@ -103,6 +104,7 @@ export const DraftCard = memo(function DraftCard({ draft: d, included, onInclude
   const f = (name: string) => `${d.key}-${name}`;
 
   const issues = cardIssues(d, grouped);
+  const past = pastIssue(d);
   const yearLine = hasYearIssue(d) && !d.confirmed ? d.yearSuggestion : null;
   const years = yearLine ? yearOptions(d) : [];
   const askConfirm = !d.confirmed && !hasErr && (warn || isLowConfidence(d));
@@ -120,10 +122,14 @@ export const DraftCard = memo(function DraftCard({ draft: d, included, onInclude
       </h3>
       <div className="flex items-center gap-1 py-1 pr-1 pl-3">
         <Switch
-          className="gap-0"
+          className="flex-col-reverse justify-center gap-0.5"
           checked={included}
           onChange={(e) => onInclude(d.key, e.target.checked)}
-          label={<span className="sr-only">Inclure : {validDate ? `${dateLabel}, ${timeLabel(d)}` : displayTitle}</span>}
+          label={
+            <span className="text-xs font-medium text-muted">
+              Ajouter<span className="sr-only"> : {validDate ? `${dateLabel}, ${timeLabel(d)}` : displayTitle}</span>
+            </span>
+          }
         />
         {included ? (
           <button
@@ -154,6 +160,12 @@ export const DraftCard = memo(function DraftCard({ draft: d, included, onInclude
             <span className="min-w-0 flex-1 text-sm">
               <span className="block first-letter:uppercase line-through decoration-1">{dateLabel}</span>
               <span className="block">Ne sera pas ajoutée</span>
+              {past && (
+                <span className="mt-0.5 flex items-start gap-1 text-xs text-warning">
+                  <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span>{frTypo(past.message)}</span>
+                </span>
+              )}
             </span>
           </div>
         )}
@@ -321,14 +333,18 @@ export function ApplyToAll({
   const [location, setLocation] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
+  const urlRef = useRef<HTMLInputElement>(null);
 
   const label = count === 1 ? "Appliquer à la date sélectionnée" : `Appliquer aux ${count} dates`;
 
   function apply() {
     const link = url.trim();
     if (link && !/^https:\/\/\S+$/.test(link)) {
-      setUrlError("Le lien doit commencer par https://");
-      setFeedback("");
+      const msg = "Le lien doit commencer par https://";
+      setUrlError(msg);
+      // Annoncé dans la région « status » (toujours montée) et focus sur le champ à corriger.
+      setFeedback(`Rien n'a été appliqué. ${msg}`);
+      urlRef.current?.focus();
       return;
     }
     setUrlError(null);
@@ -373,7 +389,7 @@ export function ApplyToAll({
             </Select>
           </Field>
           <Field label="Lien de réunion" htmlFor="all-url" error={urlError}>
-            <Input id="all-url" type="url" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://zoom.us/j/…" />
+            <Input ref={urlRef} id="all-url" type="url" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://zoom.us/j/…" />
           </Field>
           <Field label="Lieu" htmlFor="all-loc">
             <Input id="all-loc" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Adresse ou salle" />
@@ -383,7 +399,7 @@ export function ApplyToAll({
           <Button variant="outline" onClick={apply}>
             {label}
           </Button>
-          <p role="status" className="text-sm text-muted">
+          <p role="status" className={cn("text-sm", urlError ? "text-danger" : "text-muted")}>
             {feedback}
           </p>
         </div>

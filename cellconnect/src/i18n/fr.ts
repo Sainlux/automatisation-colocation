@@ -61,7 +61,41 @@ export const fr = {
     leader: "Responsable",
   },
   delivery: { sent: "Envoyé", pending: "En attente", failed: "Échec", skipped: "Non envoyé" },
-  channel: { in_app: "Application", email: "E-mail", push: "Push" },
+  channel: { in_app: "Application", email: "E-mail", push: "Téléphone" },
+  /**
+   * Vocabulaire commun des pages secondaires (fiche événement, paramètres, administration, groupes).
+   * Un seul mot par idée : « message importé », « Trouver les dates », « Notifications sur ce téléphone ».
+   */
+  words: {
+    importedMessage: "message importé",
+    importedBadge: "Importé d'un message",
+    findDates: "Trouver les dates",
+    pushOnPhone: "Notifications sur ce téléphone",
+    pushNotOffered: "Les notifications sur téléphone ne sont pas encore proposées sur ce service. Vous recevrez les rappels par e-mail.",
+    pushFailed: "Les notifications n'ont pas pu être activées sur ce téléphone. Réessayez dans un instant.",
+    installIphone: "Installer sur l'iPhone",
+    groupCalendar: "Agenda du groupe",
+    useChurch: "Utiliser cette église",
+    createChurch: "Créer une autre église",
+    emailAddress: "Adresse e-mail",
+    actionFailed: "Action impossible pour le moment. Vérifiez votre connexion internet, puis réessayez.",
+    available: "Disponible",
+    notEnabled: "Non activé",
+    invitationSent: "Invitation envoyée",
+    manualLinkIntro: "L'e-mail n'a pas pu partir. Envoyez ce lien vous-même :",
+    copyLink: "Copier le lien",
+    linkCopied: "Lien copié",
+    shareWhatsApp: "Partager sur WhatsApp",
+    dateCancelled: "Cette date est annulée",
+    restoreDate: "Rétablir cette date",
+    restoreSchedule: "Rétablir l'horaire d'origine",
+    restoreConfirm: "Remettre cette date à son horaire habituel ? Les participants seront prévenus.",
+    thisDateOnly: "Cette date uniquement",
+    allDates: "Toutes les dates",
+    editAllDates: "Modifier toutes les dates",
+    endBeforeStart: "La fin est avant le début : vérifiez les heures.",
+    otherAction: "Autre action",
+  },
 } as const;
 
 export type Messages = typeof fr;

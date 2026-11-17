@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 /* text-base sur mobile : iOS ne zoome pas sur un champ ≥ 16 px. */
 const field =
-  "w-full rounded-xl border border-input-border bg-card px-3 py-2 text-base text-fg placeholder:text-muted focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 aria-[invalid=true]:border-danger disabled:border-border disabled:bg-disabled-bg disabled:text-disabled-fg sm:text-sm";
+  "w-full rounded-xl border border-input-border bg-card px-3 py-2 text-base text-fg placeholder:text-muted focus:border-ring focus-visible:outline-2 focus-visible:outline-ring aria-[invalid=true]:border-danger disabled:border-border disabled:bg-disabled-bg disabled:text-disabled-fg sm:text-sm";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...p }, ref) => (
   <input ref={ref} className={cn(field, "h-11 sm:h-10", className)} {...p} />
@@ -87,17 +87,27 @@ export function Checkbox({ label, className, ...p }: InputHTMLAttributes<HTMLInp
 
 /**
  * Interrupteur oui / non (environ 51 × 31 px), pour un réglage appliqué immédiatement.
+ * - `label` : nom du réglage (visible ; peut être masqué avec <span className="sr-only">…</span>).
+ * - `stateLabel` : texte visible à côté de l'interrupteur selon son état (ex. « Ajoutée » / « Écartée »),
+ *   pour ne pas reposer sur la seule position du bouton. Décoratif pour les lecteurs d'écran,
+ *   qui annoncent déjà « activé / désactivé ».
  *
  * Exemple : <Switch label="Recevoir aussi les e-mails" checked={on} onChange={(e) => setOn(e.target.checked)} />
  */
-export function Switch({ label, hint, className, ...p }: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "role"> & { label: ReactNode; hint?: ReactNode }) {
+export function Switch({
+  label,
+  hint,
+  stateLabel,
+  className,
+  ...p
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "role"> & { label: ReactNode; hint?: ReactNode; stateLabel?: { on: ReactNode; off: ReactNode } }) {
   return (
     <label className={cn("flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm", p.disabled && "cursor-not-allowed", className)}>
       <span className="min-w-0">
         <span className="block">{label}</span>
         {hint && <span className="mt-0.5 block text-xs text-muted">{hint}</span>}
       </span>
-      <span className="relative inline-flex shrink-0">
+      <span className="relative inline-flex shrink-0 items-center">
         <input
           type="checkbox"
           role="switch"
@@ -108,6 +118,16 @@ export function Switch({ label, hint, className, ...p }: Omit<InputHTMLAttribute
           aria-hidden
           className="pointer-events-none absolute top-0.5 left-0.5 h-[27px] w-[27px] rounded-full bg-card shadow-sm transition-transform duration-(--dur-base) ease-out peer-checked:translate-x-5 motion-reduce:transition-none"
         />
+        {stateLabel && (
+          <>
+            <span aria-hidden className="ml-2 text-xs font-medium text-muted peer-checked:hidden">
+              {stateLabel.off}
+            </span>
+            <span aria-hidden className="ml-2 hidden text-xs font-medium text-fg peer-checked:inline">
+              {stateLabel.on}
+            </span>
+          </>
+        )}
       </span>
     </label>
   );

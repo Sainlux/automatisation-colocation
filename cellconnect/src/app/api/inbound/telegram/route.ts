@@ -3,6 +3,7 @@ import { getStore } from "@/lib/db";
 import { smtpSender } from "@/lib/channels/email";
 import { env } from "@/lib/env";
 import { log } from "@/lib/audit";
+import { errMsg } from "@/lib/errors";
 import { handleTelegramUpdate, webhookSecretValid, type TgUpdate } from "@/lib/inbound/telegram";
 
 export const maxDuration = 60;
@@ -19,10 +20,10 @@ export async function POST(req: NextRequest) {
   }
   try {
     const r = await handleTelegramUpdate(getStore(), smtpSender, update);
-    if (r.followUp) after(() => r.followUp!().catch((e) => log("warn", "telegram_followup_failed", { error: (e as Error).message })));
+    if (r.followUp) after(() => r.followUp!().catch((e) => log("warn", "telegram_followup_failed", { error: errMsg(e) })));
   } catch (e) {
     // 200 malgré tout : Telegram réessaierait sinon la même mise à jour sans fin.
-    log("error", "telegram_update_failed", { error: (e as Error).message });
+    log("error", "telegram_update_failed", { error: errMsg(e) });
   }
   return new NextResponse(null, { status: 200 });
 }

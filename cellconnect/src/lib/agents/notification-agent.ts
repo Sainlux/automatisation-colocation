@@ -1,5 +1,5 @@
 import type { Store } from "@/lib/db/store";
-import { UniqueViolationError } from "@/lib/db/store";
+import { UniqueViolationError, type Filter, type NewRow } from "@/lib/db/store";
 import type { ChannelSender } from "@/lib/channels/email";
 import type { NotificationDelivery, NotificationRow, NotificationType } from "@/lib/types";
 import { log } from "@/lib/audit";
@@ -76,7 +76,13 @@ export async function notify(store: Store, input: NotifyInput, emailSender: Chan
   ];
 
   if (input.email) {
-    const profile = await store.get("profiles", input.userId);
+    // Les livraisons externes sont enregistrées « pending » puis envoyées hors du
+    // chemin de la requête (after()) : la réponse n'attend jamais le serveur SMTP.
+    const push = getPushSender();
+    const [profile, subs] = await Promise.all([
+      store.get("profiles", input.userId),
+      push.available ? store.select("push_subscriptions", { where: [["user_id", "eq", input.userId], ["disabled_at", "is", null]] }) : Promise.resolve([]),
+    ]);
     let status: NotificationDelivery["status"] = "pending";
     let lastError: string | null = null;
     if (!profile?.notify_email) {
@@ -86,23 +92,21 @@ export async function notify(store: Store, input: NotifyInput, emailSender: Chan
       status = "skipped";
       lastError = "Canal e-mail non configuré (SMTP)";
     }
-    const d = await store.insert("notification_deliveries", {
-      notification_id: notification.id,
-      user_id: input.userId,
-      channel: "email",
-      status,
-      attempts: 0,
-      last_error: lastError,
-      next_attempt_at: status === "pending" ? nowIso : null,
-      sent_at: null,
-    });
-    deliveries.push(status === "pending" ? await attemptDelivery(store, d, emailSender, now) : d);
-
+    const rows: NewRow<NotificationDelivery>[] = [
+      {
+        notification_id: notification.id,
+        user_id: input.userId,
+        channel: "email",
+        status,
+        attempts: 0,
+        last_error: lastError,
+        next_attempt_at: status === "pending" ? nowIso : null,
+        sent_at: null,
+      },
+    ];
     // Push web : uniquement si l'utilisateur a activé le push sur au moins un appareil.
-    const push = getPushSender();
-    const subs = await store.select("push_subscriptions", { where: [["user_id", "eq", input.userId], ["disabled_at", "is", null]] });
     if (subs.length && push.available) {
-      const pd = await store.insert("notification_deliveries", {
+      rows.push({
         notification_id: notification.id,
         user_id: input.userId,
         channel: "push",
@@ -112,10 +116,74 @@ export async function notify(store: Store, input: NotifyInput, emailSender: Chan
         next_attempt_at: nowIso,
         sent_at: null,
       });
-      deliveries.push(await attemptPush(store, pd, push, now));
+    }
+    const external = await store.insertMany("notification_deliveries", rows);
+    const pending = external.filter((d) => d.status === "pending");
+    const inline = await runAfter(async () => {
+      for (const d of pending) await sendDelivery(store, d, d.channel === "push" ? push : emailSender, now);
+    });
+    if (inline && pending.length) {
+      // Exécuté sur place (hors requête : worker, tests) : on renvoie l'état final.
+      const fresh = await store.select("notification_deliveries", { where: [["id", "in", external.map((d) => d.id)]] });
+      const byId = new Map(fresh.map((d) => [d.id, d]));
+      deliveries.push(...external.map((d) => byId.get(d.id) ?? d));
+    } else {
+      deliveries.push(...external);
     }
   }
   return { notification, duplicate: false, deliveries };
+}
+
+/**
+ * Exécute `fn` après l'envoi de la réponse HTTP (after() de Next.js). Hors
+ * requête (worker, tests), after() est indisponible : `fn` est alors exécutée
+ * sur place et attendue. Renvoie true dans ce second cas.
+ * Les erreurs sont journalisées, jamais propagées à l'appelant.
+ */
+export async function runAfter(fn: () => Promise<void>): Promise<boolean> {
+  const safe = async () => {
+    try {
+      await fn();
+    } catch (e) {
+      log("error", "after_task_failed", { error: (e as Error).message });
+    }
+  };
+  try {
+    const { after } = await import("next/server");
+    after(safe);
+    return false;
+  } catch {
+    await safe();
+    return true;
+  }
+}
+
+/** Durée pendant laquelle une livraison prise par un envoi est réservée (reprise automatique au-delà). */
+const CLAIM_LEASE_MS = 10 * 60000;
+
+/**
+ * Prise atomique d'une livraison avant envoi : seule l'exécution qui modifie la
+ * ligne (statut « pending » et échéance inchangée) l'envoie. L'échéance est
+ * repoussée le temps de l'envoi : si le processus s'arrête en cours de route,
+ * la livraison redevient éligible à l'expiration du bail.
+ */
+async function claim(store: Store, d: NotificationDelivery, now: Date): Promise<NotificationDelivery | null> {
+  const where: Filter<NotificationDelivery>[] = [
+    ["id", "eq", d.id],
+    ["status", "eq", "pending"],
+    d.next_attempt_at === null ? ["next_attempt_at", "is", null] : ["next_attempt_at", "eq", d.next_attempt_at],
+  ];
+  const [claimed] = await store.updateWhere("notification_deliveries", where, { next_attempt_at: new Date(now.getTime() + CLAIM_LEASE_MS).toISOString() });
+  return claimed ?? null;
+}
+
+async function sendDelivery(store: Store, d: NotificationDelivery, sender: ChannelSender | PushSender, now: Date): Promise<NotificationDelivery | null> {
+  const claimed = await claim(store, d, now);
+  if (!claimed) return null;
+  if (claimed.channel === "push") return attemptPush(store, claimed, sender as PushSender, now);
+  const mail = sender as ChannelSender;
+  if (!mail.available) return store.update("notification_deliveries", claimed.id, { status: "skipped", last_error: "Canal e-mail non configuré (SMTP)", next_attempt_at: null });
+  return attemptDelivery(store, claimed, mail, now);
 }
 
 function notificationUrl(n: NotificationRow) {
@@ -182,27 +250,46 @@ async function attemptDelivery(store: Store, d: NotificationDelivery, sender: Ch
   }
 }
 
-/** Traite les livraisons en attente (appelé par le worker / le cron). */
+/** Nombre maximal d'envois simultanés (SMTP / push) par passage du worker. */
+const DELIVERY_CONCURRENCY = 5;
+
+/** Exécute `fn` sur chaque élément avec au plus `limit` exécutions simultanées. */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+/**
+ * Traite les livraisons en attente (appelé par le worker / le cron).
+ * Chaque ligne est prise atomiquement : deux passages simultanés n'envoient
+ * jamais deux fois le même message.
+ */
 export async function processPendingDeliveries(store: Store, sender: ChannelSender, now = new Date()) {
   const due = await store.select("notification_deliveries", {
     where: [
       ["status", "eq", "pending"],
+      ["channel", "in", ["email", "push"]],
       ["next_attempt_at", "lte", now.toISOString()],
     ],
+    order: [{ column: "next_attempt_at", ascending: true }],
     limit: 100,
   });
-  const results = [];
-  for (const d of due) {
-    if (d.channel === "push") {
-      results.push(await attemptPush(store, d, getPushSender(), now));
-      continue;
+  const push = getPushSender();
+  const results = await mapLimit(due, DELIVERY_CONCURRENCY, async (d) => {
+    try {
+      return await sendDelivery(store, d, d.channel === "push" ? push : sender, now);
+    } catch (e) {
+      log("warn", "delivery_failed", { deliveryId: d.id, error: (e as Error).message });
+      return null;
     }
-    if (d.channel !== "email") continue;
-    if (!sender.available) {
-      results.push(await store.update("notification_deliveries", d.id, { status: "skipped", last_error: "Canal e-mail non configuré (SMTP)", next_attempt_at: null }));
-      continue;
-    }
-    results.push(await attemptDelivery(store, d, sender, now));
-  }
-  return results;
+  });
+  return results.filter((r): r is NotificationDelivery => r !== null);
 }

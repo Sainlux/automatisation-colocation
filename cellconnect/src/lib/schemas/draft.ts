@@ -31,6 +31,8 @@ export const draftSchema = z.object({
   yearSuggestion: z.object({ year: z.number().int(), reason: z.string() }).nullable(),
   /** L'utilisateur a explicitement confirmé les champs incertains. */
   confirmed: z.boolean(),
+  /** Proposé décoché par défaut (date déjà passée) ; conservé lors des sauvegardes. */
+  included: z.boolean().optional(),
 });
 
 export type Issue = z.infer<typeof issueSchema>;

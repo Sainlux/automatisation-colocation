@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Mail, Send } from "lucide-react";
-import { apiFetch, ApiError, useApi } from "@/lib/client/api";
+import { apiFetch, errorText, useApi } from "@/lib/client/api";
 import { useMe } from "@/components/app/session";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,7 +85,7 @@ export default function InvitationsPage() {
       setConfirmed({ id: i.id, label: STATUS[value].label });
       refreshCounters();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "La réponse n'a pas pu être envoyée. Réessayez.");
+      setErr(errorText(e, "La réponse n'a pas pu être envoyée. Vérifiez votre connexion internet, puis réessayez."));
     } finally {
       setBusy(null);
     }
@@ -101,7 +101,7 @@ export default function InvitationsPage() {
       setToCancel(null);
     } catch (e) {
       setToCancel(null);
-      setErr(e instanceof ApiError ? e.message : "L'invitation n'a pas pu être annulée. Réessayez.");
+      setErr(errorText(e, "L'invitation n'a pas pu être annulée. Vérifiez votre connexion internet, puis réessayez."));
     } finally {
       setCancelling(false);
     }

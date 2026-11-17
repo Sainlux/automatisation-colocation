@@ -1,7 +1,11 @@
 import { DateTime } from "luxon";
+import { DEFAULT_REMINDER_OFFSETS } from "@/lib/schemas/reminder";
+import { plural } from "./text";
+
+/* Réexportés pour compatibilité : préférer l'import direct depuis ./text (sans Luxon). */
+export { frTypo, plural } from "./text";
 
 export const fmtDay = (iso: string, tz = "Europe/Zurich") => DateTime.fromISO(iso, { zone: "utc" }).setZone(tz).setLocale("fr-CH").toFormat("cccc d LLLL");
-export const fmtDayShort = (iso: string, tz = "Europe/Zurich") => DateTime.fromISO(iso, { zone: "utc" }).setZone(tz).setLocale("fr-CH").toFormat("ccc d LLL");
 export const fmtTime = (iso: string, tz = "Europe/Zurich") => DateTime.fromISO(iso, { zone: "utc" }).setZone(tz).toFormat("HH'h'mm");
 export const fmtDateTime = (iso: string, tz = "Europe/Zurich") => DateTime.fromISO(iso, { zone: "utc" }).setZone(tz).setLocale("fr-CH").toFormat("d LLL yyyy, HH'h'mm");
 export const fmtRange = (s: string, e: string, tz = "Europe/Zurich") => `${fmtDay(s, tz)} · ${fmtTime(s, tz)} – ${fmtTime(e, tz)}`;
@@ -16,20 +20,6 @@ const ZURICH = "Europe/Zurich";
 const zoned = (iso: string, tz = ZURICH) =>
   (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? DateTime.fromISO(iso, { zone: tz }) : DateTime.fromISO(iso, { zone: "utc" }).setZone(tz)).setLocale("fr-CH");
 
-/** Nombre + nom accordé, sans « (s) » : 0 et 1 au singulier. plural(3, "date", "dates") → « 3 dates ». */
-export const plural = (n: number, un: string, plusieurs: string) => `${n} ${Math.abs(n) <= 1 ? un : plusieurs}`;
-
-/**
- * Typographie française pour l'AFFICHAGE uniquement (jamais dans la valeur d'un champ) :
- * espace fine insécable avant ; ! ? » et après «, insécable avant : et entre un nombre et son unité.
- */
-export const frTypo = (s: string) =>
-  s
-    .replace(/\s+([;!?»])/g, " $1")
-    .replace(/«\s+/g, "« ")
-    .replace(/(\S)\s+:(?=\s|$)/g, "$1 :")
-    .replace(/(\d)\s+(h|min|%|CHF|km)(?![\p{L}])/gu, "$1 $2");
-
 /** « 20:30 » → « 20h30 ». Une valeur illisible est rendue telle quelle. */
 export const fmtHHmm = (hhmm: string) => {
   const m = /^(\d{1,2}):(\d{2})/.exec(hhmm);
@@ -39,9 +29,22 @@ export const fmtHHmm = (hhmm: string) => {
 /** Heure affichable depuis « HH:mm » ou une date-heure ISO (UTC). */
 const anyTime = (v: string, tz: string) => (v.includes("T") ? fmtTime(v, tz) : fmtHHmm(v));
 
-/** « 20h30 – 22h00 » (ou « 20h30 » sans fin). Accepte « HH:mm » ou des dates-heures ISO. */
+/**
+ * Vrai si la fin (date-heure ISO) tombe un autre jour civil que le début, dans le fuseau.
+ * Une fin à minuit pile appartient encore à la soirée : 20h00 – 00h00 n'est pas « lendemain ».
+ */
+const otherDay = (start: string, end: string, tz: string) =>
+  start.includes("T") && end.includes("T") && zoned(start, tz).toISODate() !== zoned(end, tz).minus({ milliseconds: 1 }).toISODate();
+
+/**
+ * « 20h30 – 22h00 » (ou « 20h30 » sans fin). Accepte « HH:mm » ou des dates-heures ISO.
+ * Une fin qui tombe un autre jour civil est signalée : « 22h00 – 01h00 (lendemain) ».
+ */
 export const fmtTimeRange = (start: string, end?: string | null, tz = ZURICH) =>
-  end ? `${anyTime(start, tz)} – ${anyTime(end, tz)}` : anyTime(start, tz);
+  end ? `${anyTime(start, tz)} – ${anyTime(end, tz)}${otherDay(start, end, tz) ? " (lendemain)" : ""}` : anyTime(start, tz);
+
+/** « mardi 17 novembre 2026 », depuis une date (AAAA-MM-JJ) ou une date-heure ISO, dans le fuseau. */
+export const fmtLongDate = (iso: string, tz = ZURICH) => zoned(iso, tz).toFormat("cccc d LLLL yyyy");
 
 /** « lun. 16 nov. », avec l'année seulement si elle diffère de l'année en cours. */
 export const fmtShortDate = (isoDate: string, tz = ZURICH) => {
@@ -65,6 +68,11 @@ export const fmtMinutes = (min: number) => {
 /** Rappel : 1440 → « 1 jour avant », 0 → « à l'heure de début ». */
 export const fmtOffset = (min: number) => (min <= 0 ? "à l'heure de début" : `${fmtMinutes(min)} avant`);
 
+/** Délais de rappel proposés (les délais par défaut, puis quelques autres), avec leur libellé. */
+export const REMINDER_PRESETS: readonly { value: number; label: string }[] = [...new Set([...DEFAULT_REMINDER_OFFSETS, 10080, 2880, 60, 15])]
+  .sort((a, b) => b - a)
+  .map((value) => ({ value, label: fmtOffset(value) }));
+
 /** Liste de rappels : [1440, 120, 30] → « 1 jour, 2 h et 30 min avant ». */
 export const fmtOffsets = (mins: readonly number[]) => {
   const sorted = [...new Set(mins)].filter((m) => m > 0).sort((a, b) => b - a).map(fmtMinutes);
@@ -86,15 +94,6 @@ export const fmtRecurrence = (rule: string | null | undefined) =>
   RECURRENCES.find((r) => r.value === (rule ?? ""))?.label ?? "Répétition personnalisée";
 
 export type DayBucket = "past" | "today" | "tomorrow" | "week" | "nextWeek" | "later";
-export const DAY_BUCKET_LABELS: Record<DayBucket, string> = {
-  past: "Passé",
-  today: "Aujourd'hui",
-  tomorrow: "Demain",
-  week: "Cette semaine",
-  nextWeek: "La semaine prochaine",
-  later: "Plus tard",
-};
-
 /** Regroupement d'une date pour les listes (« Aujourd'hui », « Demain », « Cette semaine »…), dans le fuseau donné. */
 export const dayBucket = (iso: string, tz = ZURICH, now: DateTime = DateTime.now()): DayBucket => {
   const day = zoned(iso, tz).startOf("day");

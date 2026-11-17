@@ -14,7 +14,8 @@ export function Stepper({ steps, current, className }: { steps: { id: string; la
   const idx = Math.max(0, Math.min(found, steps.length - 1));
   const cur = steps[idx];
   return (
-    <nav aria-label="Étapes" className={className}>
+    // Une progression n'est pas une navigation (les étapes ne sont pas des liens) : simple groupe nommé.
+    <div role="group" aria-label="Progression" className={className}>
       <div className="sm:hidden">
         <p className="text-sm text-muted">
           Étape {idx + 1} sur {steps.length} · <span className="font-semibold text-fg">{cur?.label}</span>
@@ -49,6 +50,6 @@ export function Stepper({ steps, current, className }: { steps: { id: string; la
           );
         })}
       </ol>
-    </nav>
+    </div>
   );
 }

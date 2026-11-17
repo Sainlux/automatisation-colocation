@@ -3,6 +3,9 @@ import { env } from "@/lib/env";
 import { getStore } from "@/lib/db";
 import { smtpSender } from "@/lib/channels/email";
 import { safeEqual } from "@/lib/auth/crypto";
+import { log } from "@/lib/audit";
+import { errMsg } from "@/lib/errors";
+import { jsonError } from "@/lib/http/api";
 import { pullAllConnections, tick } from "@/lib/worker";
 
 export const maxDuration = 60;
@@ -11,9 +14,14 @@ export const maxDuration = 60;
 export async function GET(req: NextRequest) {
   const secret = env.cronSecret;
   const auth = req.headers.get("authorization") ?? "";
-  if (!secret || !safeEqual(auth, `Bearer ${secret}`)) return NextResponse.json({ error: { code: "unauthorized" } }, { status: 401 });
-  const store = getStore();
-  const report = await tick(store, smtpSender);
-  const pull = req.nextUrl.searchParams.get("pull") === "1" ? await pullAllConnections(store, smtpSender) : null;
-  return NextResponse.json({ ...report, pulled: pull?.pulled ?? 0 });
+  if (!secret || !safeEqual(auth, `Bearer ${secret}`)) return jsonError(401, "unauthorized", "Accès refusé.");
+  try {
+    const store = getStore();
+    const report = await tick(store, smtpSender);
+    const pull = req.nextUrl.searchParams.get("pull") === "1" ? await pullAllConnections(store, smtpSender) : null;
+    return NextResponse.json({ ...report, pulled: pull?.pulled ?? 0 });
+  } catch (e) {
+    log("error", "cron_tick_failed", { error: errMsg(e) });
+    return jsonError(500, "internal", "Le passage planifié a échoué. Il sera retenté au prochain déclenchement.");
+  }
 }

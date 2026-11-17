@@ -4,17 +4,18 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CalendarCheck, Check, CirclePause, Clock, MessageSquare, Undo2, Users } from "lucide-react";
 import { DateTime } from "luxon";
-import { apiFetch, ApiError, newIdempotencyKey, useApi } from "@/lib/client/api";
+import { apiFetch, errorText, newIdempotencyKey, useApi } from "@/lib/client/api";
 import { useMe } from "@/components/app/session";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/form";
-import { Alert } from "@/components/ui/alert";
+import { Alert, LiveRegion } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Disclosure } from "@/components/ui/disclosure";
 import { EmptyState, ErrorState, ListSkeleton, PageHeader, StaleBanner } from "@/components/ui/states";
 import { OverlapBar } from "@/components/app/overlap-bar";
-import { fmtShortDate, fmtTimeRange, frTypo, plural } from "@/components/app/format";
+import { fmtShortDate, fmtTimeRange } from "@/components/app/format";
+import { frTypo, plural } from "@/components/app/text";
 import { t } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +32,8 @@ interface Side {
   otherParticipants: number;
   location: string | null;
   meetingUrl: string | null;
+  /** Date d'ajout de l'événement : distingue « Déjà prévu » de « Nouveau ». */
+  createdAt?: string;
 }
 interface Conflict {
   id: string;
@@ -81,11 +84,12 @@ export default function ConflictsPage() {
           </Button>
         }
       />
+      {/* Région permanente : l'annonce est fiable même quand le message apparaît après l'action. */}
+      <LiveRegion>{flash?.text}</LiveRegion>
       {flash && (
         <Alert
           tone="success"
           title={flash.text}
-          live
           action={
             flash.undoHref && (
               <Link href={flash.undoHref} className={buttonVariants({ variant: "ghost", size: "sm" })}>
@@ -151,9 +155,6 @@ function ConflictCard({ c, onResolved }: { c: Conflict; onResolved: (f: Flash) =
   const [hint, setHint] = useState<string | null>(null);
   const [key] = useState(newIdempotencyKey);
   const firstChoice = useRef<HTMLButtonElement>(null);
-  // Date d'ajout de chaque événement, pour distinguer « Déjà prévu » de « Nouveau ».
-  const detailA = useApi<{ event: { created_at: string } }>(!closed && c.a ? `/api/events/${c.a.id}` : null);
-  const detailB = useApi<{ event: { created_at: string } }>(!closed && c.b ? `/api/events/${c.b.id}` : null);
   if (!c.a || !c.b) return null;
   const sides = { a: c.a, b: c.b };
   const withdrawn = action === "keep_a" ? c.b : action === "keep_b" ? c.a : null;
@@ -161,8 +162,9 @@ function ConflictCard({ c, onResolved }: { c: Conflict; onResolved: (f: Flash) =
   const canAsk = !(c.a.isOrganizer && c.b.isOrganizer);
   const asking = action === "propose_slot" || action === "request_change";
 
-  const ca = detailA.data?.event.created_at;
-  const cb = detailB.data?.event.created_at;
+  // Date d'ajout de chaque événement (fournie par la liste des conflits), pour distinguer « Déjà prévu » de « Nouveau ».
+  const ca = closed ? undefined : c.a.createdAt;
+  const cb = closed ? undefined : c.b.createdAt;
   const age = ca && cb && ca !== cb ? (ca < cb ? { a: "old", b: "new" } : { a: "new", b: "old" }) : null;
   const eyebrow = (k: "a" | "b") => (age ? (age[k] === "new" ? "Nouveau" : "Déjà prévu") : (sides[k].groupName ?? "Personnel"));
 
@@ -196,7 +198,10 @@ function ConflictCard({ c, onResolved }: { c: Conflict; onResolved: (f: Flash) =
       let proposedStart: string | null = null;
       let proposedEnd: string | null = null;
       if (action === "propose_slot") {
-        if (!slotDate || !slotStart || !slotEnd) throw new Error("Indiquez la date et les heures proposées.");
+        if (!slotDate || !slotStart || !slotEnd) {
+          setErr("Indiquez la date et les heures proposées.");
+          return;
+        }
         proposedStart = DateTime.fromISO(`${slotDate}T${slotStart}`, { zone: targetSide.timezone }).toUTC().toISO();
         proposedEnd = DateTime.fromISO(`${slotDate}T${slotEnd}`, { zone: targetSide.timezone }).toUTC().toISO();
       }
@@ -227,7 +232,7 @@ function ConflictCard({ c, onResolved }: { c: Conflict; onResolved: (f: Flash) =
         });
       }
     } catch (e) {
-      setErr(e instanceof ApiError || e instanceof Error ? e.message : "Action impossible.");
+      setErr(errorText(e, "Votre décision n'a pas pu être enregistrée. Réessayez."));
     } finally {
       setBusy(false);
     }

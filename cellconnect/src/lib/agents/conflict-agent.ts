@@ -1,6 +1,6 @@
 import type { Ctx } from "@/lib/context";
 import type { Store } from "@/lib/db/store";
-import { UniqueViolationError } from "@/lib/db/store";
+import { UniqueViolationError, type Filter } from "@/lib/db/store";
 import type { ChannelSender } from "@/lib/channels/email";
 import type { CalendarConflict, EventRow, ParticipantStatus } from "@/lib/types";
 import type { ReadyDraft } from "@/lib/schemas/draft";
@@ -19,7 +19,15 @@ import { notify } from "./notification-agent";
 
 export const ACTIVE_STATUSES: ParticipantStatus[] = ["invited", "accepted", "tentative"];
 const WINDOW_PAST_MS = 1 * 86400000;
+/** Vérification des brouillons (avant enregistrement) : toute l'année à venir et au-delà. */
 const WINDOW_FUTURE_MS = 400 * 86400000;
+/**
+ * Conflits enregistrés en base : horizon de 90 jours pour les séries, comme les
+ * rappels. Au-delà, deux séries hebdomadaires produiraient des centaines de
+ * lignes inutiles ; les dates plus lointaines sont détectées lors des
+ * vérifications suivantes. Un événement ponctuel est vérifié jusqu'à sa date.
+ */
+const PERSIST_FUTURE_MS = 90 * 86400000;
 
 /** Événement accompagné de ses exceptions d'occurrences (récurrences). */
 export type EventWithExceptions = EventRow & { exceptions?: Record<string, OccurrenceException> };
@@ -131,55 +139,47 @@ export async function checkDrafts(ctx: Ctx, drafts: ReadyDraft[], bufferMinutes 
   return out;
 }
 
+/** Clé canonique d'une paire (A < B) : garantit l'unicité des conflits. */
+function canonical(o: Overlap) {
+  return o.a.eventId < o.b.eventId ? [o.a, o.b] : [o.b, o.a];
+}
+
 /**
- * Détecte et enregistre les conflits d'un utilisateur impliquant un événement
- * donné (après création, modification, acceptation d'invitation…).
- * Les conflits déjà connus ne sont pas dupliqués ; ceux qui n'existent plus
- * (événement déplacé) sont clos.
+ * Cœur de la détection pour un événement déjà chargé. `active` indique si
+ * l'utilisateur participe activement à un événement non annulé ; sinon seuls
+ * les conflits obsolètes sont clos. `others` : autres événements actifs de
+ * l'utilisateur dans la même organisation (avec leurs exceptions).
  */
-export async function detectForUserEvent(
+async function detectLoaded(
   store: Store,
   mailer: ChannelSender,
   userId: string,
-  eventId: string,
+  event: EventWithExceptions,
+  active: boolean,
+  others: EventWithExceptions[],
+  buffer: number,
   now: Date,
-  opts: { notify?: boolean } = {},
+  opts: { notify?: boolean },
 ): Promise<CalendarConflict[]> {
-  const raw = await store.get("events", eventId);
-  if (!raw) return [];
-  const [event] = await withExceptions(store, [raw]);
-  const profile = await store.get("profiles", userId);
-  const buffer = profile?.travel_buffer_minutes ?? 0;
   const from = now.getTime() - WINDOW_PAST_MS;
-  const to = now.getTime() + WINDOW_FUTURE_MS;
-
-  const others = (await activeEventsForUser(store, userId, event.organization_id)).filter((e) => e.id !== eventId);
-  const [participation] = await store.select("event_participants", {
-    where: [
-      ["event_id", "eq", eventId],
-      ["user_id", "eq", userId],
-    ],
-  });
-  const active = event.status !== "cancelled" && participation && ACTIVE_STATUSES.includes(participation.status);
+  // Horizon de 90 jours pour une série ; un événement ponctuel plus lointain est
+  // toujours vérifié jusqu'à sa date (une seule occurrence : coût négligeable).
+  const horizon = now.getTime() + PERSIST_FUTURE_MS;
+  const to = event.recurrence_rule ? horizon : Math.min(Math.max(horizon, Date.parse(event.ends_at)), now.getTime() + WINDOW_FUTURE_MS);
+  const eventId = event.id;
   const overlaps = active ? findOverlaps(expandOccurrences(eventToSlot(event), from, to), occurrencesOf(others, from, to), buffer) : [];
 
-  // Clôture des conflits ouverts devenus obsolètes.
-  const open = (await store.select("calendar_conflicts", { where: [["user_id", "eq", userId], ["status", "in", ["open", "postponed"]]] })).filter(
-    (c) => c.event_a_id === eventId || c.event_b_id === eventId,
-  );
-  for (const c of open) {
-    const still = overlaps.some((o) => {
-      const [a, b] = o.a.eventId < o.b.eventId ? [o.a, o.b] : [o.b, o.a];
-      return c.event_a_id === a.eventId && c.event_b_id === b.eventId && c.occurrence_a_start === new Date(a.start).toISOString() && c.occurrence_b_start === new Date(b.start).toISOString();
-    });
-    if (!still) await store.update("calendar_conflicts", c.id, { status: "dismissed", resolved_at: now.toISOString() });
-  }
+  // Conflits déjà connus de l'utilisateur pour cet événement (côté A ou B), chargés une seule fois.
+  const [asA, asB] = await Promise.all([
+    store.select("calendar_conflicts", { where: [["user_id", "eq", userId], ["event_a_id", "eq", eventId]] }),
+    store.select("calendar_conflicts", { where: [["user_id", "eq", userId], ["event_b_id", "eq", eventId]] }),
+  ]);
+  const known = new Map<string, CalendarConflict>();
+  for (const c of [...asA, ...asB]) known.set(`${c.event_a_id}:${c.event_b_id}:${c.occurrence_a_start}:${c.occurrence_b_start}`, c);
 
-  const created: CalendarConflict[] = [];
-  for (const o of overlaps) {
-    // Ordre canonique pour garantir l'unicité (A < B).
-    const [a, b] = o.a.eventId < o.b.eventId ? [o.a, o.b] : [o.b, o.a];
-    const row = {
+  const rows = overlaps.map((o) => {
+    const [a, b] = canonical(o);
+    return {
       organization_id: event.organization_id,
       user_id: userId,
       event_a_id: a.eventId,
@@ -194,31 +194,61 @@ export async function detectForUserEvent(
       detected_at: now.toISOString(),
       resolved_at: null,
     };
-    const existing = await store.select("calendar_conflicts", {
-      where: [
-        ["user_id", "eq", userId],
-        ["event_a_id", "eq", row.event_a_id],
-        ["event_b_id", "eq", row.event_b_id],
-        ["occurrence_a_start", "eq", row.occurrence_a_start],
-        ["occurrence_b_start", "eq", row.occurrence_b_start],
-      ],
-    });
-    if (existing.length > 0) {
-      const ex = existing[0];
-      if (ex.status === "dismissed") created.push(await store.update("calendar_conflicts", ex.id, { status: "open", resolved_at: null, overlap_minutes: row.overlap_minutes, kind: row.kind }));
-      continue;
-    }
+  });
+  const keyOf = (r: { event_a_id: string; event_b_id: string; occurrence_a_start: string; occurrence_b_start: string }) =>
+    `${r.event_a_id}:${r.event_b_id}:${r.occurrence_a_start}:${r.occurrence_b_start}`;
+  const current = new Set(rows.map(keyOf));
+
+  // Clôture des conflits ouverts devenus obsolètes. Événement toujours actif : seuls ceux de
+  // l'horizon calculé sont réexaminés (les dates plus lointaines n'ont pas été recalculées).
+  const obsolete = [...known.values()]
+    .filter((c) => (c.status === "open" || c.status === "postponed") && !current.has(keyOf(c)))
+    .filter((c) => !active || Math.min(Date.parse(c.occurrence_a_start), Date.parse(c.occurrence_b_start)) <= to)
+    .map((c) => c.id);
+  if (obsolete.length) await store.updateWhere("calendar_conflicts", [["id", "in", obsolete]], { status: "dismissed", resolved_at: now.toISOString() });
+
+  const created: CalendarConflict[] = [];
+  const fresh: typeof rows = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const k = keyOf(row);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const ex = known.get(k);
+    if (!ex) fresh.push(row);
+    else if (ex.status === "dismissed")
+      created.push(await store.update("calendar_conflicts", ex.id, { status: "open", resolved_at: null, overlap_minutes: row.overlap_minutes, kind: row.kind }));
+  }
+  if (fresh.length) {
     try {
-      const c = await store.insert("calendar_conflicts", row);
-      created.push(c);
+      created.push(...(await store.insertMany("calendar_conflicts", fresh)));
     } catch (e) {
       if (!(e instanceof UniqueViolationError)) throw e;
+      // Détection concurrente : on insère ligne à ligne en ignorant les conflits déjà enregistrés.
+      for (const row of fresh) {
+        try {
+          created.push(await store.insert("calendar_conflicts", row));
+        } catch (err) {
+          if (!(err instanceof UniqueViolationError)) throw err;
+        }
+      }
     }
   }
 
-  if (opts.notify !== false) {
+  if (opts.notify !== false && created.length) {
+    // Une seule notification par paire d'événements, quel que soit le nombre de dates concernées.
+    const byPair = new Map<string, CalendarConflict[]>();
     for (const c of created) {
-      const other = await store.get("events", c.event_a_id === eventId ? c.event_b_id : c.event_a_id);
+      const k = `${c.event_a_id}:${c.event_b_id}`;
+      byPair.set(k, [...(byPair.get(k) ?? []), c]);
+    }
+    const titles = new Map(others.map((e) => [e.id, e.title]));
+    for (const [pair, list] of byPair) {
+      list.sort((x, y) => x.occurrence_a_start.localeCompare(y.occurrence_a_start));
+      const first = list[0];
+      const otherId = first.event_a_id === eventId ? first.event_b_id : first.event_a_id;
+      const detail = first.kind === "travel_buffer" ? "temps de déplacement insuffisant" : `${first.overlap_minutes} min`;
+      const more = list.length > 1 ? ` ${list.length} dates concernées.` : "";
       await notify(
         store,
         {
@@ -226,14 +256,63 @@ export async function detectForUserEvent(
           orgId: event.organization_id,
           type: "conflict_detected",
           title: "Conflit d'agenda détecté",
-          body: `« ${event.title} » chevauche « ${other?.title ?? "un autre événement"} » (${c.kind === "travel_buffer" ? "temps de déplacement insuffisant" : `${c.overlap_minutes} min`}) le ${formatRangeFr(c.occurrence_a_start, c.occurrence_a_end, event.timezone)}.`,
-          data: { conflictId: c.id },
-          dedupeKey: `conflict:${c.id}`,
+          body: `« ${event.title} » chevauche « ${titles.get(otherId) ?? "un autre événement"} » (${detail}) le ${formatRangeFr(first.occurrence_a_start, first.occurrence_a_end, event.timezone)}.${more}`,
+          data: { conflictId: first.id, count: list.length },
+          // Une notification par paire et par détection : le premier conflit créé distingue une
+          // nouvelle détection (événement déplacé) d'un nouveau passage sur les mêmes dates.
+          dedupeKey: `conflict:${userId}:${pair}:${first.id}`,
         },
         mailer,
         now,
       );
     }
+  }
+  return created;
+}
+
+/**
+ * Détecte et enregistre les conflits d'un utilisateur impliquant un événement
+ * donné (après création, modification, acceptation d'invitation…).
+ * Les conflits déjà connus ne sont pas dupliqués ; ceux qui n'existent plus
+ * (événement déplacé) sont clos.
+ */
+export async function detectForUserEvent(
+  store: Store,
+  mailer: ChannelSender,
+  userId: string,
+  eventId: string,
+  now: Date,
+  opts: { notify?: boolean } = {},
+): Promise<CalendarConflict[]> {
+  const [raw, profile] = await Promise.all([store.get("events", eventId), store.get("profiles", userId)]);
+  if (!raw) return [];
+  // La liste des événements actifs contient l'événement lui-même s'il est actif pour l'utilisateur.
+  const mine = await activeEventsForUser(store, userId, raw.organization_id);
+  const self = mine.find((e) => e.id === eventId);
+  const others = mine.filter((e) => e.id !== eventId);
+  return detectLoaded(store, mailer, userId, self ?? raw, Boolean(self), others, profile?.travel_buffer_minutes ?? 0, now, opts);
+}
+
+/**
+ * Variante groupée (synchronisation d'un calendrier externe) : l'agenda de
+ * l'utilisateur est chargé une seule fois pour tous les événements modifiés.
+ */
+export async function detectForUserEvents(store: Store, mailer: ChannelSender, userId: string, ids: string[], now: Date, opts: { notify?: boolean } = {}) {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return [];
+  const [profile, mine] = await Promise.all([store.get("profiles", userId), activeEventsForUser(store, userId)]);
+  const byId = new Map(mine.map((e) => [e.id, e]));
+  const missing = unique.filter((id) => !byId.has(id));
+  const inactive = missing.length ? await store.select("events", { where: [["id", "in", missing]] }) : [];
+  const inactiveById = new Map(inactive.map((e) => [e.id, e]));
+  const buffer = profile?.travel_buffer_minutes ?? 0;
+  const created: CalendarConflict[] = [];
+  for (const id of unique) {
+    const self = byId.get(id);
+    const event = self ?? inactiveById.get(id);
+    if (!event) continue;
+    const others = mine.filter((e) => e.id !== id && e.organization_id === event.organization_id);
+    created.push(...(await detectLoaded(store, mailer, userId, event, Boolean(self), others, buffer, now, opts)));
   }
   return created;
 }
@@ -246,13 +325,10 @@ export async function detectForEventParticipants(store: Store, mailer: ChannelSe
 
 /** Clôt les conflits d'un utilisateur liés à un événement (désistement, annulation). */
 export async function closeConflictsForEvent(store: Store, eventId: string, now: Date, userId?: string) {
-  const open = [
-    ...(await store.select("calendar_conflicts", { where: [["event_a_id", "eq", eventId], ["status", "in", ["open", "postponed"]]] })),
-    ...(await store.select("calendar_conflicts", { where: [["event_b_id", "eq", eventId], ["status", "in", ["open", "postponed"]]] })),
-  ];
-  for (const c of open) {
-    if (!userId || c.user_id === userId) {
-      await store.update("calendar_conflicts", c.id, { status: "resolved", resolved_at: now.toISOString() });
-    }
+  const patch = { status: "resolved" as const, resolved_at: now.toISOString() };
+  for (const side of ["event_a_id", "event_b_id"] as const) {
+    const where: Filter<CalendarConflict>[] = [[side, "eq", eventId], ["status", "in", ["open", "postponed"]]];
+    if (userId) where.push(["user_id", "eq", userId]);
+    await store.updateWhere("calendar_conflicts", where, patch);
   }
 }

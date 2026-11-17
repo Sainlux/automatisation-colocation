@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { TableName, Tables } from "@/lib/types";
-import { matches, UNIQUE_CONSTRAINTS, UniqueViolationError, type Filter, type NewRow, type Query, type Store } from "./store";
+import { matches, PARTIAL_UNIQUE, UNIQUE_CONSTRAINTS, UniqueViolationError, type Filter, type NewRow, type Query, type Store } from "./store";
 
 type Data = { [K in TableName]?: Tables[K][] };
 
@@ -62,6 +62,16 @@ export class LocalStore implements Store {
         return o.id !== ignoreId && cols.every((c) => o[c] === r[c]);
       });
       if (clash) throw new UniqueViolationError(table, cols);
+    }
+    // Index uniques partiels : seules les lignes concernées par le prédicat sont comparées.
+    for (const { columns, applies } of PARTIAL_UNIQUE[table] ?? []) {
+      const r = row as unknown as Record<string, unknown>;
+      if (!applies(r) || columns.some((c) => r[c] === null || r[c] === undefined)) continue;
+      const clash = this.rows(table).some((other) => {
+        const o = other as unknown as Record<string, unknown>;
+        return o.id !== ignoreId && applies(o) && columns.every((c) => o[c] === r[c]);
+      });
+      if (clash) throw new UniqueViolationError(table, columns);
     }
   }
 
@@ -131,6 +141,38 @@ export class LocalStore implements Store {
       if (idx >= 0) list.splice(idx, 1);
       await this.persist();
     });
+  }
+
+  updateWhere<K extends TableName>(table: K, where: Filter<Tables[K]>[], patch: Partial<Tables[K]>) {
+    return this.run(async () => {
+      if (where.length === 0) throw new Error("updateWhere sans filtre refusé");
+      const list = this.rows(table);
+      const now = new Date().toISOString();
+      const changed: Tables[K][] = [];
+      const next = list.map((r) => {
+        if (!matches(r, where)) return r;
+        const id = (r as unknown as { id: string }).id;
+        const n = { ...r, ...patch, id } as Tables[K];
+        if ("updated_at" in (r as object)) (n as unknown as Record<string, unknown>).updated_at = now;
+        changed.push(n);
+        return n;
+      });
+      // Contrôle d'unicité sur l'état final, avant toute écriture (tout ou rien).
+      const before = this.data[table];
+      (this.data as Record<string, unknown>)[table] = next;
+      try {
+        for (const n of changed) this.checkUnique(table, n, (n as unknown as { id: string }).id);
+      } catch (e) {
+        (this.data as Record<string, unknown>)[table] = before;
+        throw e;
+      }
+      if (changed.length) await this.persist();
+      return structuredClone(changed);
+    });
+  }
+
+  count<K extends TableName>(table: K, where?: Filter<Tables[K]>[]) {
+    return this.run(() => this.rows(table).filter((r) => matches(r, where)).length);
   }
 
   deleteWhere<K extends TableName>(table: K, where: Filter<Tables[K]>[]) {

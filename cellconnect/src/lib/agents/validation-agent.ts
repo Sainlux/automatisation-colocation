@@ -40,7 +40,9 @@ export function suggestYear(
     candidates.push(y);
   }
   if (candidates.length === 0) return null;
-  const year = candidates[0];
+  // Sans jour de semaine : la prochaine occurrence (aujourd'hui compris) plutôt qu'une date déjà passée.
+  const year =
+    wd === null ? (candidates.find((y) => DateTime.fromObject({ year: y, month: date.month, day: date.day }, { zone: tz }) >= today) ?? candidates[0]) : candidates[0];
   if (wd !== null) {
     const unique = candidates.length === 1;
     return {
@@ -117,6 +119,12 @@ export function toDraft(ev: ExtractedEvent, opts: ValidationOptions, context: st
     issues.push({ field: "date", severity: "error", message: "Date absente ou illisible." });
   }
 
+  // --- Date passée ----------------------------------------------------------
+  // Une date antérieure à aujourd'hui (dans le fuseau) est proposée mais décochée par défaut.
+  const today = DateTime.fromJSDate(opts.now).setZone(tz).toISODate()!;
+  const past = date !== null && date < today;
+  if (past) issues.push({ field: "date", severity: "warning", message: "Cette date est déjà passée : l'ajouter quand même ?" });
+
   // --- Heures -------------------------------------------------------------
   if (!ev.startTime) issues.push({ field: "startTime", severity: "error", message: "Heure de début absente de la source." });
   if (!ev.endTime) issues.push({ field: "endTime", severity: "error", message: "Heure de fin absente : indiquez-la ou choisissez une durée." });
@@ -167,7 +175,7 @@ export function toDraft(ev: ExtractedEvent, opts: ValidationOptions, context: st
     issues.push({ field: "groupId", severity: "info", message: `Groupe mentionné (« ${ev.groupName} ») non trouvé dans vos groupes.` });
   }
 
-  return {
+  const draft: EventDraft & { included?: boolean } = {
     key: `d${Date.now().toString(36)}${(keyCounter++).toString(36)}`,
     title,
     date,
@@ -185,6 +193,14 @@ export function toDraft(ev: ExtractedEvent, opts: ValidationOptions, context: st
     yearSuggestion,
     confirmed: false,
   };
+  // Indication pour l'interface : brouillon non coché par défaut (date passée).
+  if (past) draft.included = false;
+  return draft;
+}
+
+/** Le brouillon est-il proposé coché par défaut ? (faux pour une date déjà passée) */
+export function draftIncludedByDefault(d: EventDraft & { included?: boolean }): boolean {
+  return d.included !== false;
 }
 
 export function validateExtraction(result: ExtractionResult, opts: ValidationOptions): EventDraft[] {
