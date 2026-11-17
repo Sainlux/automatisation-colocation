@@ -31,6 +31,7 @@ Les adaptateurs sont en haut de la section « Style par description » (`IN_ARTI
 - `npm start` : construit puis lance http://localhost:8787
 - `npm run build` : reconstruit seulement `public/index.html`
 - Test rapide sans navigateur : `node --check` sur le JS extrait, puis Playwright (capture 390×844 et 1280×900, aucune `pageerror`).
+- Synchro automatique : toute modification de `analyseVoice`, `alignSyllables` ou `placeLinesOnVoice` se mesure avec `tests/banc-synchro/` (voir son README) ; ne pas livrer si le score baisse.
 
 ## Règles
 - **Toujours tester avant de livrer** : construire, ouvrir dans Playwright (mobile 390 px), vérifier qu'il n'y a pas d'erreur console, et faire un essai d'export de 5 s avec un MP3 de test (`ffmpeg -f lavfi -i sine=d=12 test.mp3`).

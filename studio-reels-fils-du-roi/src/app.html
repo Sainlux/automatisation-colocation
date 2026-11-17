@@ -690,9 +690,16 @@ function autoSync(quiet){
   const a = +$("vStart").value || 0, b = +$("vEnd").value || (duration || 60) * 0.92;
   const counts = lines.map(l => l.split(/\s+/).length), tot = counts.reduce((x,y) => x+y, 0);
   let starts = null, how = "";
-  if (voiceAna && voiceAna.ok) { starts = placeLinesOnVoice(counts, voiceAna, a, b); if (starts) how = "voix"; }
+  let wst = null;
+  if (voiceAna && voiceAna.ok) {
+    // deux méthodes : syllabe par syllabe (précise, donne aussi les mots) et ligne par ligne avec comptage des syllabes (plus stable).
+    // Si elles s'accordent sur au moins la moitié des lignes, on garde la précise ; sinon la stable. (Mesuré sur 9 chansons de test.)
+    const A = alignSyllables(lines, voiceAna, a, b, vStartSure), B = placeLinesOnVoice(lines, voiceAna, a, b, vStartSure);
+    const agree = A && B ? A.starts.filter((x, i) => Math.abs(x - B[i]) < 0.3).length / lines.length : 0;
+    if (A && (!B || agree >= 0.5)) { starts = A.starts; wst = A.wordStarts; how = "voix"; }
+    else if (B) { starts = B; how = "voix"; } }
   if (!starts) { let t = a; starts = counts.map(c => { const s = t; t += (b - a) * c / tot; return s; }); }
-  words = how ? wordsFromVoice(lines, starts, b, voiceAna) : wordsFromLines(lines, starts, b); lineStarts = starts; shiftTotal = 0; rebuild();
+  words = wst ? wordsFromStarts(lines, wst, b) : wordsFromLines(lines, starts, b); lineStarts = starts; shiftTotal = 0; rebuild();
   setStatus("syncStatus", how ? `${lines.length} lignes calées sur la voix (${voiceAna.cands.length} départs de voix repérés). Vérifie dans l'aperçu ; « Décaler » corrige un petit retard.`
     : voiceAnaBusy ? "Synchro provisoire : l'appli écoute encore la musique, les lignes vont se recaler toutes seules…"
     : quiet ? "Synchro approximative en place (répartition). Essaie « Suno, mot à mot » ou « Au toucher »." : `${lines.length} lignes réparties de ${fmt(a)} à ${fmt(b)}.`);
@@ -718,46 +725,134 @@ async function analyseVoice(file){
   node.connect(oc.destination); src.start();
   const x = (await oc.startRendering()).getChannelData(0), hop = 320, n = Math.floor(x.length / hop), e = new Float32Array(n);
   for (let i = 0; i < n; i++){ let s = 0; for (let k = i*hop, m = Math.min(x.length, k + 640); k < m; k++) s += x[k]*x[k]; e[i] = 10*Math.log10(s/640 + 1e-10); }
-  const sm = new Float32Array(n); for (let i = 0; i < n; i++){ let s = 0, c = 0; for (let k = i-2; k <= i+2; k++) if (k >= 0 && k < n){ s += e[k]; c++; } sm[i] = s/c; }
+  const sm = new Float32Array(n); for (let i = 0; i < n; i++){ let s = 0, c = 0; for (let k = i-1; k <= i+1; k++) if (k >= 0 && k < n){ s += e[k]; c++; } sm[i] = s/c; }
   const sorted = Array.from(sm).sort((a,b) => a-b), floor = sorted[Math.floor(n*.3)] || -100;
   const on = new Float32Array(n);
-  for (let i = 3; i < n; i++){ let mn = Infinity; for (let k = Math.max(0, i-25); k <= i-3; k++) mn = Math.min(mn, sm[k]); on[i] = sm[i] > floor + 3 ? Math.max(0, sm[i] - mn) : 0; }
+  for (let i = 3; i < n; i++){ let mn = Infinity; for (let k = Math.max(0, i-25); k <= i-2; k++) mn = Math.min(mn, sm[k]); on[i] = sm[i] > floor + 3 ? Math.max(0, sm[i] - mn) : 0; }
+  const mean = (a, b) => { let s = 0, c = 0; for (let k = Math.max(0, a); k < Math.min(n, b); k++){ s += sm[k]; c++; } return c ? s/c : -100; };
   const cands = [];
-  for (let i = 8; i < n - 8; i++){
-    if (on[i] < 3) continue; let peak = true; for (let k = i-8; k <= i+8; k++) if (on[k] > on[i]) { peak = false; break; }
-    if (!peak) continue; let j = i; while (j > 1 && sm[j-1] < sm[j] - 0.4 && i - j < 15) j--;   // remonte au pied de la montée
-    cands.push({t: j * hop / sr, s: on[i]});
+  for (let i = 6; i < n - 6; i++){
+    if (on[i] < 2.5) continue; let peak = true; for (let k = i-6; k <= i+6; k++) if (on[k] > on[i]) { peak = false; break; }
+    if (!peak) continue;
+    // pied de la montée : là où l'énergie quitte le creux (20 % de la montée), pas le sommet
+    let mn = Infinity; for (let k = Math.max(0, i-25); k <= i; k++) mn = Math.min(mn, sm[k]);
+    const thr = mn + 0.2 * (sm[i] - mn); let j = i; while (j > 0 && sm[j-1] > thr && i - j < 25) j--;
+    // respiration avant : écart d'énergie avant/après et part de trames calmes juste avant (un départ de ligne suit un silence)
+    const after = mean(j, j + 15), gap = Math.max(0, Math.min(20, after - mean(j - 15, j)));
+    let quiet = 0; for (let k = Math.max(0, j - 20); k < j; k++) if (sm[k] < after - 8) quiet++;
+    cands.push({t: Math.max(0, j * hop / sr - 0.02), s: on[i], l: gap / 10 + quiet / 20});
   }
-  // deux départs à moins de 0,4 s = la même entrée de voix : on garde le plus tôt, avec la force du plus fort
-  const merged = []; cands.forEach(c => { const l = merged[merged.length-1]; if (l && c.t - l.t < 0.4) l.s = Math.max(l.s, c.s); else merged.push({...c}); });
-  return {ok:true, hop: hop/sr, env: sm, cands: merged};
+  // deux départs à moins de 0,25 s = la même entrée de voix : on garde le plus tôt, avec les meilleures notes
+  const merged = []; cands.forEach(c => { const l = merged[merged.length-1]; if (l && c.t - l.t < 0.25){ l.s = Math.max(l.s, c.s); l.l = Math.max(l.l, c.l); } else merged.push({...c}); });
+  // attaques de syllabes : montées courtes (min sur 0,14 s), sommets locaux à ±60 ms
+  const syl = [];
+  for (let i = 8; i < n - 3; i++){
+    if (sm[i] < floor + 2) continue; let mn = Infinity; for (let k = i-7; k < i; k++) mn = Math.min(mn, sm[k]);
+    const r = sm[i] - mn; if (r < 1.5) continue; let pk = true;
+    for (let k = i-3; k <= i+3; k++){ if (k === i || k < 8 || k >= n) continue; let m2 = Infinity; for (let q = k-7; q < k; q++) m2 = Math.min(m2, sm[q]); if (sm[k] - m2 > r) { pk = false; break; } }
+    if (!pk) continue; const thr = mn + 0.2 * r; let j = i; while (j > 0 && sm[j-1] > thr && i - j < 8) j--;
+    const after = mean(j, j + 12), gap = Math.max(0, Math.min(20, after - mean(j - 15, j)));
+    let quiet = 0; for (let k = Math.max(0, j - 20); k < j; k++) if (sm[k] < after - 8) quiet++;
+    const tt = Math.max(0, j * hop / sr - 0.02); if (syl.length && tt - syl[syl.length-1].t < 0.08) continue;
+    syl.push({t: tt, s: r, l: gap / 10 + quiet / 20});
+  }
+  return {ok:true, hop: hop/sr, env: sm, cands: merged, syl};
 }
-// Programmation dynamique : une ligne par départ de voix, durées proches des longueurs de lignes
-function placeLinesOnVoice(counts, ana, a, b){
-  const N = counts.length; let C = ana.cands.filter(c => c.t >= Math.max(0, a - 3) && c.t <= b - 0.3);
+// Programmation dynamique : une ligne par départ de voix. Un bon départ de ligne = une montée de voix APRÈS une respiration ;
+// la durée de chaque ligne suit son nombre de syllabes ; une ligne qui « avale » une vraie respiration est pénalisée.
+const syllables = l => Math.max(1, (l.toLowerCase().match(/[aeiouyàâäéèêëîïôöùûüœæ]+/g) || []).length);
+const SYNC_P = {first: 1.2, short: 0.3, long: 0.3, inside: 0.3, wS: 0.35, before: 2.5, cnt: 3, cntOver: 0.8};   // réglés sur le banc de test
+function placeLinesOnVoice(lines, ana, a, b, aSure, P = SYNC_P){
+  const N = lines.length, syl = lines.map(syllables);
+  let C = ana.cands.filter(c => c.t >= Math.max(0, a - (aSure ? 0.5 : 3)) && c.t <= b - 0.3);
   if (C.length < N) return null;
-  if (C.length > Math.max(4*N, 260)) C = C.slice().sort((x,y) => y.s - x.s).slice(0, Math.max(4*N, 260)).sort((x,y) => x.t - y.t);
-  const M = C.length, smax = Math.max(...C.map(c => c.s)), s = C.map(c => c.s / smax);
-  const W = counts.reduce((x,y) => x + y + 1, 0), exp = counts.map(c => (b - a) * (c + 1) / W);
+  const K = Math.max(5*N, 300); if (C.length > K) C = C.slice().sort((x,y) => (y.s + 8*y.l) - (x.s + 8*x.l)).slice(0, K).sort((x,y) => x.t - y.t);
+  const M = C.length, smax = Math.max(...C.map(c => c.s)) || 1, lmax = Math.max(...C.map(c => c.l)) || 1;
+  const L = C.map(c => c.l / lmax), v = C.map((c, k) => P.wS * c.s / smax + L[k]);
+  const W = syl.reduce((x,y) => x + y + 1.5, 0), exp = syl.map(s => (b - a) * (s + 1.5) / W);
+  // compter les attaques de syllabes entre deux départs : il doit y en avoir à peu près autant que de syllabes (indépendant du tempo)
+  const T = (ana.syl || []).map(c => c.t), cnt = (t0, t1) => { const lo = x => { let l = 0, h = T.length; while (l < h){ const m = (l + h) >> 1; if (T[m] < x) l = m + 1; else h = m; } return l; }; return lo(t1) - lo(t0); };
+  const rho = T.length ? Math.max(0.3, cnt(a, b) / syl.reduce((x, y) => x + y, 0)) : 1;
+  const cntCost = (n, s) => { if (!P.cnt || !T.length) return 0; const r = Math.log((n + 1) / (rho * s + 1)); return r > 0 ? P.cntOver * r : P.cnt * -r; };
   const best = [], from = [];
   best[0] = new Float64Array(M); from[0] = new Int32Array(M).fill(-1);
-  for (let j = 0; j < M; j++) best[0][j] = s[j] - 0.6 * Math.abs(C[j].t - a) / Math.max(3, exp[0]);
+  // « Début du chant » = plancher : avant, très pénalisé ; après, un peu (le chant peut commencer un peu plus tard)
+  for (let j = 0; j < M; j++){ const dt = C[j].t - a; best[0][j] = v[j] - (dt < 0 ? P.before * -dt : (aSure ? P.first : 0.15) * dt / Math.max(1.5, exp[0])); }
   for (let i = 1; i < N; i++){
     best[i] = new Float64Array(M).fill(-1e9); from[i] = new Int32Array(M).fill(-1);
     for (let j = i; j < M; j++){
-      let bv = -1e9, bk = -1;
-      for (let k = i - 1; k < j; k++){ const d = C[j].t - C[k].t; if (d < 0.5) break;
-        const v = best[i-1][k] - 1.1 * Math.abs(Math.log(d / exp[i-1])); if (v > bv){ bv = v; bk = k; } }
-      if (bk >= 0){ best[i][j] = bv + s[j]; from[i][j] = bk; }
+      let bv = -1e9, bk = -1, inside = 0;                         // inside = meilleure respiration sautée entre k et j
+      for (let k = j - 1; k >= i - 1; k--){
+        const d = C[j].t - C[k].t;
+        if (d >= 0.5 && best[i-1][k] > -1e8){
+          const r = Math.log(d / exp[i-1]);   // plus court que prévu : cher ; plus long (silence, pont instrumental) : peu cher
+          const val = best[i-1][k] - (r < 0 ? P.short * -r : P.long * r) - P.inside * inside - cntCost(cnt(C[k].t, C[j].t), syl[i-1]);
+          if (val > bv){ bv = val; bk = k; }
+        }
+        if (d > 6 * exp[i-1] + 8) break;
+        inside = Math.max(inside, L[k]);
+      }
+      if (bk >= 0){ best[i][j] = bv + v[j]; from[i][j] = bk; }
     }
   }
   let bj = -1, bv = -1e9;
-  for (let j = 0; j < M; j++){ const tail = Math.max(0.3, b - C[j].t), v = best[N-1][j] - 0.5 * Math.abs(Math.log(tail / exp[N-1])); if (v > bv){ bv = v; bj = j; } }
-  if (bj < 0 || bv < -1e8) return null;
+  for (let j = 0; j < M; j++){ if (best[N-1][j] < -1e8) continue; const tail = Math.max(0.3, b - C[j].t), val = best[N-1][j] - 0.5 * Math.abs(Math.log(tail / exp[N-1])) - cntCost(cnt(C[j].t, b), syl[N-1]); if (val > bv){ bv = val; bj = j; } }
+  if (bj < 0) return null;
   const starts = new Array(N); for (let i = N - 1, j = bj; i >= 0; i--){ starts[i] = C[j].t; j = from[i][j]; }
   return starts;
 }
-// Dans une ligne, les mots suivent les petites montées d'énergie (syllabes) quand il y en a assez
+// Alignement forcé par syllabes : chaque syllabe du texte va sur une attaque détectée (ou est « ratée »),
+// le rythme dans une ligne est régulier, un début de ligne suit une respiration. On essaie plusieurs tempos.
+const wordSyl = w => { const g = (w.toLowerCase().match(/[aeiouyàâäéèêëîïôöùûüœæ]+/g) || []).length; return Math.max(1, /[^aeiouy]e?s?$|[aeiouy]$/i.test(w) && /e(s|nt)?$/i.test(w) && g > 1 ? g - 1 : g); };
+const SYL_P = {on: 1, pause: 0.8, rhythm: 0.5, short: 1.5, miss: 0.5, skipIn: 0.3, first: 1.2, before: 2.5};   // réglés sur le banc de test
+function alignSyllables(lines, ana, a, b, aSure, P = SYL_P){
+  if (!ana.syl || ana.syl.length < 4) return null;
+  const S = []; lines.forEach((ln, li) => ln.split(/\s+/).filter(Boolean).forEach((w, wi) => { const n = wordSyl(w); for (let q = 0; q < n; q++) S.push({li, wi, q, ls: wi === 0 && q === 0}); }));
+  const C = ana.syl.filter(c => c.t >= Math.max(0, a - (aSure ? 0.5 : 3)) && c.t <= b);
+  const K = S.length, M = C.length; if (M < K * 0.4 || K < 2) return null;
+  const smax = Math.max(...C.map(c => c.s)) || 1, lmax = Math.max(...C.map(c => c.l)) || 1, on = C.map(c => c.s / smax), L = C.map(c => c.l / lmax);
+  const nls = lines.length, voiced = Math.max(1, (b - a) - 0.6 * nls);
+  let bestRun = null;
+  for (const f of [0.6, 0.8, 1.0, 1.25]){
+    const dl = f * voiced / K;                                  // intervalle attendu entre deux syllabes
+    const sc = Array.from({length: K}, () => new Float32Array(M).fill(-1e9)), fr = Array.from({length: K}, () => new Int32Array(M).fill(-1)), fk = Array.from({length: K}, () => new Int8Array(M));
+    for (let j = 0; j < M; j++){ const dt = C[j].t - a; sc[0][j] = P.on * on[j] + P.pause * L[j] - (dt < 0 ? P.before * -dt : (aSure ? P.first : 0.15) * dt / Math.max(1.5, 4 * dl)); }
+    for (let k = 1; k < K; k++){
+      const ls = S[k].ls;
+      for (let j = 1; j < M; j++){
+        let bv = -1e9, bj = -1, bs = 0, inside = 0;
+        for (let jp = j - 1; jp >= 0; jp--){
+          const d = C[j].t - C[jp].t; if (d > (ls ? 10 : 6 * dl + 0.5)) break;
+          for (const step of [1, 2]){                          // step 2 = une syllabe ratée entre les deux
+            const kp = k - step; if (kp < 0 || sc[kp][jp] < -1e8) continue;
+            const r = Math.log(d / (dl * step)); let val = sc[kp][jp] - (step === 2 ? P.miss : 0);
+            if (ls) val += P.pause * L[j] - (r < 0 ? P.short * -r : 0);              // début de ligne : respiration bienvenue, pas trop serré
+            else val -= P.rhythm * Math.abs(r) + P.skipIn * inside + P.pause * 0.5 * L[j];   // dans une ligne : rythme régulier, pas de respiration sautée
+            if (val > bv){ bv = val; bj = jp; bs = step; }
+          }
+          inside = Math.max(inside, L[jp]);
+        }
+        if (bj >= 0){ sc[k][j] = bv + P.on * on[j]; fr[k][j] = bj; fk[k][j] = bs; }
+      }
+    }
+    let ej = -1, ev = -1e9; for (let j = 0; j < M; j++) if (sc[K-1][j] > ev){ ev = sc[K-1][j]; ej = j; }
+    if (ej < 0) continue; const norm = ev / K;
+    if (!bestRun || norm > bestRun.norm) bestRun = {norm, ej, sc, fr, fk, dl};
+  }
+  if (!bestRun) return null;
+  const tS = new Array(K).fill(null);
+  for (let k = K - 1, j = bestRun.ej; k >= 0 && j >= 0;){ tS[k] = C[j].t; const st = bestRun.fk[k][j], jp = bestRun.fr[k][j]; if (st === 2 && k - 1 >= 0) tS[k-1] = (C[j].t + (jp >= 0 ? C[jp].t : C[j].t)) / 2; k -= st || 1; j = jp; if (!st) break; }
+  for (let k = 0; k < K; k++) if (tS[k] == null) tS[k] = k ? tS[k-1] + bestRun.dl : a;
+  const starts = lines.map((_, li) => tS[S.findIndex(x => x.li === li)]);
+  const wts = []; S.forEach((x, k) => { if (x.q === 0) wts.push(tS[k]); });
+  return {starts, wordStarts: wts, dl: bestRun.dl};
+}
+function wordsFromStarts(lines, wst, endT){
+  const ws = lines.flatMap(l => l.split(/\s+/).filter(Boolean)), out = [];
+  ws.forEach((w, i) => { const s = wst[i], nx = i + 1 < ws.length ? wst[i+1] : endT; out.push({w, s, e: Math.max(s + 0.1, Math.min(nx, s + 1.2))}); });
+  return out;
+}
+// (ancienne répartition dans une ligne, gardée en secours)
 function wordsFromVoice(lines, starts, endT, ana){
   const out = [];
   lines.forEach((ln, i) => {
@@ -767,7 +862,9 @@ function wordsFromVoice(lines, starts, endT, ana){
   });
   return out;
 }
-$("hereVStart").onclick = () => { $("vStart").value = curTime().toFixed(1); };
+let vStartSure = false;   // vrai dès que l'utilisateur a indiqué le début du chant
+$("vStart").addEventListener("input", () => { vStartSure = true; });
+$("hereVStart").onclick = () => { $("vStart").value = curTime().toFixed(1); vStartSure = true; };
 $("hereVEnd").onclick = () => { $("vEnd").value = curTime().toFixed(1); };
 
 /* ----- Synchro Suno : alignement mot à mot lu dans le compte Suno de l'utilisateur ----- */

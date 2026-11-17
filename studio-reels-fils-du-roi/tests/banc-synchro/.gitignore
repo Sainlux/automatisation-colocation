@@ -1,0 +1,4 @@
+songs/
+songs_valid/
+results*.json
+__pycache__/
