@@ -968,7 +968,7 @@ $("tapStart").onclick = async () => {
 };
 function tap(){
   if (!tapping) return; const lines = lyricLines();
-  lineStarts[tapIdx] = Math.max(0, audio.currentTime - 0.12); tapIdx++;
+  lineStarts[tapIdx] = Math.max(0, songTime() - 0.12); tapIdx++;
   words = wordsFromLines(lines, lineStarts, duration); rebuild();
   const rows = $("lineList").children; [...rows].forEach((r,i) => r.classList.toggle("cur", i === tapIdx - 1));
   if (rows[tapIdx-1]) rows[tapIdx-1].scrollIntoView({block:"nearest"});
@@ -1224,7 +1224,16 @@ function demoChunks(){
       const part = ws.slice(i,i+n).map((w,k) => ({w, s:t+k*0.42, e:t+(k+1)*0.42})); out.push({words:part, s:t, e:t + part.length*0.42 + 0.9, idx:out.length}); t += part.length*0.42 + 0.9; i += n; } });
   out.forEach(c => c.emph = emphasisIndex(c.words)); demoCache = {chunks:out, len:t}; return demoCache;
 }
-function curTime(){ return demo ? demoTime : audio.currentTime; }
+// Horloge lissée : sur Safari/iPhone, audio.currentTime n'avance que par paliers (~0,25 s) ;
+// entre deux paliers on extrapole avec l'horloge de l'écran, pour que les mots tombent pile sur ce qu'on entend.
+const clk = {ct: -1, at: 0};
+function songTime(){
+  const ct = audio.currentTime, now = performance.now();
+  if (audio.paused || audio.seeking || ct !== clk.ct && Math.abs(ct - (clk.ct + (now - clk.at)/1000 * audio.playbackRate)) > 0.35) { clk.ct = ct; clk.at = now; return ct; }
+  if (ct !== clk.ct) { const est = clk.ct + (now - clk.at)/1000 * audio.playbackRate; clk.ct = ct; clk.at = now; return Math.max(ct, Math.min(est, ct + 0.05)); }
+  return Math.min(ct + (now - clk.at)/1000 * audio.playbackRate, ct + 0.3);
+}
+function curTime(){ return demo ? demoTime : songTime(); }
 
 /* image courante : change au début d'une phrase, fondu de 0,45 s */
 function bgIndexAt(t, C, total){
@@ -1521,7 +1530,7 @@ $("rec").onclick = async () => {
   recorder.start(1000); setStatus("recStatus", "Enregistrement… garde la page ouverte.");
   function tick(){
     if (!recording) return;
-    const t = audio.currentTime; try { drawFrame(t, cv.width, cv.height); } catch(e){ console.error(e); }
+    const t = songTime(); try { drawFrame(t, cv.width, cv.height); } catch(e){ console.error(e); }
     $("recBar").style.width = `${Math.min(100, (t - from) / (to - from) * 100)}%`;
     if (t >= to || audio.ended) return finish();
     requestAnimationFrame(tick);
