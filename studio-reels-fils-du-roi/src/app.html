@@ -76,6 +76,14 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
 .proj b{display:block;font-family:var(--display);font-size:16px;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .proj .btn{flex:none}
 .proj.on{border-color:var(--gold)}
+.bible{display:grid;gap:8px;margin-top:8px}
+.bible .grid4{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:8px}
+.bible .grid4 .ctl{grid-template-columns:1fr;gap:4px}
+.bible .grid4 select{width:100%;min-width:0;font-variant-numeric:tabular-nums}
+@media(max-width:600px){.bible .grid4{grid-template-columns:1fr 1fr 1fr}.bible .grid4 .wide{grid-column:1/-1}}
+.biblePrev{max-height:170px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13.5px;line-height:1.55}
+.biblePrev sup{color:var(--gold);font-weight:700;margin-right:3px}
+.bibleBox{margin:6px 0}
 .ask summary{cursor:pointer;color:var(--gold);font-weight:700;min-height:44px;display:flex;align-items:center}
 .vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .thumbs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
@@ -147,6 +155,11 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
           <summary>Faire créer une nouvelle chanson par Claude</summary>
           <div class="stack" style="margin-top:8px">
             <div class="ctl"><label for="askTitre" class="small">Titre</label><input type="text" id="askTitre" placeholder="Ex : Psaume 23"></div>
+            <details class="ask bibleBox" id="askBibleBox"><summary>📖 Partir d'un passage de la Bible</summary><div id="bibleAsk"></div></details>
+            <div class="ctl hidden" id="askModeBox"><label for="askMode" class="small">Que faire du passage ?</label><select id="askMode">
+              <option value="exact">Chanter le texte exact de la Bible</option>
+              <option value="adapte" selected>L'adapter en chanson, fidèle au passage (refrain, rimes)</option>
+              <option value="inspire">S'en inspirer librement</option></select></div>
             <div class="ctl"><label for="askParoles" class="small">Paroles (ou juste l'idée de la chanson)</label><textarea id="askParoles" style="min-height:90px" placeholder="Colle tes paroles, ou décris le thème : « Psaume 23, confiance, berger »"></textarea></div>
             <div class="grid2">
               <div class="ctl"><label for="askGenre" class="small">Style musical</label><select id="askGenre"></select></div>
@@ -181,6 +194,7 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
     <section>
       <h2><span class="n">2</span>Paroles et synchro</h2>
       <p class="note">Une ligne = une phrase chantée. Ensuite, cale chaque ligne sur la voix.</p>
+      <details class="ask bibleBox"><summary>📖 Prendre un passage de la Bible</summary><div id="bibleLyr"></div></details>
       <label class="l" for="lyrics">Paroles</label>
       <textarea id="lyrics" placeholder="Colle tes paroles ici, une phrase par ligne"></textarea>
       <div class="row" style="margin-top:10px" role="group" aria-label="Méthode de synchro">
@@ -530,7 +544,8 @@ $("askCopy").onclick = async () => {
   if (!par) { $("askParoles").focus(); return setStatus("syncStatus", "Écris les paroles ou l'idée de la chanson.", true); }
   const msg = `Crée une chanson pour mon Studio Reels, de A à Z.
 Titre : ${titre || "à toi de proposer"}
-${par.split("\n").length > 2 ? "Paroles (à garder telles quelles) :\n" + par : "Idée : " + par + " (écris les paroles en français, couplets courts, refrain fort)"}
+${askRef ? `Passage biblique : ${askRef} (Louis Segond 1910). ${({exact:"Chante le texte exact du passage, sans rien changer (tu peux répéter un verset comme refrain).", adapte:"Adapte-le en chanson française fidèle au passage : couplets courts, refrain fort tiré du verset clé, sans rien ajouter de contraire au texte.", inspire:"Inspire-toi librement du passage pour écrire la chanson."})[$("askMode").value]}\nTexte du passage :\n${par}`
+  : par.split("\n").length > 2 ? "Paroles (à garder telles quelles) :\n" + par : "Idée : " + par + " (écris les paroles en français, couplets courts, refrain fort)"}
 Style musical Suno : ${$("askMusic").value.trim()} (genre choisi : ${$("askGenre").selectedOptions[0].text})
 Images : ${$("askImgs").value}, lumière « ${$("askLight").value} », format 9:16, sans personne ni texte.
 Suis la procédure « Générer une chanson de A à Z » de CLAUDE.md : 2 versions Suno, synchro mot à mot, images, puis publie-la dans le Studio.`;
@@ -539,6 +554,92 @@ Suis la procédure « Générer une chanson de A à Z » de CLAUDE.md : 2 versio
   catch(e){ $("askOut").select(); $("askHelp").textContent = "Sélectionne le texte ci-dessous et copie-le, puis colle-le dans ta conversation avec Claude."; }
 };
 loadProjectList();
+
+/* =================== BIBLE (Louis Segond 1910, domaine public) =================== */
+// Fichiers publiés à côté de la page : bible/index.json + bible/lsg/NN.json (un livre = liste de chapitres = liste de versets)
+let bibleIdx = null; const bibleBooks = {};
+async function bibleIndex(){ if (!bibleIdx) bibleIdx = await (await fetch("bible/index.json")).json(); return bibleIdx; }
+async function bibleBook(f){ if (!bibleBooks[f]) bibleBooks[f] = (await fetch("bible/lsg/" + f + ".json")).json(); return bibleBooks[f]; }
+const refName = n => n === "Psaumes" ? "Psaume" : n;
+function bibleRef(b, c, v1, v2, nv){ return `${refName(b.n)} ${c}` + (v1 === 1 && v2 === nv ? "" : v1 === v2 ? `:${v1}` : `:${v1}-${v2}`); }
+// Lignes courtes pour chanter : on coupe sur la ponctuation, puis les morceaux trop longs vers le milieu (jamais après un petit mot)
+function singLines(verses){
+  const out = [];
+  verses.forEach(v => (v.match(/[^,;:.!?]+[,;:.!?]*/g) || [v]).map(s => s.trim()).filter(Boolean).forEach(seg => {
+    const w = seg.split(/\s+/);
+    if (w.length <= 8) return out.push(seg);
+    let cut = Math.round(w.length / 2); while (cut < w.length - 2 && STOP.has(w[cut-1].toLowerCase().replace(/[^a-zàâçéèêëîïôûùüÿœ']/g, ""))) cut++;
+    out.push(w.slice(0, cut).join(" ")); out.push(w.slice(cut).join(" "));
+  }));
+  return out.map(s => s.replace(/[,;:]$/, ""));
+}
+function makeBible(root, {useLabel, onUse, linesChoice}){
+  root.innerHTML = `<div class="bible">
+    <div class="grid4">
+      <div class="ctl wide"><span class="small">Livre</span><select data-b="book"></select></div>
+      <div class="ctl"><span class="small">Chapitre</span><select data-b="chap"></select></div>
+      <div class="ctl"><span class="small">Du verset</span><select data-b="v1"></select></div>
+      <div class="ctl"><span class="small">Au verset</span><select data-b="v2"></select></div>
+    </div>
+    <div class="biblePrev" data-b="prev" aria-live="polite">Chargement de la Bible…</div>
+    ${linesChoice ? `<div class="ctl"><span class="small">Découpage</span><select data-b="cut"><option value="court">Lignes courtes, pour chanter</option><option value="verset">Un verset par ligne</option></select></div>` : ""}
+    <label class="toggle"><input type="checkbox" data-b="notitle" checked> Sans le titre du psaume (« Cantique de David »…)</label>
+    <div class="row"><button class="btn" data-b="use">${useLabel}</button><span class="small">Louis Segond 1910</span></div>
+  </div>`;
+  const q = k => root.querySelector(`[data-b="${k}"]`);
+  let idx, verses = [];
+  const fill = (sel, n, val) => { sel.innerHTML = ""; for (let i = 1; i <= n; i++) sel.add(new Option(String(i), String(i))); sel.value = String(Math.min(val, n)); };
+  const cur = () => { const b = idx.livres[+q("book").value], c = +q("chap").value, v1 = +q("v1").value, v2 = Math.max(v1, +q("v2").value); return {b, c, v1, v2, nv: b.v[c-1]}; };
+  // Titres de psaumes : phrases en tête du verset 1 (« Au chef des chantres. Psaume de David. Lorsque Nathan… . »).
+  // On retire une phrase de titre, puis les phrases d'occasion qui la suivent ; « -Pause. » ne se chante pas.
+  const TITLE1 = /^(Au chef des chantres|Complainte|Cantique|Psaume|Prière|Hymne|Maskil|Miktam|Chant|Louange|De David|Des fils de Koré|D'Asaph|De Salomon|De Moïse|Du serviteur)[^.]*\.\s*/i;
+  const TITLE2 = /^(Au chef des chantres|Complainte|Chantée|Cantique|Psaume|Prière|Hymne|Maskil|Miktam|Chant|De David|Des fils de Koré|D'Asaph|De Salomon|De Moïse|Du serviteur|Sur |Pour |Lorsque|A l'occasion)[^.]*\.\s*/i;
+  const stripTitle = v0 => { let v = v0.replace(/^Cantique des degrés(\. De (David|Salomon))?[,.]\s*/, "");
+    if (TITLE1.test(v)) { v = v.replace(TITLE1, ""); while (TITLE2.test(v)) v = v.replace(TITLE2, ""); v = v.replace(/^Il dit:\s*/, ""); }
+    return v.trim() ? v.charAt(0).toUpperCase() + v.slice(1) : v0; };   // jamais de verset vidé par erreur
+  const noPause = v => v.replace(/\s*-\s*Pause\.?/g, "").trim();
+  const passage = () => { const {b, v1, v2} = cur(), ps = b.n === "Psaumes";
+    return verses.slice(v1 - 1, v2).map((v, i) => ps ? noPause(i === 0 && v1 === 1 && q("notitle").checked ? stripTitle(v) : v) : v).filter(Boolean); };
+  async function showChap(){
+    const {b, c} = cur(); q("prev").textContent = "Chargement…";
+    try { verses = (await bibleBook(b.f))[c - 1] || []; } catch(e){ q("prev").textContent = "Ce livre n'a pas pu être chargé."; return; }
+    showPrev();
+  }
+  function showPrev(){
+    const {v1, v2} = cur(); q("prev").innerHTML = "";
+    verses.slice(v1 - 1, v2).forEach((v, i) => { const p = document.createElement("div"); const s = document.createElement("sup"); s.textContent = v1 + i; p.append(s, v); q("prev").appendChild(p); });
+  }
+  const psOnly = () => q("notitle").closest("label").classList.toggle("hidden", idx.livres[+q("book").value].n !== "Psaumes");
+  q("book").onchange = () => { const b = idx.livres[+q("book").value]; fill(q("chap"), b.v.length, 1); psOnly(); q("chap").onchange(); };
+  q("chap").onchange = () => { const {b, c} = cur(); fill(q("v1"), b.v[c-1], 1); fill(q("v2"), b.v[c-1], b.v[c-1]); showChap(); };
+  q("v1").onchange = () => { if (+q("v2").value < +q("v1").value) q("v2").value = q("v1").value; showPrev(); };
+  q("v2").onchange = () => { if (+q("v2").value < +q("v1").value) q("v1").value = q("v2").value; showPrev(); };
+  q("notitle").onchange = showPrev;
+  q("use").onclick = () => { if (!verses.length) return; const c = cur(), txt = passage();
+    onUse({ref: bibleRef(c.b, c.c, c.v1, c.v2, c.nv), titre: `${refName(c.b.n)} ${c.c}`, verses: txt,
+           lines: (q("cut") && q("cut").value === "verset") ? txt : singLines(txt)}); };
+  bibleIndex().then(i => {
+    idx = i; const ga = document.createElement("optgroup"), gn = document.createElement("optgroup"); ga.label = "Ancien Testament"; gn.label = "Nouveau Testament";
+    idx.livres.forEach((b, k) => (b.t === "AT" ? ga : gn).appendChild(new Option(b.n, String(k))));
+    q("book").append(ga, gn); q("book").value = String(idx.livres.findIndex(b => b.n === "Psaumes"));
+    const b = idx.livres[+q("book").value]; fill(q("chap"), b.v.length, 23); fill(q("v1"), b.v[22], 1); fill(q("v2"), b.v[22], b.v[22]); psOnly(); showChap();
+  }).catch(() => { q("prev").textContent = "La Bible n'est pas disponible dans cette version de l'appli."; q("use").disabled = true; });
+}
+makeBible($("bibleLyr"), {useLabel: "Mettre dans les paroles", linesChoice: true, onUse: ({ref, titre, lines}) => {
+  $("lyrics").value = lines.join("\n"); if (!$("titre").value.trim()) $("titre").value = titre;
+  if (syncSource === "code" || syncSource === "tap") { words = []; lineStarts = []; syncSource = null; }
+  $("lyrics").dispatchEvent(new Event("input"));
+  if (duration) autoSync(true); else rebuild();
+  $("lyrics").closest("section").querySelector(".bibleBox").open = false;
+  setStatus("syncStatus", `${ref} : ${lines.length} lignes dans les paroles.` + (duration ? " Synchro automatique en place." : " Ajoute ta musique pour la synchro."));
+}});
+let askRef = "";
+makeBible($("bibleAsk"), {useLabel: "Utiliser ce passage", linesChoice: false, onUse: ({ref, titre, verses}) => {
+  askRef = ref; $("askParoles").value = verses.join("\n"); if (!$("askTitre").value.trim()) $("askTitre").value = titre;
+  $("askModeBox").classList.remove("hidden"); $("askBibleBox").open = false;
+  $("askHelp").textContent = `Passage choisi : ${ref}. Choisis ce qu'il faut en faire, puis copie la demande.`;
+}});
+$("askParoles").addEventListener("input", () => { if (askRef && !$("askParoles").value.trim()) { askRef = ""; $("askModeBox").classList.add("hidden"); } });
 
 /* =================== PAROLES & SYNCHRO =================== */
 const lyricLines = () => $("lyrics").value.split("\n").map(s => s.trim()).filter(Boolean);

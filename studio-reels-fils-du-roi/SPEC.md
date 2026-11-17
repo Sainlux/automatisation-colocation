@@ -15,12 +15,13 @@ Couleurs : fond `#111214`, panneaux `#1a1c1f`, texte `#ece9e2`, accent or `#f2c1
 
 **Étape 1 — Musique et images**
 - **Chansons créées par Claude** (en tête) : liste lue dans `projets/index.json` (fichiers publiés à côté de la page). Chaque ligne : vignette, titre, durée, date, bouton « Charger » qui remplit d'un coup musique, images, paroles, synchro mot à mot (`words`) et titre. Sans projet : « Aucune chanson prête pour l'instant. »
-- **Faire créer une nouvelle chanson par Claude** (repliable) : titre, paroles ou idée, style musical (16 genres : gospel moderne, worship acoustique, afro-gospel, rap chrétien, trap louange, orchestral épique, zouk gospel… ; les mots-clés Suno se remplissent et restent modifiables), nombre d'images, lumière (15) → « Copier la demande pour Claude ». Procédure suivie par Claude : CLAUDE.md § Générer une chanson de A à Z ; rangement par `video/nouveau_projet.py`.
+- **Faire créer une nouvelle chanson par Claude** (repliable) : passage de la Bible (même sélecteur ; puis « Chanter le texte exact », « L'adapter en chanson, fidèle au passage » ou « S'en inspirer librement » ; la référence et le texte partent dans la demande), titre, paroles ou idée, style musical (16 genres : gospel moderne, worship acoustique, afro-gospel, rap chrétien, trap louange, orchestral épique, zouk gospel… ; les mots-clés Suno se remplissent et restent modifiables), nombre d'images, lumière (15) → « Copier la demande pour Claude ». Procédure suivie par Claude : CLAUDE.md § Générer une chanson de A à Z ; rangement par `video/nouveau_projet.py`.
 - Bouton pour choisir le MP3 (gros bouton or, 52 px de haut ; accepte mp3, m4a, wav, aac, ogg ; sur iPhone, passer par « Parcourir / Fichiers »), et bouton pour ajouter plusieurs images. Sur ordinateur, on peut aussi glisser les fichiers sur ces boutons.
 - Vignettes numérotées, avec × pour retirer une image (zone de toucher de 32 px).
 - Lien « Pas encore d'images ? Écrire les prompts ChatGPT » qui descend à l'étape 4.
 
 **Étape 2 — Paroles et synchro**
+- **📖 Prendre un passage de la Bible** (repliable, au-dessus des paroles) : Louis Segond 1910 (domaine public), 66 livres groupés Ancien / Nouveau Testament, chapitre, du verset … au verset (par défaut Psaume 23 en entier), aperçu numéroté. Découpage « Lignes courtes, pour chanter » (coupe sur la ponctuation, puis au milieu des morceaux de plus de 8 mots, jamais après un petit mot) ou « Un verset par ligne ». Pour les Psaumes : case « Sans le titre » (retire « Au chef des chantres. Psaume de David. Lorsque… » en tête du verset 1) et les « -Pause. » sont retirés. « Mettre dans les paroles » remplace les paroles, met le titre (« Psaume 23 ») s'il est vide et relance la synchro automatique.
 - Zone de texte : une ligne par phrase chantée.
 - Trois méthodes de synchro :
   - **Au toucher** : une barre fixe en bas de l'écran montre la prochaine ligne en grand, un gros bouton « Touche quand elle commence », et les boutons « Annuler la dernière » et « Terminer ». Les lignes non touchées sont réparties automatiquement.
@@ -127,3 +128,6 @@ Il suit les mêmes règles (découpage, mot fort, mise en page stable, un effet 
 - looks : nuit, dore, clair, nb.
 
 Encodage : `libx264 -crf 20 -tune grain`. Pistes d'évolution : reprendre dans le moteur Python les 12 polices et les 10 animations de l'appli, et ajouter le fondu entre images.
+
+## 6. Bible
+`bible/index.json` (livres : nom français, code OSIS, AT/NT, fichier, nombre de versets par chapitre) et `bible/lsg/NN.json` (un livre = liste de chapitres = liste de versets), produits par `scripts/preparer_bible.py` depuis le jeu de données public « bible-data » (version lsg). Le build les copie dans `public/bible` ; l'appli les charge à la demande (un livre à la fois).

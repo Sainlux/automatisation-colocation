@@ -18,6 +18,7 @@ exemples/             ← words.json des Psaumes 40/91, prompts ChatGPT, command
 SPEC.md               ← cahier des charges complet de l'interface (à relire avant toute refonte)
 projets/<slug>/       ← chansons créées par Claude (projet.json, chanson.mp3, 1.jpg…) + projets/index.json ; copiés dans public/ par le build
 video/nouveau_projet.py ← range une chanson + images + synchro dans projets/
+bible/                ← Bible Louis Segond 1910 (domaine public) : index.json + lsg/NN.json, faits par scripts/preparer_bible.py
 ```
 
 `src/app.html` tourne dans **deux environnements** :
@@ -41,7 +42,7 @@ Les adaptateurs sont en haut de la section « Style par description » (`IN_ARTI
 
 ## Générer une chanson de A à Z (demande copiée depuis l'appli)
 Merhawi colle une demande « Crée une chanson pour mon Studio Reels » (titre, paroles ou idée, style, nombre d'images, lumière). Procédure :
-1. **Paroles** : s'il n'a donné qu'une idée, écris les paroles (français, couplets courts, refrain fort, sans répétition de « [Verse] » dans le texte chanté) et montre-les-lui avant de générer.
+1. **Paroles** : si la demande donne un « Passage biblique », respecte le mode demandé (texte exact / adaptation fidèle / inspiration) et le texte Louis Segond fourni ; s'il n'a donné qu'une idée, écris les paroles (français, couplets courts, refrain fort, sans répétition de « [Verse] » dans le texte chanté) et montre-les-lui avant de générer.
 2. **Musique (Suno, ~10 crédits)** : `audio-create` en mode custom (`lyrics`, `style`, `title`), une seule fois (2 versions). `audio-wait` avec les deux `ids`, `until: "complete"`. Fais-lui écouter les deux versions (`song_url`) et laisse-le choisir.
 3. **Synchro** : `audio-lyrics-alignment` sur la version choisie (relancer tant que `processing`) ; enregistre la réponse brute en JSON.
 4. **Fichier MP3** : télécharge l'`audio_url` de la version choisie (exception ci-dessus). Jamais `audio-download` avec `confirm: true`.
