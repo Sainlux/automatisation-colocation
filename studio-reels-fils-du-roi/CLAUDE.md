@@ -22,7 +22,7 @@ bible/                ← Bible Louis Segond 1910 (domaine public) : index.json 
 ```
 
 `src/app.html` tourne dans **deux environnements** :
-- comme artifact claude.ai, avec `window.claude.use("sample"|"downloads")` ;
+- comme artifact claude.ai, avec `window.claude.use("sample"|"downloads"|"mcp")` — `mcp` = connecteur « Suno » (`library-search`, `audio-lyrics-alignment`, lecture seule) pour la synchro mot à mot. À republier avec `capabilities: {sample:{}, downloads:true, mcp:{servers:[{server:"Suno", tools:["library-search","audio-lyrics-alignment"]}]}}` ;
 - en autonome, avec `fetch("/api/claude")` et un téléchargement par `<a download>`.
 
 Les adaptateurs sont en haut de la section « Style par description » (`IN_ARTIFACT`, `apiSampler`, `localDownloads`). Garde ces deux chemins fonctionnels.
