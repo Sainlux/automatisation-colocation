@@ -1,0 +1,114 @@
+# Intégration continue de CellConnect (dossier cellconnect/ ; l'ancienne application à la racine n'est pas concernée).
+# Aucun secret n'est nécessaire : les tests tournent en mode local et contre un Supabase local (clés de démonstration).
+name: CellConnect CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "cellconnect/**"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cellconnect-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: cellconnect
+
+jobs:
+  verify:
+    name: verify (lint, types, tests, build, e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: cellconnect/.nvmrc
+          cache: npm
+          cache-dependency-path: cellconnect/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Cache du build Next.js
+        uses: actions/cache@v4
+        with:
+          path: cellconnect/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('cellconnect/package-lock.json') }}-${{ hashFiles('cellconnect/src/**', 'cellconnect/public/**', 'cellconnect/next.config.ts') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('cellconnect/package-lock.json') }}-
+
+      - run: npm run build
+
+      - name: Navigateur Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests de bout en bout
+        run: npx playwright test
+
+      - name: Rapport Playwright (en cas d'échec)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            cellconnect/playwright-report/
+            cellconnect/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Intégration contre un Supabase local (Docker) + Mailpit. Non bloquant tant qu'il n'a pas réussi une première fois.
+  supabase:
+    name: supabase (RLS, Auth, Storage, SMTP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: cellconnect/.nvmrc
+          cache: npm
+          cache-dependency-path: cellconnect/package-lock.json
+
+      - run: npm ci
+
+      - name: Démarrer Supabase (services utiles seulement)
+        run: npx supabase start -x realtime,imgproxy,studio,edge-runtime,logflare,vector,supavisor,postgres-meta
+
+      - name: Exporter les clés locales (démonstration, publiques)
+        run: |
+          npx supabase status -o env \
+            --override-name api.url=NEXT_PUBLIC_SUPABASE_URL \
+            --override-name auth.anon_key=NEXT_PUBLIC_SUPABASE_ANON_KEY \
+            --override-name auth.service_role_key=SUPABASE_SERVICE_ROLE_KEY \
+            | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|SUPABASE_SERVICE_ROLE_KEY)=' \
+            | sed -E 's/^([A-Z_]+)="(.*)"$/\1=\2/' >> "$GITHUB_ENV"
+
+      - name: Tests d'intégration Supabase
+        run: npm run test:supabase
+        env:
+          SUPABASE_IT: "1"
+          DATA_BACKEND: supabase
+          SMTP_HOST: 127.0.0.1
+          SMTP_PORT: "54325"
+          MAILPIT_URL: http://127.0.0.1:54324
+
+      - name: Arrêter Supabase
+        if: always()
+        run: npx supabase stop --no-backup
