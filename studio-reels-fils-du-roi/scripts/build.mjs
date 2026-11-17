@@ -8,4 +8,5 @@ mkdirSync("public", { recursive: true });
 writeFileSync("public/index.html", app.replace("__IMGS__", imgs));
 rmSync("public/projets", { recursive: true, force: true });
 if (existsSync("projets")) cpSync("projets", "public/projets", { recursive: true });
+else { mkdirSync("public/projets", { recursive: true }); writeFileSync("public/projets/index.json", "[]\n"); }  // liste vide : pas d'erreur 404
 console.log("public/index.html prêt" + (existsSync("projets") ? " (+ projets/)" : ""));

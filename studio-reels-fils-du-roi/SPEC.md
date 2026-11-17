@@ -15,7 +15,7 @@ Couleurs : fond `#111214`, panneaux `#1a1c1f`, texte `#ece9e2`, accent or `#f2c1
 
 **Étape 1 — Musique et images**
 - **Chansons créées par Claude** (en tête) : liste lue dans `projets/index.json` (fichiers publiés à côté de la page). Chaque ligne : vignette, titre, durée, date, bouton « Charger » qui remplit d'un coup musique, images, paroles, synchro mot à mot (`words`) et titre. Sans projet : « Aucune chanson prête pour l'instant. »
-- **Faire créer une nouvelle chanson par Claude** (repliable) : titre, paroles ou idée, style musical, nombre d'images, lumière → « Copier la demande pour Claude ». Procédure suivie par Claude : CLAUDE.md § Générer une chanson de A à Z ; rangement par `video/nouveau_projet.py`.
+- **Faire créer une nouvelle chanson par Claude** (repliable) : titre, paroles ou idée, style musical (16 genres : gospel moderne, worship acoustique, afro-gospel, rap chrétien, trap louange, orchestral épique, zouk gospel… ; les mots-clés Suno se remplissent et restent modifiables), nombre d'images, lumière (15) → « Copier la demande pour Claude ». Procédure suivie par Claude : CLAUDE.md § Générer une chanson de A à Z ; rangement par `video/nouveau_projet.py`.
 - Bouton pour choisir le MP3 (gros bouton or, 52 px de haut ; accepte mp3, m4a, wav, aac, ogg ; sur iPhone, passer par « Parcourir / Fichiers »), et bouton pour ajouter plusieurs images. Sur ordinateur, on peut aussi glisser les fichiers sur ces boutons.
 - Vignettes numérotées, avec × pour retirer une image (zone de toucher de 32 px).
 - Lien « Pas encore d'images ? Écrire les prompts ChatGPT » qui descend à l'étape 4.
@@ -30,7 +30,9 @@ Couleurs : fond `#111214`, panneaux `#1a1c1f`, texte `#ece9e2`, accent or `#f2c1
 - **Décaler toute la synchro** (visible dès qu'une synchro existe) : boutons −0,5 s, −0,1 s, +0,1 s, +0,5 s. Tous les mots et les débuts de ligne bougent ensemble, jamais avant 0:00. Le total du décalage est affiché ; il revient à 0 à chaque nouvelle synchro. En synchro automatique, « Début / Fin du chant » suivent le décalage (la fin ne dépasse pas la durée du MP3).
 
 **Étape 3 — Style**
-- **18 styles prêts**, chacun montré par une vraie miniature 9:16 rendue par le moteur : Nuit cinéma, Or lumineux, Rap jaune, Un mot, Néon rose, Glacier, Feu, Royal, Vert espoir, Louange douce, Karaoké, Craie, Machine à écrire, Affiche rouge, Pastel aube, Magazine, Contour seul, Minimal.
+- **45 styles prêts**, classés par ambiance (puces de filtre « Tous », Cinéma, Louange & lumière, Urbain & énergie, Doux & poétique, Rétro & matière, Audacieux), chacun montré par une vraie miniature 9:16 rendue par le moteur. Les 18 d'origine sont gardés ; 27 nouveaux s'appuient sur les effets de cinéma ci-dessous (ex. Grand écran, Poussière d'or, Vitrail, Gloire céleste, Sous-titres, VHS 1990, Afro joie, Aquarelle, Pellicule 16 mm, Rouge & or, Prisme).
+- **🎲 Surprise** : tire un style neuf et cohérent (palette choisie dans une liste lisible, police, apparition, 1 ou 2 effets).
+- **Effets de cinéma** (réglages fins) : poussière de lumière (force + couleur), rayons d'en haut (couleur), image en deux couleurs (ombres / lumières), bandes noires cinéma, cadre fin double (couleur du mot fort), effet cassette VHS, étiquette derrière chaque mot (couleur ; texte sombre si étiquette claire). Texte sombre : pas d'ombre portée, voile clair au lieu du voile sombre.
 - **« Décris ton style »** : un texte libre envoyé à Claude, qui renvoie un style JSON valide, un nom et une phrase d'explication.
 - **Réglages fins** :
   - police (12) ;
@@ -47,7 +49,7 @@ Couleurs : fond `#111214`, panneaux `#1a1c1f`, texte `#ece9e2`, accent or `#f2c1
   - interrupteurs : couleurs qui changent, glitch, éclats de lumière (avec leur couleur), lettres usées, zoom lent.
 
 **Étape 4 — Prompts d'images ChatGPT**
-- On choisit une lumière : Nuit cinéma, Lumière dorée, Ciel lumineux, Aube pastel, Matin lumineux ou Néon urbain.
+- On choisit une lumière (15) : Nuit cinéma, Lumière dorée, Ciel lumineux, Aube pastel, Matin lumineux, Néon urbain, Vitrail, Désert biblique, Tempête, Nuit étoilée, Montagne et brume, Mer au lever du jour, Peinture à l'huile, Noir et blanc argentique, Aquarelle.
 - On choisit le nombre d'images.
 - Claude lit les paroles, les découpe en passages et propose une scène par passage.
 - Chaque prompt complet a son bouton Copier. Gabarit : « Crée une photo cinématographique verticale au format 9:16. » + texte de la lumière avec [SCÈNE] + « … centre simple pour le texte. Aucune personne, aucun texte, aucune lettre. »
@@ -114,6 +116,7 @@ Clés :
 - `bright`, `sat`, `tint`, `tintAmt`, `vignette`, `grain` ;
 - `flicker`, `flickerColors` ;
 - `glitch`, `leaks`, `leakColor`, `wear`, `zoom`.
+- `dust`, `dustColor`, `rays`, `rayColor`, `duo`, `duoDark`, `duoLight`, `bars`, `frame`, `scan`, `box`, `boxColor` (effets de cinéma ; le moteur Python les ignore pour l'instant).
 
 Valeurs autorisées et bornes : voir `STYLE_SCHEMA_TXT` dans `src/app.html`. Ce texte est aussi la consigne envoyée à Claude. Toute clé inconnue renvoyée par Claude est ignorée.
 

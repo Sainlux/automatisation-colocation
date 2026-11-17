@@ -55,6 +55,8 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
 .toggle{display:flex;align-items:center;gap:10px;font-size:14px;min-height:44px}
 .toggle input[type=checkbox]{accent-color:var(--gold);width:22px;height:22px}
 .toggle input[type=color]{width:42px;height:36px}
+.cats{margin:8px 0;gap:6px}
+.cats .chip{min-height:36px;padding:6px 12px;font-size:12.5px}
 .presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
 @media(max-width:600px){.presets{grid-template-columns:repeat(3,1fr)}.preset{padding:6px}.preset small{display:none}}
 .preset{position:relative;text-align:left;font:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 10px;color:var(--ink);cursor:pointer;display:grid;gap:3px;overflow:hidden}
@@ -147,9 +149,10 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
             <div class="ctl"><label for="askTitre" class="small">Titre</label><input type="text" id="askTitre" placeholder="Ex : Psaume 23"></div>
             <div class="ctl"><label for="askParoles" class="small">Paroles (ou juste l'idée de la chanson)</label><textarea id="askParoles" style="min-height:90px" placeholder="Colle tes paroles, ou décris le thème : « Psaume 23, confiance, berger »"></textarea></div>
             <div class="grid2">
-              <div class="ctl"><label for="askStyle" class="small">Style musical</label><input type="text" id="askStyle" value="gospel moderne, voix masculine, piano, émotion"></div>
+              <div class="ctl"><label for="askGenre" class="small">Style musical</label><select id="askGenre"></select></div>
+              <div class="ctl"><label for="askMusic" class="small">Précisions pour Suno (modifiable)</label><input type="text" id="askMusic"></div>
               <div class="ctl"><label for="askImgs" class="small">Images</label><select id="askImgs"><option>3</option><option selected>5</option><option>7</option></select></div>
-              <div class="ctl"><label for="askLight" class="small">Lumière des images</label><select id="askLight"><option>Nuit cinéma</option><option>Lumière dorée</option><option>Ciel lumineux</option><option>Aube pastel</option><option>Matin lumineux</option><option>Néon urbain</option></select></div>
+              <div class="ctl"><label for="askLight" class="small">Lumière des images</label><select id="askLight"></select></div>
             </div>
             <button class="btn" id="askCopy">Copier la demande pour Claude</button>
             <p class="small" id="askHelp">Colle ce message dans ta conversation avec Claude. Il crée 2 versions de la chanson sur ton Suno, les images, la synchro mot à mot, et la chanson apparaît ici.</p>
@@ -226,7 +229,8 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
     <section>
       <h2><span class="n">3</span>Style</h2>
       <p class="note">Touche un style prêt, ou décris le tien avec tes mots.</p>
-      <label class="l">Styles prêts</label>
+      <div class="row" style="justify-content:space-between"><label class="l" style="margin:0">Styles prêts</label><button class="btn" id="surprise">🎲 Surprise</button></div>
+      <div class="row cats" id="cats" role="group" aria-label="Ambiance des styles"></div>
       <div class="presets" id="presets"></div>
       <div id="describeBox" style="margin-top:14px">
       <label class="l" for="stylePrompt">Décris ton style</label>
@@ -249,6 +253,7 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
             <div class="ctl"><span>Mot fort</span><input type="color" id="s_accent" aria-label="Couleur du mot fort"></div>
             <div class="ctl"><span>Contour</span><div class="row" style="flex-wrap:nowrap"><input type="range" id="s_outline" min="0" max="8" step="1"><input type="color" id="s_outlineColor" aria-label="Couleur du contour"></div></div>
             <div class="ctl"><span>Lueur</span><div class="row" style="flex-wrap:nowrap"><input type="range" id="s_glow" min="0" max="1" step="0.05"><input type="color" id="s_glowColor" aria-label="Couleur de la lueur"></div></div>
+            <label class="toggle"><input type="checkbox" id="s_box"> Étiquette derrière chaque mot <input type="color" id="s_boxColor" aria-label="Couleur des étiquettes"></label>
           </div>
           <div class="stack" style="gap:10px">
             <label class="l">Image</label>
@@ -262,6 +267,13 @@ input[type=color]{width:42px;height:36px;padding:0;border:1px solid var(--line);
             <label class="toggle"><input type="checkbox" id="s_leaks"> Éclats de lumière <input type="color" id="s_leakColor" aria-label="Couleur des éclats"></label>
             <label class="toggle"><input type="checkbox" id="s_wear"> Lettres usées</label>
             <label class="toggle"><input type="checkbox" id="s_zoom"> Zoom lent sur l'image</label>
+            <label class="l" style="margin-top:6px">Effets de cinéma</label>
+            <div class="ctl"><span>Poussière de lumière</span><div class="row" style="flex-wrap:nowrap"><input type="range" id="s_dust" min="0" max="1" step="0.05"><input type="color" id="s_dustColor" aria-label="Couleur de la poussière"></div></div>
+            <label class="toggle"><input type="checkbox" id="s_rays"> Rayons de lumière d'en haut <input type="color" id="s_rayColor" aria-label="Couleur des rayons"></label>
+            <label class="toggle"><input type="checkbox" id="s_duo"> Image en deux couleurs <input type="color" id="s_duoDark" aria-label="Couleur des ombres"><input type="color" id="s_duoLight" aria-label="Couleur des lumières"></label>
+            <label class="toggle"><input type="checkbox" id="s_bars"> Bandes noires cinéma</label>
+            <label class="toggle"><input type="checkbox" id="s_frame"> Cadre fin (couleur du mot fort)</label>
+            <label class="toggle"><input type="checkbox" id="s_scan"> Effet cassette VHS</label>
           </div>
         </div>
       </details>
@@ -317,27 +329,63 @@ const ANIMS = {pop:"Pop mot à mot", impact:"Impact", slide:"Glisse vers le haut
   type:"Machine à écrire", bounce:"Rebond", tilt:"Bascule", cascade:"Lettres en cascade", karaoke:"Karaoké (surligné)"};
 const BASE = {font:"oswald",anim:"pop",layout:"stack",pos:"centre",case:"upper",size:1,color:"#F0F0F0",grad:0,color2:"#F2C14E",
   accent:"#F0F0F0",outline:0,outlineColor:"#000000",glow:0,glowColor:"#FFFFFF",bright:0,sat:0.2,tint:"#8090A0",tintAmt:0,
-  vignette:0.6,grain:1,flicker:1,flickerColors:["#808080","#7FA36A","#E08A3C","#5E8C99"],glitch:1,leaks:1,leakColor:"#FF6A1A",wear:1,zoom:1};
-const P = (name, sub, o) => ({name, sub, s:{...BASE, ...o}});
+  vignette:0.6,grain:1,flicker:1,flickerColors:["#808080","#7FA36A","#E08A3C","#5E8C99"],glitch:1,leaks:1,leakColor:"#FF6A1A",wear:1,zoom:1,
+  dust:0,dustColor:"#FFE2A8",rays:0,rayColor:"#FFF1C9",duo:0,duoDark:"#1B1035",duoLight:"#FFB36B",bars:0,frame:0,scan:0,box:0,boxColor:"#000000"};
+const CATS = {cine:"Cinéma", lumiere:"Louange & lumière", urbain:"Urbain & énergie", doux:"Doux & poétique", retro:"Rétro & matière", audace:"Audacieux"};
+const CALM = {flicker:0, glitch:0, leaks:0, wear:0};   // base sans effets nerveux
+const P = (name, sub, o, cat) => ({name, sub, cat, s:{...BASE, ...o}});
 const PRESETS = [
-  P("Nuit cinéma","le Reel modèle",{}),
-  P("Or lumineux","image claire, or",{font:"montserrat",anim:"slide",color:"#FFFFFF",accent:"#F2B33D",bright:0.25,sat:0.9,tint:"#F2B33D",tintAmt:0.15,vignette:0.25,grain:0.5,flicker:0,glitch:0,wear:0}),
-  P("Rap jaune","lettres jaunes, impact",{font:"bebas",anim:"impact",color:"#FFD23F",accent:"#FFD23F",glitch:1,leaks:0,wear:0,outline:4,outlineColor:"#000000"}),
-  P("Un mot","un mot géant à la fois",{font:"anton",anim:"impact",layout:"one",color:"#FFFFFF",accent:"#FFD23F",flicker:1,glitch:1,leaks:1,wear:0}),
-  P("Néon rose","rose et cyan lumineux",{font:"righteous",anim:"pop",color:"#FF4FA3",accent:"#3EF0FF",glow:0.8,glowColor:"#FF4FA3",sat:0.5,tint:"#3A1F5C",tintAmt:0.35,flicker:0,wear:0,leakColor:"#FF4FA3"}),
-  P("Glacier","bleu glacé, fondu",{font:"montserrat",anim:"blur",color:"#DFF4FF",accent:"#7FD3FF",glow:0.4,glowColor:"#7FD3FF",bright:0.15,sat:0.4,tint:"#4A90C8",tintAmt:0.3,flicker:0,glitch:0,leaks:0,wear:0,grain:0.5}),
-  P("Feu","orange et rouge",{font:"anton",anim:"impact",color:"#FFE3B0",accent:"#FF5A1F",grad:1,color2:"#FF5A1F",sat:0.7,tint:"#B33A0E",tintAmt:0.25,flicker:0,leakColor:"#FF3D00",wear:0}),
-  P("Royal","violet et or, majestueux",{font:"cinzel",anim:"fade",case:"upper",color:"#F3E6C4",accent:"#E7B84A",glow:0.3,glowColor:"#E7B84A",sat:0.5,tint:"#5B2A86",tintAmt:0.3,flicker:0,glitch:0,leaks:0,wear:0,grain:0.6}),
-  P("Vert espoir","vert tendre, clair",{font:"montserrat",anim:"bounce",case:"normal",color:"#FFFFFF",accent:"#9BE15D",bright:0.2,sat:1,tint:"#6FBF4A",tintAmt:0.12,vignette:0.3,flicker:0,glitch:0,leaks:0,wear:0,grain:0.4}),
-  P("Louange douce","crème, élégant",{font:"playfair",anim:"fade",case:"normal",color:"#FFF4DC",accent:"#FFE27A",bright:0.2,sat:0.9,vignette:0.25,flicker:0,glitch:0,leaks:0,wear:0,grain:0.4}),
-  P("Karaoké","phrase entière surlignée",{font:"montserrat",anim:"karaoke",layout:"line",pos:"bas",case:"normal",color:"#FFFFFF",accent:"#FFD23F",sat:0.8,flicker:0,glitch:0,leaks:0,wear:0,grain:0.4,vignette:0.4}),
-  P("Craie","écriture à la main",{font:"marker",anim:"cascade",case:"normal",color:"#F5F5F0",accent:"#FFB3C7",sat:0.3,flicker:0,glitch:0,wear:1,grain:0.8}),
-  P("Machine à écrire","sépia, lettres tapées",{font:"mono",anim:"type",case:"normal",color:"#F4E9D0",accent:"#F4E9D0",sat:0.2,tint:"#9A6B3A",tintAmt:0.35,flicker:0,glitch:0,leaks:0,wear:1,grain:1.2}),
-  P("Affiche rouge","rouge et noir, contour",{font:"archivo",anim:"impact",color:"#FFFFFF",accent:"#FF2E2E",outline:4,outlineColor:"#000000",sat:0,flicker:0,leaks:0,wear:0,grain:0.8,vignette:0.7}),
-  P("Pastel aube","pêche et lilas, manuscrit",{font:"caveat",anim:"fade",case:"normal",size:1.15,color:"#FFE6D5",accent:"#D9B8FF",bright:0.3,sat:0.9,tint:"#FFB38A",tintAmt:0.15,vignette:0.15,flicker:0,glitch:0,leaks:0,wear:0,grain:0.3}),
-  P("Magazine","noir et blanc chic",{font:"abril",anim:"tilt",case:"normal",color:"#FFFFFF",accent:"#FFFFFF",sat:0,bright:0.05,flicker:0,glitch:0,leaks:0,wear:0,grain:0.9,vignette:0.5}),
-  P("Contour seul","lettres creuses",{font:"anton",anim:"pop",color:"#00000000",accent:"#FFD23F",outline:6,outlineColor:"#FFFFFF",sat:0.4,flicker:0,glitch:1,leaks:0,wear:0}),
-  P("Minimal","sobre, sans effet",{font:"montserrat",anim:"fade",layout:"line",pos:"centre",case:"normal",size:0.85,color:"#FFFFFF",accent:"#FFFFFF",sat:1,vignette:0.35,grain:0,flicker:0,glitch:0,leaks:0,wear:0,zoom:1}),
+  P("Nuit cinéma","le Reel modèle",{},"cine"),
+  P("Or lumineux","image claire, or",{font:"montserrat",anim:"slide",color:"#FFFFFF",accent:"#F2B33D",bright:0.25,sat:0.9,tint:"#F2B33D",tintAmt:0.15,vignette:0.25,grain:0.5,flicker:0,glitch:0,wear:0},"lumiere"),
+  P("Rap jaune","lettres jaunes, impact",{font:"bebas",anim:"impact",color:"#FFD23F",accent:"#FFD23F",glitch:1,leaks:0,wear:0,outline:4,outlineColor:"#000000"},"urbain"),
+  P("Un mot","un mot géant à la fois",{font:"anton",anim:"impact",layout:"one",color:"#FFFFFF",accent:"#FFD23F",flicker:1,glitch:1,leaks:1,wear:0},"urbain"),
+  P("Néon rose","rose et cyan lumineux",{font:"righteous",anim:"pop",color:"#FF4FA3",accent:"#3EF0FF",glow:0.8,glowColor:"#FF4FA3",sat:0.5,tint:"#3A1F5C",tintAmt:0.35,flicker:0,wear:0,leakColor:"#FF4FA3"},"urbain"),
+  P("Glacier","bleu glacé, fondu",{font:"montserrat",anim:"blur",color:"#DFF4FF",accent:"#7FD3FF",glow:0.4,glowColor:"#7FD3FF",bright:0.15,sat:0.4,tint:"#4A90C8",tintAmt:0.3,flicker:0,glitch:0,leaks:0,wear:0,grain:0.5},"doux"),
+  P("Feu","orange et rouge",{font:"anton",anim:"impact",color:"#FFE3B0",accent:"#FF5A1F",grad:1,color2:"#FF5A1F",sat:0.7,tint:"#B33A0E",tintAmt:0.25,flicker:0,leakColor:"#FF3D00",wear:0},"audace"),
+  P("Royal","violet et or, majestueux",{font:"cinzel",anim:"fade",case:"upper",color:"#F3E6C4",accent:"#E7B84A",glow:0.3,glowColor:"#E7B84A",sat:0.5,tint:"#5B2A86",tintAmt:0.3,flicker:0,glitch:0,leaks:0,wear:0,grain:0.6},"lumiere"),
+  P("Vert espoir","vert tendre, clair",{font:"montserrat",anim:"bounce",case:"normal",color:"#FFFFFF",accent:"#9BE15D",bright:0.2,sat:1,tint:"#6FBF4A",tintAmt:0.12,vignette:0.3,flicker:0,glitch:0,leaks:0,wear:0,grain:0.4},"doux"),
+  P("Louange douce","crème, élégant",{font:"playfair",anim:"fade",case:"normal",color:"#FFF4DC",accent:"#FFE27A",bright:0.2,sat:0.9,vignette:0.25,flicker:0,glitch:0,leaks:0,wear:0,grain:0.4},"lumiere"),
+  P("Karaoké","phrase entière surlignée",{font:"montserrat",anim:"karaoke",layout:"line",pos:"bas",case:"normal",color:"#FFFFFF",accent:"#FFD23F",sat:0.8,flicker:0,glitch:0,leaks:0,wear:0,grain:0.4,vignette:0.4},"urbain"),
+  P("Craie","écriture à la main",{font:"marker",anim:"cascade",case:"normal",color:"#F5F5F0",accent:"#FFB3C7",sat:0.3,flicker:0,glitch:0,wear:1,grain:0.8},"retro"),
+  P("Machine à écrire","sépia, lettres tapées",{font:"mono",anim:"type",case:"normal",color:"#F4E9D0",accent:"#F4E9D0",sat:0.2,tint:"#9A6B3A",tintAmt:0.35,flicker:0,glitch:0,leaks:0,wear:1,grain:1.2},"retro"),
+  P("Affiche rouge","rouge et noir, contour",{font:"archivo",anim:"impact",color:"#FFFFFF",accent:"#FF2E2E",outline:4,outlineColor:"#000000",sat:0,flicker:0,leaks:0,wear:0,grain:0.8,vignette:0.7},"audace"),
+  P("Pastel aube","pêche et lilas, manuscrit",{font:"caveat",anim:"fade",case:"normal",size:1.15,color:"#FFE6D5",accent:"#D9B8FF",bright:0.3,sat:0.9,tint:"#FFB38A",tintAmt:0.15,vignette:0.15,flicker:0,glitch:0,leaks:0,wear:0,grain:0.3},"doux"),
+  P("Magazine","noir et blanc chic",{font:"abril",anim:"tilt",case:"normal",color:"#FFFFFF",accent:"#FFFFFF",sat:0,bright:0.05,flicker:0,glitch:0,leaks:0,wear:0,grain:0.9,vignette:0.5},"retro"),
+  P("Contour seul","lettres creuses",{font:"anton",anim:"pop",color:"#00000000",accent:"#FFD23F",outline:6,outlineColor:"#FFFFFF",sat:0.4,flicker:0,glitch:1,leaks:0,wear:0},"audace"),
+  P("Minimal","sobre, sans effet",{font:"montserrat",anim:"fade",layout:"line",pos:"centre",case:"normal",size:0.85,color:"#FFFFFF",accent:"#FFFFFF",sat:1,vignette:0.35,grain:0,flicker:0,glitch:0,leaks:0,wear:0,zoom:1},"doux"),
+  // ----- Cinéma
+  P("Grand écran","bandes noires, bleu-orangé",{...CALM,font:"playfair",anim:"fade",layout:"line",pos:"bas",color:"#FFFFFF",accent:"#F2B33D",sat:0.6,tint:"#1F4E5A",tintAmt:0.28,vignette:0.7,grain:0.8,bars:1,leaks:1,leakColor:"#FF8A3C"},"cine"),
+  P("Bande-annonce","un mot, choc, bandes",{font:"bebas",anim:"impact",layout:"one",color:"#FFFFFF",accent:"#E8B04A",sat:0.3,vignette:0.8,flicker:0,wear:0,bars:1},"cine"),
+  P("Noir & lumière","noir et blanc, rayons",{...CALM,font:"oswald",anim:"fade",color:"#FFFFFF",accent:"#FFFFFF",sat:0,bright:-0.1,grain:1.2,rays:1,rayColor:"#FFFFFF"},"cine"),
+  P("Poussière d'or","braises dorées qui flottent",{...CALM,font:"cinzel",anim:"blur",color:"#F6EBD0",accent:"#E7B84A",glow:0.2,glowColor:"#E7B84A",sat:0.5,tint:"#3A2A10",tintAmt:0.25,dust:0.8,dustColor:"#FFC86B"},"cine"),
+  P("Désert","sable chaud, vent",{...CALM,font:"abril",anim:"slide",case:"normal",color:"#FFF1DC",accent:"#FFB35C",sat:0.7,tint:"#C9853A",tintAmt:0.35,dust:0.5,dustColor:"#FFD9A0",leaks:1,leakColor:"#FF9A3C",grain:1},"cine"),
+  // ----- Louange & lumière
+  P("Vitrail","bleu profond, or, rayons",{...CALM,font:"cinzel",anim:"fade",color:"#FFFFFF",accent:"#FFC94A",glow:0.5,glowColor:"#5AB4FF",sat:1.1,tint:"#2B3A8C",tintAmt:0.3,rays:1,rayColor:"#CFE6FF",grain:0.5},"lumiere"),
+  P("Gloire céleste","rayons et lumière blanche",{...CALM,font:"playfair",anim:"blur",case:"normal",color:"#FFFFFF",accent:"#FFE08A",glow:0.3,glowColor:"#FFE08A",bright:0.2,sat:0.9,vignette:0.2,grain:0.3,rays:1,dust:0.5,dustColor:"#FFFFFF"},"lumiere"),
+  P("Colombe","blanc, ciel, paix",{...CALM,font:"montserrat",anim:"fade",case:"normal",color:"#FFFFFF",accent:"#FFFFFF",glow:0.4,glowColor:"#6F9CC8",bright:0.3,sat:0.6,tint:"#DCE8F5",tintAmt:0.2,vignette:0.1,grain:0.2,dust:0.3,dustColor:"#FFFFFF"},"lumiere"),
+  P("Couronne","cadre doré, majestueux",{...CALM,font:"cinzel",anim:"fade",layout:"line",color:"#F3E6C4",accent:"#E7B84A",sat:0.4,tint:"#3B1F06",tintAmt:0.3,dust:0.4,dustColor:"#E7B84A",frame:1,grain:0.6},"lumiere"),
+  P("Feu de l'Esprit","flammes, braises",{...CALM,font:"anton",anim:"bounce",color:"#FFF3E0",accent:"#FFB020",grad:1,color2:"#FF6A00",sat:0.8,tint:"#6B1A00",tintAmt:0.3,dust:0.7,dustColor:"#FF9A3C",leaks:1,leakColor:"#FF5A00"},"lumiere"),
+  // ----- Urbain & énergie
+  P("Sous-titres","étiquettes noires, TikTok",{...CALM,font:"montserrat",anim:"pop",layout:"line",pos:"bas",case:"normal",color:"#FFFFFF",accent:"#FFD23F",sat:1,vignette:0.3,grain:0.3,box:1,boxColor:"#000000"},"urbain"),
+  P("Étiquette jaune","mots sur fond jaune",{...CALM,font:"archivo",anim:"impact",color:"#111111",accent:"#111111",sat:0.6,box:1,boxColor:"#FFD23F",grain:0.6},"urbain"),
+  P("VHS 1990","cassette, lignes, rose",{font:"mono",anim:"type",color:"#E8FFE8",accent:"#FF4FD8",sat:0.6,tint:"#2D6B5E",tintAmt:0.25,grain:1.4,flicker:0,leaks:0,wear:0,scan:1},"urbain"),
+  P("Drill","noir et blanc, rouge, dur",{font:"bebas",anim:"impact",layout:"one",color:"#FFFFFF",accent:"#FF2E2E",outline:3,outlineColor:"#000000",sat:0,bright:-0.15,flicker:0,leaks:0,grain:1.3},"urbain"),
+  P("Afro joie","couleurs vives qui dansent",{font:"righteous",anim:"bounce",case:"normal",color:"#FFFFFF",accent:"#FFC21A",outline:3,outlineColor:"#1B1B1B",sat:1.2,flicker:1,flickerColors:["#FF7A00","#00A86B","#FFC21A","#E63946"],glitch:0,leaks:0,wear:0,grain:0.4},"urbain"),
+  P("Néon bleu","cyan électrique, lignes",{...CALM,font:"anton",anim:"pop",color:"#CFF4FF",accent:"#FF4FD8",glow:0.9,glowColor:"#2EC5FF",sat:0.5,bright:-0.1,tint:"#0B1E4A",tintAmt:0.4,scan:1},"urbain"),
+  // ----- Doux & poétique
+  P("Aquarelle","bleu et pêche, manuscrit",{...CALM,font:"caveat",anim:"cascade",case:"normal",size:1.2,color:"#FFFFFF",accent:"#FFD6E0",glow:0.3,glowColor:"#3D5A80",vignette:0.1,grain:0.5,duo:1,duoDark:"#3D5A80",duoLight:"#FCE4D6"},"doux"),
+  P("Lettre","manuscrit, sépia, cadre",{...CALM,font:"caveat",anim:"type",case:"normal",size:1.15,color:"#FFF8EC",accent:"#F2C14E",sat:0.4,tint:"#6B4A2B",tintAmt:0.3,frame:1,grain:0.9},"doux"),
+  P("Brume du matin","gris bleuté, très doux",{...CALM,font:"montserrat",anim:"blur",layout:"line",case:"normal",size:0.9,color:"#FFFFFF",accent:"#FFFFFF",bright:0.25,sat:0.5,tint:"#B8C7D9",tintAmt:0.25,vignette:0.15,grain:0.4,dust:0.3,dustColor:"#FFFFFF"},"doux"),
+  P("Lavande","violet tendre, élégant",{...CALM,font:"playfair",anim:"fade",case:"normal",color:"#FFFFFF",accent:"#FFE38A",glow:0.3,glowColor:"#B794F6",vignette:0.2,grain:0.4,duo:1,duoDark:"#2E1F4F",duoLight:"#E9D8FF"},"doux"),
+  // ----- Rétro & matière
+  P("Pellicule 16 mm","grain fort, brûlures",{font:"oswald",anim:"fade",color:"#F4ECDC",accent:"#FFB35C",sat:0.5,tint:"#A06A2C",tintAmt:0.3,vignette:0.9,grain:2,flicker:0,glitch:0,leaks:1,leakColor:"#FF7A2E",wear:1},"retro"),
+  P("Journal ancien","papier jauni, rouge",{...CALM,font:"abril",anim:"tilt",case:"normal",color:"#FFF7E6",accent:"#E0452E",grain:1.2,wear:1,duo:1,duoDark:"#2A2118",duoLight:"#EFE3C8"},"retro"),
+  P("Disco 70","rose, jaune, paillettes",{...CALM,font:"abril",anim:"bounce",case:"normal",color:"#FFE066",accent:"#FF9F1C",grad:1,color2:"#FF5E9C",glow:0.5,glowColor:"#FF5E9C",tint:"#6A1B9A",tintAmt:0.3,leaks:1,leakColor:"#FF9F1C",dust:0.5,dustColor:"#FFE066"},"retro"),
+  P("Sérigraphie","affiche bleu et orange",{...CALM,font:"archivo",anim:"impact",color:"#FFFFFF",accent:"#FFD23F",outline:4,outlineColor:"#12355B",grain:1,wear:1,duo:1,duoDark:"#12355B",duoLight:"#FF8C42"},"retro"),
+  // ----- Audacieux
+  P("Rouge & or","pourpre royal, cadre",{...CALM,font:"cinzel",anim:"fade",color:"#F7D774",accent:"#FFFFFF",glow:0.4,glowColor:"#F7D774",frame:1,duo:1,duoDark:"#1A0000",duoLight:"#C0182A",grain:0.6},"audace"),
+  P("Inversé","texte noir sur image blanche",{...CALM,font:"anton",anim:"impact",color:"#111111",accent:"#E10600",bright:0.5,sat:0,vignette:0,grain:0.6},"audace"),
+  P("Prisme","dégradé cyan-rose, flashs",{font:"anton",anim:"tilt",color:"#3EF0FF",accent:"#FFE600",grad:1,color2:"#FF4FD8",flicker:1,flickerColors:["#3EF0FF","#FF4FD8","#FFE600","#7CFF6B"],leaks:1,leakColor:"#FF4FD8",wear:0},"audace"),
 ];
 const LIGHTS = {
   nuit:["Nuit cinéma","La nuit, [SCÈNE], un seul point de lumière chaude. Ambiance sombre et contemplative. Couleurs désaturées, grain de pellicule argentique. Le centre de l'image doit rester sombre et vide pour pouvoir y écrire du texte."],
@@ -346,7 +394,34 @@ const LIGHTS = {
   aube:["Aube pastel","Au lever du soleil, [SCÈNE], couleurs pastel pêche, rose doux et bleu ciel, brume légère, lumière douce et claire. Ambiance d'espoir. Le centre de l'image doit rester simple et lumineux pour pouvoir y écrire du texte."],
   nature:["Matin lumineux","Un matin ensoleillé, [SCÈNE], verts frais, lumière naturelle douce, arrière-plan légèrement flou. Ambiance de paix, image claire. Le centre de l'image doit rester simple et peu détaillé pour pouvoir y écrire du texte."],
   neon:["Néon urbain","La nuit en ville, [SCÈNE], reflets de néons roses et bleus sur le sol mouillé, ambiance moderne et mystérieuse. Le centre de l'image doit rester sombre et simple pour pouvoir y écrire du texte."],
+  vitrail:["Vitrail","Dans une chapelle de pierre, [SCÈNE], la lumière colorée d'un grand vitrail (bleu profond, rouge rubis, or) tombe en rayons dans la poussière. Ambiance sacrée et silencieuse. Le centre de l'image doit rester sombre et simple pour pouvoir y écrire du texte."],
+  desert:["Désert biblique","Dans un désert du Proche-Orient antique, [SCÈNE], dunes et roches ocre, lumière chaude et rasante, poussière dans l'air. Ambiance de pèlerinage. Le centre de l'image doit rester simple (ciel ou sable) pour pouvoir y écrire du texte."],
+  tempete:["Tempête","Sous un ciel d'orage, [SCÈNE], nuages noirs dramatiques, un rayon de lumière perce les nuages, pluie fine, mer ou terre agitée. Ambiance de combat et d'espoir. Le centre de l'image doit rester sombre et simple pour pouvoir y écrire du texte."],
+  etoiles:["Nuit étoilée","Sous un ciel nocturne immense rempli d'étoiles et de la Voie lactée, [SCÈNE], lumière bleue froide de la lune. Ambiance d'émerveillement. Le centre de l'image doit rester sombre (ciel étoilé) pour pouvoir y écrire du texte."],
+  montagne:["Montagne et brume","En haute montagne au petit matin, [SCÈNE], mer de nuages et brume dans les vallées, sommets éclairés de rose. Ambiance de grandeur et de paix. Le centre de l'image doit rester simple (brume ou ciel) pour pouvoir y écrire du texte."],
+  mer:["Mer au lever du jour","Au bord de la mer au lever du soleil, [SCÈNE], eau calme qui reflète le ciel orange et rose, horizon dégagé. Ambiance de renouveau. Le centre de l'image doit rester simple (ciel ou eau calme) pour pouvoir y écrire du texte."],
+  peinture:["Peinture à l'huile","À la manière d'une peinture à l'huile classique, [SCÈNE], clair-obscur, touches de pinceau visibles, tons chauds et profonds. Ambiance de tableau de maître. Le centre de l'image doit rester sombre et simple pour pouvoir y écrire du texte."],
+  argentique:["Noir et blanc argentique","En photographie noir et blanc argentique, [SCÈNE], fort contraste, grain de pellicule visible, ombres profondes. Ambiance intemporelle. Le centre de l'image doit rester simple pour pouvoir y écrire du texte."],
+  aquarelle:["Aquarelle","En illustration à l'aquarelle douce, [SCÈNE], couleurs diluées qui se mélangent, papier texturé, tons pastel. Ambiance tendre et lumineuse. Le centre de l'image doit rester clair et presque vide pour pouvoir y écrire du texte."],
 };
+const GENRES = [
+  ["Gospel moderne","modern gospel, powerful male vocals, piano, choir, uplifting, emotional build"],
+  ["Worship acoustique","acoustic worship, soft male vocals, acoustic guitar, warm, intimate"],
+  ["Pop louange","christian pop, worship anthem, drums, synth pads, big uplifting chorus"],
+  ["Afro-gospel","afro gospel, afrobeats groove, joyful, percussion, call and response choir"],
+  ["Rap chrétien","christian hip hop, french rap, boom bap, deep bass, confident male vocals"],
+  ["Trap louange","christian trap, 808 bass, dark piano, melodic rap, atmospheric"],
+  ["Ballade piano","piano ballad, emotional male vocals, strings, cinematic, slow tempo"],
+  ["Orchestral épique","epic orchestral, cinematic choir, war drums, majestic, worship anthem"],
+  ["R&B soul","soulful r&b, smooth vocals, rhodes piano, gospel chords, groove"],
+  ["Reggae louange","reggae gospel, one drop rhythm, warm bass, skank guitar, joyful"],
+  ["Chorale africaine","african choir, a cappella harmonies, hand claps, joyful praise"],
+  ["Lo-fi prière","lofi chill, prayer, soft vocals, mellow piano, vinyl crackle, slow"],
+  ["Électro louange","electronic worship, edm, build up, euphoric drop, uplifting"],
+  ["Folk acoustique","folk worship, acoustic guitar, banjo, heartfelt, storytelling"],
+  ["Hymne traditionnel","traditional hymn, church organ, choir, reverent, majestic"],
+  ["Zouk gospel","zouk gospel, kompa groove, caribbean, warm romantic vocals"],
+];
 const PROMPT_HEAD = "Crée une photo cinématographique verticale au format 9:16. ";
 const PROMPT_TAIL = " Aucune personne, aucun texte, aucune lettre.";
 const DEMO_LYR = "J'ai mis tout mon espoir dans le Seigneur\nIl s'est penché vers moi\nIl a écouté mon cri\nIl m'a fait remonter du puits\nIl a dressé mes pieds sur le rocher";
@@ -446,13 +521,17 @@ async function loadProject(slug, row){
   } catch(e){ btn.textContent = "Réessayer"; setStatus("syncStatus", "Cette chanson n'a pas pu être chargée. Réessaie, ou demande à Claude de la republier.", true); }
   finally { btn.disabled = false; }
 }
+GENRES.forEach(([n, tags], i) => $("askGenre").add(new Option(n, String(i))));
+$("askGenre").onchange = () => { $("askMusic").value = GENRES[+$("askGenre").value][1]; };
+$("askGenre").onchange();
+Object.values(LIGHTS).forEach(v => $("askLight").add(new Option(v[0], v[0])));
 $("askCopy").onclick = async () => {
   const titre = $("askTitre").value.trim(), par = $("askParoles").value.trim();
   if (!par) { $("askParoles").focus(); return setStatus("syncStatus", "Écris les paroles ou l'idée de la chanson.", true); }
   const msg = `Crée une chanson pour mon Studio Reels, de A à Z.
 Titre : ${titre || "à toi de proposer"}
 ${par.split("\n").length > 2 ? "Paroles (à garder telles quelles) :\n" + par : "Idée : " + par + " (écris les paroles en français, couplets courts, refrain fort)"}
-Style musical Suno : ${$("askStyle").value.trim()}
+Style musical Suno : ${$("askMusic").value.trim()} (genre choisi : ${$("askGenre").selectedOptions[0].text})
 Images : ${$("askImgs").value}, lumière « ${$("askLight").value} », format 9:16, sans personne ni texte.
 Suis la procédure « Générer une chanson de A à Z » de CLAUDE.md : 2 versions Suno, synchro mot à mot, images, puis publie-la dans le Studio.`;
   $("askOut").value = msg; $("askOut").classList.remove("hidden");
@@ -578,9 +657,9 @@ $("lyrics").addEventListener("input", () => {
 });
 
 /* =================== STYLE (UI) =================== */
-const SLIDERS = ["size","outline","glow","bright","sat","tintAmt","vignette","grain"];
-const COLORS_ = ["color","color2","accent","outlineColor","glowColor","tint","leakColor"];
-const CHECKS = ["grad","flicker","glitch","leaks","wear","zoom"];
+const SLIDERS = ["size","outline","glow","bright","sat","tintAmt","vignette","grain","dust"];
+const COLORS_ = ["color","color2","accent","outlineColor","glowColor","tint","leakColor","dustColor","rayColor","duoDark","duoLight","boxColor"];
+const CHECKS = ["grad","flicker","glitch","leaks","wear","zoom","rays","duo","bars","frame","scan","box"];
 const SELECTS = ["font","anim","layout","pos","case"];
 Object.entries(FONTS).forEach(([k,v]) => $("s_font").add(new Option(v[2], k)));
 Object.entries(ANIMS).forEach(([k,v]) => $("s_anim").add(new Option(v, k)));
@@ -608,9 +687,41 @@ function presetThumb(p){
   cv = keep.cv; cx = keep.cx; st = keep.st; demo = keep.demo; images = keep.imgs;
   const url = c.toDataURL("image/jpeg", .8); if (ready) thumbCache[key] = url; return url;
 }
+let presetCat = "tous";
+function drawCats(){
+  const box = $("cats"); box.innerHTML = "";
+  [["tous", `Tous (${PRESETS.length})`], ...Object.entries(CATS)].forEach(([k, label]) => {
+    const b = document.createElement("button"); b.className = "chip"; b.textContent = label;
+    b.setAttribute("aria-pressed", String(k === presetCat)); b.onclick = () => { presetCat = k; drawCats(); drawPresets(); };
+    box.appendChild(b);
+  });
+}
+// Surprise : un style neuf, tiré au hasard mais cohérent et lisible
+const SURPRISE_PAL = [
+  ["#FFFFFF","#F2C14E","#3A2A10"],["#F3E6C4","#E7B84A","#5B2A86"],["#DFF4FF","#7FD3FF","#1F4E5A"],["#FFE6D5","#FF8FA3","#6A1B9A"],
+  ["#FFFFFF","#FF2E2E","#111111"],["#E8FFE8","#7CFF6B","#0B3D2E"],["#FFF3E0","#FF7A00","#6B1A00"],["#FFFFFF","#3EF0FF","#0B1E4A"],
+  ["#FFF8EC","#C0392B","#2A2118"],["#FFFFFF","#FFD23F","#12355B"]];
+let surpriseN = 0;
+function surpriseStyle(){
+  const pick = a => a[Math.floor(Math.random() * a.length)], yes = p => Math.random() < p;
+  const [c, a, tnt] = pick(SURPRISE_PAL), fx = {};
+  const fxPool = ["dust","rays","duo","bars","frame","scan","box","leaks","glitch","flicker"];
+  for (let i = 0, n = 1 + Math.floor(Math.random()*2); i < n; i++) fx[pick(fxPool)] = 1;
+  const s = {font: pick(Object.keys(FONTS)), anim: pick(Object.keys(ANIMS)), layout: pick(["stack","stack","stack","line","one"]),
+    pos: pick(["centre","centre","haut","bas"]), case: yes(.6) ? "upper" : "normal", size: +(0.85 + Math.random()*0.35).toFixed(2),
+    color: c, accent: a, color2: a, grad: yes(.2) ? 1 : 0, glow: yes(.4) ? 0.4 : 0, glowColor: a, outline: yes(.25) ? 3 : 0, outlineColor: "#000000",
+    sat: +(0.3 + Math.random()*0.8).toFixed(2), tint: tnt, tintAmt: +(Math.random()*0.35).toFixed(2), bright: +(Math.random()*0.2 - 0.12).toFixed(2),
+    vignette: +(0.3 + Math.random()*0.5).toFixed(2), grain: +(Math.random()*1.2).toFixed(1), wear: yes(.25) ? 1 : 0, zoom: 1,
+    flicker:0, glitch:0, leaks:0, leakColor: a, dust:0, dustColor: a, rays:0, rayColor:"#FFF1C9", duo:0, duoDark: tnt, duoLight: a,
+    bars:0, frame:0, scan:0, box:0, boxColor:"#000000"};
+  Object.assign(s, fx); if (fx.dust) s.dust = 0.6;
+  if (s.box && yes(.5)) { s.boxColor = a; s.color = "#111111"; s.accent = "#111111"; s.glow = 0; s.outline = 0; }
+  if (s.anim === "karaoke") s.layout = "line";
+  applyStyle(s, "Surprise n° " + (++surpriseN));
+}
 function drawPresets(){
   const box = $("presets"); box.innerHTML = "";
-  PRESETS.forEach(p => {
+  PRESETS.filter(p => presetCat === "tous" || p.cat === presetCat).forEach(p => {
     const b = document.createElement("button"); b.className = "preset"; b.setAttribute("aria-pressed", String(p.name === presetName));
     b.innerHTML = `<img alt="" style="width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:6px;display:block" src="${presetThumb(p)}"><b style="font-size:13px">${p.name}</b><small>${p.sub}</small>`;
     b.onclick = () => applyStyle(p.s, p.name);
@@ -618,6 +729,7 @@ function drawPresets(){
   });
   $("styleNow").textContent = "Style : " + presetName;
 }
+drawCats(); $("surprise").onclick = surpriseStyle;
 
 /* ----- style par description (Claude) ----- */
 const STYLE_SCHEMA_TXT = `Clés et valeurs autorisées :
@@ -625,7 +737,9 @@ font: ${Object.keys(FONTS).join("|")} ; anim: ${Object.keys(ANIMS).join("|")} ; 
 size: 0.6-1.6 ; color, color2, accent, outlineColor, glowColor, tint, leakColor: couleurs hex "#RRGGBB" ; grad: 0|1 (dégradé de color vers color2) ;
 outline: 0-8 (épaisseur du contour) ; glow: 0-1 (lueur) ; bright: -0.6..0.6 (luminosité de l'image) ; sat: 0-1.5 (saturation de l'image, 0 = noir et blanc) ;
 tintAmt: 0-0.8 (force de la teinte) ; vignette: 0-1 ; grain: 0-2 ; flicker: 0|1 (couleurs de l'image qui changent à chaque phrase) ; flickerColors: liste de 2 à 4 hex ;
-glitch: 0|1 ; leaks: 0|1 (éclats de lumière) ; wear: 0|1 (lettres usées) ; zoom: 0|1.`;
+glitch: 0|1 ; leaks: 0|1 (éclats de lumière) ; wear: 0|1 (lettres usées) ; zoom: 0|1 ;
+dust: 0-1 (poussière de lumière qui flotte) + dustColor ; rays: 0|1 (rayons de lumière d'en haut) + rayColor ; duo: 0|1 (image en deux couleurs) + duoDark (ombres) + duoLight (lumières) ;
+bars: 0|1 (bandes noires cinéma) ; frame: 0|1 (cadre fin couleur accent) ; scan: 0|1 (effet cassette VHS) ; box: 0|1 (étiquette de couleur boxColor derrière chaque mot, style sous-titres ; texte sombre si étiquette claire).`;
 /* ----- Adaptateurs : artifact claude.ai OU appli autonome (serveur local / Netlify) ----- */
 const IN_ARTIFACT = !!(window.claude && window.claude.use);
 function apiSampler(){
@@ -768,7 +882,11 @@ function drawFrame(t, W, H, opts = {}){
   if (images.length){ const b = bgIndexAt(t, C, total);
     if (b.prev >= 0) drawImg(ctx, images[b.prev].im, W, H, t, total, 1);
     drawImg(ctx, images[b.i].im, W, H, t, total, b.prev >= 0 ? b.e : 1); }
-  if (st.sat < 1){ ctx.globalCompositeOperation = "saturation"; ctx.globalAlpha = 1 - st.sat; ctx.fillStyle = "hsl(0,0%,50%)"; ctx.fillRect(0,0,W,H); }
+  if (st.duo){                                          // bichromie : ombres = duoDark, lumières = duoLight
+    ctx.globalCompositeOperation = "saturation"; ctx.globalAlpha = 1; ctx.fillStyle = "hsl(0,0%,50%)"; ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation = "multiply"; ctx.fillStyle = st.duoLight; ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation = "screen"; ctx.fillStyle = st.duoDark; ctx.fillRect(0,0,W,H);
+  } else if (st.sat < 1){ ctx.globalCompositeOperation = "saturation"; ctx.globalAlpha = 1 - st.sat; ctx.fillStyle = "hsl(0,0%,50%)"; ctx.fillRect(0,0,W,H); }
   else if (st.sat > 1){ ctx.globalCompositeOperation = "overlay"; ctx.globalAlpha = (st.sat - 1) * 0.4; ctx.drawImage(cv,0,0); }
   let tint = st.tint, tAmt = st.tintAmt;
   if (st.flicker && ch){
@@ -782,7 +900,27 @@ function drawFrame(t, W, H, opts = {}){
     ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = Math.min(.12, st.bright * .25); ctx.fillRect(0,0,W,H); }
   else if (st.bright < 0){ ctx.globalCompositeOperation = "multiply"; ctx.globalAlpha = -st.bright; ctx.fillStyle = "#000"; ctx.fillRect(0,0,W,H); }
   ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+  if (st.rays){                                         // rayons venus d'en haut, qui oscillent doucement
+    ctx.globalCompositeOperation = "screen";
+    for (let i = 0; i < 5; i++){
+      const sway = Math.sin(t*0.35 + i*1.7) * W*0.03, x0 = W*(0.08 + i*0.2) + sway, w0 = W*(0.03 + rnd(i+3)*0.03), w1 = W*(0.16 + rnd(i+7)*0.12), dx = W*(0.12 + rnd(i)*0.1);
+      const g = ctx.createLinearGradient(0, 0, 0, H*0.95); g.addColorStop(0, hexA(st.rayColor, 0.22 + 0.08*Math.sin(t*0.8 + i))); g.addColorStop(1, hexA(st.rayColor, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x0, -2); ctx.lineTo(x0 + w0, -2); ctx.lineTo(x0 + dx + w1, H*0.95); ctx.lineTo(x0 + dx, H*0.95); ctx.closePath(); ctx.fill();
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
   if (st.vignette > 0){ const g = ctx.createRadialGradient(W/2,H*.45,W*.28,W/2,H*.45,H*.78); g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,`rgba(0,0,0,${.85*st.vignette})`); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); }
+  if (st.dust > 0){                                     // poussière de lumière qui monte lentement
+    ctx.globalCompositeOperation = "screen"; const n = Math.round(18 + 40*st.dust);
+    for (let i = 0; i < n; i++){
+      const x = ((rnd(i*1.31)*W + t*W*0.012*(rnd(i*7.7)-.3)) % W + W) % W;
+      const y = ((rnd(i*2.71)*H - t*H*0.018*(0.4 + rnd(i*4.1))) % H + H) % H;
+      const r = W*(0.0025 + 0.007*rnd(i*5.3)), a = (0.25 + 0.55*(0.5 + 0.5*Math.sin(t*1.6 + i*2.3))) * st.dust;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r*3); g.addColorStop(0, hexA(st.dustColor, a)); g.addColorStop(1, hexA(st.dustColor, 0));
+      ctx.fillStyle = g; ctx.fillRect(x - r*3, y - r*3, r*6, r*6);
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
   // un seul effet par phrase : éclat, glitch ou rien
   const fxKind = ch ? (rnd(ch.idx + 5) < .35 ? "glitch" : rnd(ch.idx + 9) < .38 ? "leak" : "") : "";
   if (ch && st.leaks && fxKind === "leak" && t - ch.s < 0.9){
@@ -803,9 +941,9 @@ function drawFrame(t, W, H, opts = {}){
     box = titleCard(W, H, $("sign").value.replace(/^le\s+/i, ""), $("titre").value, ease((t - outroStart)/0.5), true);
   } else if (ch) box = drawChunk(ch, t, W, H);
   if (st.wear){ tx.globalCompositeOperation = "destination-out"; tx.drawImage(SPECK,0,0,W,H); tx.globalCompositeOperation = "source-over"; }
-  if (box && (st.bright > 0 || st.sat >= .8)){        // voile doux derrière le texte sur les images claires
-    const r = Math.max(box.h, W*.45), g = ctx.createRadialGradient(W/2, box.cy, 0, W/2, box.cy, r);
-    g.addColorStop(0,"rgba(0,0,0,.35)"); g.addColorStop(1,"rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.fillRect(0, box.cy - r, W, r*2);
+  if (box && !st.box && (st.bright > 0 || st.sat >= .8)){   // voile doux derrière le texte sur les images claires
+    const r = Math.max(box.h, W*.45), g = ctx.createRadialGradient(W/2, box.cy, 0, W/2, box.cy, r), v = darkText() ? "255,255,255" : "0,0,0";
+    g.addColorStop(0,`rgba(${v},.35)`); g.addColorStop(1,`rgba(${v},0)`); ctx.fillStyle = g; ctx.fillRect(0, box.cy - r, W, r*2);
   }
   ctx.drawImage(tc, 0, 0);
   // flash blanc seulement sur le mot fort
@@ -820,14 +958,34 @@ function drawFrame(t, W, H, opts = {}){
     const ox = -Math.floor(rnd(Math.floor(t*24))*512), oy = -Math.floor(rnd(Math.floor(t*24)+.5)*512);
     for (let x = ox; x < W; x += 512) for (let y = oy; y < H; y += 512) ctx.drawImage(NOISE, x, y);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; }
+  if (st.scan){                                         // cassette VHS : lignes, bande qui défile, léger décalage de couleur
+    ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = .14; ctx.drawImage(cv, Math.max(1, W*.004), 0); ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over"; ctx.fillStyle = "rgba(0,0,0,.16)"; const step = Math.max(2, Math.round(H/400));
+    for (let y = 0; y < H; y += step*2) ctx.fillRect(0, y, W, step);
+    const by = ((t*0.12) % 1) * H; ctx.fillStyle = "rgba(255,255,255,.05)"; ctx.fillRect(0, by, W, H*0.05);
+  }
+  if (st.frame){                                        // cadre fin double
+    const m = W*.045; ctx.strokeStyle = hexA(st.accent.slice(0,7), .85); ctx.lineWidth = Math.max(1, W*.004); ctx.strokeRect(m, m, W - 2*m, H - 2*m);
+    ctx.strokeStyle = hexA(st.accent.slice(0,7), .4); ctx.lineWidth = Math.max(1, W*.002); ctx.strokeRect(m*1.35, m*1.35, W - 2.7*m, H - 2.7*m);
+  }
+  if (st.bars){ ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H*.085); ctx.fillRect(0, H*.915, W, H*.085); }
 }
+function darkText(){ const c = (st.color || "#ffffff"); if (c.length > 7 && c.slice(7) === "00") return false;
+  const n = parseInt(c.slice(1,7),16); return (0.299*(n>>16&255) + 0.587*(n>>8&255) + 0.114*(n&255)) / 255 < 0.35; }
 function paint(txt, x, y, sz, color, alpha, opt = {}){
   if (!txt || alpha <= 0) return 0;
   tx.save(); tx.globalAlpha = alpha; tx.font = fnt(sz);
   const blurOK = opt.blur && HAS_FILTER; if (blurOK) tx.filter = `blur(${opt.blur}px)`;
   const m = tx.measureText(txt), asc = m.actualBoundingBoxAscent || sz*.75;
+  if (st.box && !opt.noGrad){                           // étiquette derrière le mot (style sous-titres)
+    const w = m.width, pad = sz*0.14, left = tx.textAlign === "center" ? x - w/2 : x;
+    tx.save(); tx.shadowColor = "transparent"; tx.fillStyle = st.boxColor; tx.globalAlpha = alpha * 0.92;
+    tx.beginPath(); if (tx.roundRect) tx.roundRect(left - pad, y - asc - pad, w + 2*pad, asc + 2*pad, sz*0.12); else tx.rect(left - pad, y - asc - pad, w + 2*pad, asc + 2*pad);
+    tx.fill(); tx.restore();
+  }
   if (st.outline > 0){ tx.shadowColor = "transparent"; tx.lineJoin = "round"; tx.lineWidth = Math.max(2, st.outline * sz * 0.018); tx.strokeStyle = st.outlineColor; tx.strokeText(txt, x, y); }
   if (st.glow > 0){ tx.shadowColor = hexA(color.length >= 7 ? color : st.glowColor, Math.min(1, st.glow + .2)); tx.shadowBlur = sz * .6 * st.glow; tx.shadowOffsetY = 0; }
+  else if (st.box || darkText()) { tx.shadowColor = "transparent"; }
   else { tx.shadowColor = "rgba(0,0,0,.55)"; tx.shadowBlur = sz * 0.22; tx.shadowOffsetY = sz * 0.03; }
   let fill = color;
   if (st.grad && !opt.noGrad){ const g = tx.createLinearGradient(x, y - asc, x, y); g.addColorStop(0, color); g.addColorStop(1, st.color2); fill = g; }
