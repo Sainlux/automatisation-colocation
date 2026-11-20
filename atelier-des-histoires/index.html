@@ -1741,7 +1741,7 @@ function toMessages(input){
 function sseLines(res,onData,signal){
   var reader=res.body.getReader(),dec=new TextDecoder(),buf="";
   function pump(){return reader.read().then(function(r){
-    if(r.done){if(buf.trim())onData(buf);return}
+    if(r.done){if(buf.indexOf("data:")===0)onData(buf.slice(5).trim());return}
     buf+=dec.decode(r.value,{stream:true});var parts=buf.split("\n");buf=parts.pop();
     parts.forEach(function(line){if(line.indexOf("data:")===0)onData(line.slice(5).trim())});
     if(signal&&signal.aborted){reader.cancel();return}
